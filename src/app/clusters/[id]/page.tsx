@@ -65,9 +65,13 @@ import StorageIcon from '@mui/icons-material/Storage';
 import VpnKeyIcon from '@mui/icons-material/VpnKey';
 import SecurityIcon from '@mui/icons-material/Security';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import LogoutIcon from '@mui/icons-material/Logout';
+import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 
 import {
   useCluster,
+  useCurrentUser,
+  logout,
   useDashboardData,
   TerminalWindow,
   useNamespaces,
@@ -229,6 +233,7 @@ spec:
 
   // Fetch cluster profile & metadata
   const { availableClusters } = useCluster();
+  const { data: currentUser } = useCurrentUser();
   const clusterMeta = useMemo(() => {
     return availableClusters.find((c) => c.id === id) || null;
   }, [availableClusters, id]);
@@ -1567,6 +1572,44 @@ users:
           >
             Create Resource
           </Button>
+
+          <Divider orientation="vertical" flexItem sx={{ height: 24, my: 'auto', mx: 0.5 }} />
+
+          {/* User Status Badge */}
+          {currentUser && (
+            <Chip
+              icon={<AccountCircleIcon sx={{ fontSize: '1rem !important', color: '#38bdf8' }} />}
+              label={`${currentUser.username} (${currentUser.role})`}
+              size="small"
+              variant="outlined"
+              sx={{
+                fontWeight: 600,
+                fontSize: '0.72rem',
+                borderRadius: 2,
+                borderColor: 'rgba(56, 189, 248, 0.3)',
+                color: '#38bdf8',
+                bgcolor: 'rgba(56, 189, 248, 0.08)',
+                height: 28,
+              }}
+            />
+          )}
+
+          <Tooltip title="Sign Out of NextKube">
+            <IconButton
+              onClick={() => logout()}
+              size="small"
+              sx={{
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 2,
+                p: 0.8,
+                color: 'text.secondary',
+                '&:hover': { color: 'error.main', borderColor: 'error.main' },
+              }}
+            >
+              <LogoutIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
         </Box>
       </Box>
 

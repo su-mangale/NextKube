@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { ThemeRegistry, ClusterProvider, QueryProvider, ThemeScript } from "@/shared";
-import { Box, Typography } from "@mui/material";
+import { Box } from "@mui/material";
 import "./globals.css";
 
 export const metadata: Metadata = {
