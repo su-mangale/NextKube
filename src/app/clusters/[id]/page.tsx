@@ -109,6 +109,7 @@ import {
   applyResourceYaml,
   YamlIdeEditor,
   YamlEditorDialog,
+  AddClusterDialog,
   getZoneUrl,
 } from '@/shared';
 
@@ -133,6 +134,9 @@ export default function ClusterDetailPage({
   // Operations state
   const [drawerOpen, setDrawerOpen] = useState<boolean>(false);
   const [selectedResource, setSelectedResource] = useState<any | null>(null);
+
+  // Add / Connect Cluster Modal
+  const [addClusterOpen, setAddClusterOpen] = useState<boolean>(false);
 
   // Apply / Create Resource Manifest Modal
   const [createDialogOpen, setCreateDialogOpen] = useState<boolean>(false);
@@ -1495,21 +1499,95 @@ users:
           zIndex: 10,
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <Box
-              sx={{
-                width: 10,
-                height: 10,
-                borderRadius: '50%',
-                bgcolor: status === 'Healthy' ? '#10b981' : '#f59e0b',
-                boxShadow: status === 'Healthy' ? '0 0 10px #10b981' : '0 0 10px #f59e0b',
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+          {/* Interactive Cluster Switcher Dropdown */}
+          <FormControl size="small" sx={{ minWidth: 220 }}>
+            <Select
+              value={id}
+              onChange={(e) => {
+                const targetId = e.target.value;
+                if (targetId && targetId !== id) {
+                  router.push(`/clusters/${targetId}`);
+                }
               }}
-            />
-            <Typography variant="h6" sx={{ fontWeight: 800, letterSpacing: '-0.02em', color: 'text.primary', fontSize: '1.1rem' }}>
-              {name}
-            </Typography>
-          </Box>
+              displayEmpty
+              renderValue={() => (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2 }}>
+                  <Box
+                    sx={{
+                      width: 9,
+                      height: 9,
+                      borderRadius: '50%',
+                      bgcolor: status === 'Healthy' ? '#10b981' : '#f59e0b',
+                      boxShadow: status === 'Healthy' ? '0 0 8px #10b981' : '0 0 8px #f59e0b',
+                    }}
+                  />
+                  <Typography variant="body2" sx={{ fontWeight: 800, color: 'text.primary', fontSize: '0.92rem' }}>
+                    {name}
+                  </Typography>
+                </Box>
+              )}
+              sx={{
+                borderRadius: 2,
+                bgcolor: 'background.paper',
+                '& .MuiSelect-select': { py: 0.8, px: 1.5 },
+              }}
+            >
+              {availableClusters.map((c) => (
+                <MenuItem key={c.id} value={c.id} sx={{ py: 1, px: 1.5 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 1.5 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2 }}>
+                      <Box
+                        sx={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: '50%',
+                          bgcolor: c.status === 'Healthy' ? '#10b981' : '#f59e0b',
+                        }}
+                      />
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        {c.name}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
+                      <Chip
+                        label={c.provider || 'K8s'}
+                        size="small"
+                        sx={{ height: 18, fontSize: '0.62rem', fontWeight: 600 }}
+                      />
+                      <Chip
+                        label={c.labels?.tier || c.labels?.environment || 'prod'}
+                        size="small"
+                        color={c.labels?.tier === 'production' ? 'primary' : 'default'}
+                        variant="outlined"
+                        sx={{ height: 18, fontSize: '0.62rem' }}
+                      />
+                    </Box>
+                  </Box>
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          {/* Quick Add Cluster Button */}
+          <Button
+            variant="outlined"
+            size="small"
+            color="info"
+            startIcon={<AddIcon fontSize="small" />}
+            onClick={() => setAddClusterOpen(true)}
+            sx={{
+              fontWeight: 700,
+              borderRadius: 2,
+              textTransform: 'none',
+              borderColor: 'rgba(56, 189, 248, 0.4)',
+              color: '#38bdf8',
+              '&:hover': { borderColor: '#38bdf8', bgcolor: 'rgba(56, 189, 248, 0.08)' },
+            }}
+          >
+            Add Cluster
+          </Button>
+
           <Chip
             label={type === 'management' ? 'Management Cluster' : 'Workload Cluster'}
             color={type === 'management' ? 'secondary' : 'default'}
@@ -2897,6 +2975,17 @@ users:
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Connect / Add Cluster Dialog */}
+      <AddClusterDialog
+        open={addClusterOpen}
+        onClose={() => setAddClusterOpen(false)}
+        onClusterAdded={(newClusterId) => {
+          setToastSeverity('success');
+          setToastMessage(`Cluster successfully attached and ready.`);
+          router.push(`/clusters/${newClusterId}`);
+        }}
+      />
 
       {/* YAML IDE Editor Dialog */}
       <YamlEditorDialog

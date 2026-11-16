@@ -14,5 +14,6 @@ export * from './utils/zone-routing';
 export { default as YamlIdeEditor } from './components/YamlIdeEditor';
 export { default as YamlEditorDialog, type YamlEditorDialogProps } from './components/YamlEditorDialog';
 export { TerminalWindow, type TerminalWindowProps } from './components/TerminalWindow';
+export { AddClusterDialog, type AddClusterDialogProps } from './components/AddClusterDialog';
 export * from './components/QueryProvider';
 export * from './hooks/use-auth';
