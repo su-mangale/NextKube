@@ -105,6 +105,7 @@ interface ClusterContextType {
   allClusters: ClusterInfo[]; // Unfiltered by fleet
   setActiveClusterId: (id: string) => void;
   attachCluster: (payload: AttachedClusterPayload) => ClusterInfo;
+  disconnectCluster: (id: string) => Promise<boolean>;
 }
 
 const ClusterContext = createContext<ClusterContextType | undefined>(undefined);
@@ -170,75 +171,10 @@ export function ClusterProvider({ children }: { children: ReactNode }) {
     queryFn: fetchClusters,
   });
   const availableClusters = serverClusters || EMPTY_CLUSTERS;
+  const allMergedClusters = availableClusters;
+  const filteredClusters = availableClusters;
 
-  const [localClusters, setLocalClusters] = useState<LocalClusterRecord[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        return JSON.parse(localStorage.getItem('ykp-created-clusters') || '[]');
-      } catch {
-        return [];
-      }
-    }
-    return [];
-  });
-
-  const allMergedClusters = useMemo(() => {
-    const overridden = availableClusters
-      .map((c) => {
-        const localOverride = localClusters.find((lc) => lc.id === c.id);
-        const mappedFleet = fleets.find((f) => f.clusterIds?.includes(c.id));
-        const defaultTier = (c.id === 'production-gcp' || c.id === 'production-nutanix') ? 'production' : 'staging';
-        const initialLabels = { tier: defaultTier, environment: defaultTier, provider: c.provider?.toLowerCase() || 'custom' };
-
-        return {
-          ...c,
-          managedType: (localOverride?.managedType || 'provisioned') as ClusterManagedType,
-          fleetId: localOverride?.fleetId || mappedFleet?.id || (defaultTier === 'production' ? 'fleet-prod' : 'fleet-staging'),
-          labels: { ...initialLabels, ...(localOverride?.labels || {}) },
-          ...(localOverride ? {
-            ...(localOverride.name ? { name: localOverride.name } : {}),
-            ...(localOverride.type ? { type: localOverride.type } : {}),
-            ...(localOverride.provider ? { provider: localOverride.provider } : {}),
-            ...(localOverride.status ? { status: localOverride.status } : {}),
-            ...(localOverride.version ? { version: localOverride.version } : {}),
-          } : {}),
-        };
-      })
-      .filter((c) => {
-        const localOverride = localClusters.find((lc) => lc.id === c.id);
-        return !(localOverride && localOverride.deleted);
-      });
-
-    const ids = new Set(overridden.map((c) => c.id));
-    const filteredLocal: ClusterInfo[] = localClusters
-      .filter((c): c is LocalClusterRecord & { id: string; name: string } =>
-        Boolean(c.id && c.name && !ids.has(c.id) && !c.deleted)
-      )
-      .map((lc) => ({
-        id: lc.id,
-        name: lc.name,
-        type: lc.type || 'workload',
-        managedType: lc.managedType || 'provisioned',
-        provider: lc.provider || 'Custom',
-        status: lc.status || 'Healthy',
-        version: lc.version || 'v1.32.0',
-        fleetId: lc.fleetId || 'fleet-prod',
-        labels: lc.labels || { tier: 'production', environment: 'production' },
-      }));
-    return [...overridden, ...filteredLocal];
-  }, [availableClusters, localClusters, fleets]);
-
-  // Dynamic filter clusters by active fleet
-  const filteredClusters = useMemo(() => {
-    if (activeFleetId === 'all') {
-      return allMergedClusters;
-    }
-    const currentFleet = fleets.find((f) => f.id === activeFleetId);
-    if (!currentFleet) return allMergedClusters;
-    return allMergedClusters.filter((c) => isClusterInFleet(c, currentFleet));
-  }, [allMergedClusters, activeFleetId, fleets]);
-
-  const activeCluster = allMergedClusters.find((c) => c.id === activeClusterId) || null;
+  const activeCluster = allMergedClusters.find((c) => c.id === activeClusterId) || allMergedClusters[0] || null;
   const activeFleet = fleets.find((f) => f.id === activeFleetId) || null;
 
   // Fleet CRUD handlers
@@ -280,10 +216,7 @@ export function ClusterProvider({ children }: { children: ReactNode }) {
   // Attach Cluster (BYOK) handler
   const attachCluster = (payload: AttachedClusterPayload): ClusterInfo => {
     const clusterId = payload.name.toLowerCase().replace(/\s+/g, '-');
-    const targetFleetId = payload.fleetId || 'fleet-prod';
-    const targetFleet = fleets.find((f) => f.id === targetFleetId);
-
-    const newCluster: LocalClusterRecord = {
+    const newCluster: ClusterInfo = {
       id: clusterId,
       name: payload.name,
       type: 'workload',
@@ -291,31 +224,26 @@ export function ClusterProvider({ children }: { children: ReactNode }) {
       provider: payload.provider,
       status: 'Healthy',
       version: payload.version || 'v1.32.0',
-      fleetId: targetFleetId,
+      fleetId: 'default',
       labels: payload.labels || {
-        tier: targetFleet?.environment || 'production',
-        environment: targetFleet?.environment || 'production',
-        managedBy: 'ykp-agent',
+        managedBy: 'nextkube',
         importMethod: payload.method,
       },
     };
+    return newCluster;
+  };
 
-    if (typeof window !== 'undefined') {
-      const existing: LocalClusterRecord[] = JSON.parse(localStorage.getItem('ykp-created-clusters') || '[]');
-      const filtered = existing.filter((c) => c.id !== clusterId);
-      filtered.push(newCluster);
-      localStorage.setItem('ykp-created-clusters', JSON.stringify(filtered));
-      setLocalClusters(filtered);
-
-      if (targetFleetId && targetFleetId !== 'all') {
-        const f = fleets.find((fl) => fl.id === targetFleetId);
-        if (f && !f.clusterIds.includes(clusterId)) {
-          updateFleet(f.id, { clusterIds: [...f.clusterIds, clusterId] });
-        }
+  const disconnectCluster = async (id: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/clusters/${id}`, { method: 'DELETE' });
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('ykp-created-clusters');
       }
+      return res.ok;
+    } catch (err) {
+      console.error('Failed to disconnect cluster:', err);
+      return false;
     }
-
-    return newCluster as ClusterInfo;
   };
 
   return (
@@ -337,6 +265,7 @@ export function ClusterProvider({ children }: { children: ReactNode }) {
         allClusters: allMergedClusters,
         setActiveClusterId,
         attachCluster,
+        disconnectCluster,
       }}
     >
       {children}

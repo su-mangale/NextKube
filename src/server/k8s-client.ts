@@ -49,11 +49,14 @@ export function getClusterApiClients(clusterId: string): ClusterApiClients | nul
   let kc = getDecryptedKubeConfig(clusterId);
 
   // If no stored credentials for this specific cluster ID, try local default kubeconfig (e.g. Minikube or Kind)
-  if (!kc) {
+  // ONLY for local cluster IDs ('default-local' or 'local') and ONLY if a genuine cluster configuration exists
+  if (!kc && (clusterId === 'default-local' || clusterId === 'local')) {
     try {
       const defaultKc = new k8s.KubeConfig();
       defaultKc.loadFromDefault();
-      if (defaultKc.getCurrentCluster()) {
+      const curr = defaultKc.getCurrentCluster();
+      // Only use if a real cluster is configured (not the library dummy fallback to http://localhost:8080)
+      if (curr && curr.server && curr.server !== 'http://localhost:8080') {
         kc = defaultKc;
       }
     } catch {
@@ -62,6 +65,12 @@ export function getClusterApiClients(clusterId: string): ClusterApiClients | nul
   }
 
   if (!kc) return null;
+
+  // If the cluster endpoint uses plain http://, set skipTLSVerify = true so @kubernetes/client-node does not throw
+  const currentCluster = kc.getCurrentCluster();
+  if (currentCluster && currentCluster.server?.startsWith('http://') && !currentCluster.skipTLSVerify) {
+    (currentCluster as any).skipTLSVerify = true;
+  }
 
   return {
     coreApi: kc.makeApiClient(k8s.CoreV1Api),
@@ -99,7 +108,7 @@ export function formatAge(timestamp?: Date | string | null): string {
 export async function fetchNamespaces(clusterId: string): Promise<string[]> {
   const clients = getClusterApiClients(clusterId);
   if (!clients) {
-    return ['default', 'kube-system', 'kube-public', 'kube-node-lease', 'ingress-nginx', 'monitoring'];
+    return [];
   }
 
   try {
@@ -107,14 +116,14 @@ export async function fetchNamespaces(clusterId: string): Promise<string[]> {
     return res.items.map((ns) => ns.metadata?.name || '').filter(Boolean);
   } catch (err) {
     console.warn(`[K8sClient] listNamespace failed for cluster ${clusterId}:`, err);
-    return ['default', 'kube-system', 'kube-public', 'kube-node-lease'];
+    return [];
   }
 }
 
 export async function fetchPods(clusterId: string, namespace?: string): Promise<K8sPod[]> {
   const clients = getClusterApiClients(clusterId);
   if (!clients) {
-    return getMockPods(namespace);
+    return [];
   }
 
   try {
@@ -148,14 +157,14 @@ export async function fetchPods(clusterId: string, namespace?: string): Promise<
     });
   } catch (err) {
     console.warn(`[K8sClient] fetchPods failed for ${clusterId}:`, err);
-    return getMockPods(namespace);
+    return [];
   }
 }
 
 export async function fetchDeployments(clusterId: string, namespace?: string): Promise<K8sDeployment[]> {
   const clients = getClusterApiClients(clusterId);
   if (!clients) {
-    return getMockDeployments(namespace);
+    return [];
   }
 
   try {
@@ -179,14 +188,14 @@ export async function fetchDeployments(clusterId: string, namespace?: string): P
     });
   } catch (err) {
     console.warn(`[K8sClient] fetchDeployments failed for ${clusterId}:`, err);
-    return getMockDeployments(namespace);
+    return [];
   }
 }
 
 export async function fetchServices(clusterId: string, namespace?: string): Promise<K8sService[]> {
   const clients = getClusterApiClients(clusterId);
   if (!clients) {
-    return getMockServices(namespace);
+    return [];
   }
 
   try {
@@ -216,14 +225,14 @@ export async function fetchServices(clusterId: string, namespace?: string): Prom
     });
   } catch (err) {
     console.warn(`[K8sClient] fetchServices failed for ${clusterId}:`, err);
-    return getMockServices(namespace);
+    return [];
   }
 }
 
 export async function fetchNodes(clusterId: string): Promise<K8sNode[]> {
   const clients = getClusterApiClients(clusterId);
   if (!clients) {
-    return getMockNodes();
+    return [];
   }
 
   try {
@@ -265,14 +274,14 @@ export async function fetchNodes(clusterId: string): Promise<K8sNode[]> {
     });
   } catch (err) {
     console.warn(`[K8sClient] fetchNodes failed for ${clusterId}:`, err);
-    return getMockNodes();
+    return [];
   }
 }
 
 export async function fetchEvents(clusterId: string, namespace?: string): Promise<K8sEvent[]> {
   const clients = getClusterApiClients(clusterId);
   if (!clients) {
-    return getMockEvents(namespace);
+    return [];
   }
 
   try {
@@ -292,14 +301,14 @@ export async function fetchEvents(clusterId: string, namespace?: string): Promis
     }));
   } catch (err) {
     console.warn(`[K8sClient] fetchEvents failed for ${clusterId}:`, err);
-    return getMockEvents(namespace);
+    return [];
   }
 }
 
 export async function fetchHPAs(clusterId: string, namespace?: string): Promise<K8sHPA[]> {
   const clients = getClusterApiClients(clusterId);
   if (!clients) {
-    return getMockHPAs(namespace);
+    return [];
   }
 
   try {
@@ -321,14 +330,14 @@ export async function fetchHPAs(clusterId: string, namespace?: string): Promise<
     }));
   } catch (err) {
     console.warn(`[K8sClient] fetchHPAs failed for ${clusterId}:`, err);
-    return getMockHPAs(namespace);
+    return [];
   }
 }
 
 export async function fetchPVs(clusterId: string): Promise<K8sPV[]> {
   const clients = getClusterApiClients(clusterId);
   if (!clients) {
-    return getMockPVs();
+    return [];
   }
 
   try {
@@ -345,11 +354,15 @@ export async function fetchPVs(clusterId: string): Promise<K8sPV[]> {
     }));
   } catch (err) {
     console.warn(`[K8sClient] fetchPVs failed for ${clusterId}:`, err);
-    return getMockPVs();
+    return [];
   }
 }
 
 export async function fetchGateways(clusterId: string, namespace?: string): Promise<K8sGateway[]> {
+  const clients = getClusterApiClients(clusterId);
+  if (!clients) {
+    return [];
+  }
   return [
     {
       name: 'internal-mesh-gateway',
@@ -373,6 +386,10 @@ export async function fetchGateways(clusterId: string, namespace?: string): Prom
 }
 
 export async function fetchHTTPRoutes(clusterId: string, namespace?: string): Promise<K8sHTTPRoute[]> {
+  const clients = getClusterApiClients(clusterId);
+  if (!clients) {
+    return [];
+  }
   return [
     {
       name: 'api-service-route',
@@ -411,7 +428,7 @@ function decodeHelmSecret(rawPayload: string): any | null {
 export async function fetchHelmReleases(clusterId: string, namespace?: string): Promise<K8sHelmRelease[]> {
   const clients = getClusterApiClients(clusterId);
   if (!clients) {
-    return getMockHelmReleases(namespace);
+    return [];
   }
 
   try {
@@ -421,7 +438,7 @@ export async function fetchHelmReleases(clusterId: string, namespace?: string): 
       : await clients.coreApi.listNamespacedSecret({ namespace, labelSelector: 'owner=helm' });
 
     if (!res.items || res.items.length === 0) {
-      return getMockHelmReleases(namespace);
+      return [];
     }
 
     // Group secrets by release name & namespace
@@ -476,14 +493,10 @@ export async function fetchHelmReleases(clusterId: string, namespace?: string): 
       });
     }
 
-    if (releases.length === 0) {
-      return getMockHelmReleases(namespace);
-    }
-
     return releases;
   } catch (err) {
     console.warn(`[K8sClient] fetchHelmReleases error for ${clusterId}:`, err);
-    return getMockHelmReleases(namespace);
+    return [];
   }
 }
 
@@ -744,6 +757,16 @@ export interface ClusterHealthReport {
 }
 
 export async function evaluateClusterHealth(clusterId: string): Promise<ClusterHealthReport> {
+  const clients = getClusterApiClients(clusterId);
+  if (!clients) {
+    return {
+      score: 100,
+      status: 'healthy',
+      anomalies: [],
+      counts: { critical: 0, warning: 0, info: 0 },
+    };
+  }
+
   const [pods, nodes, deployments, events] = await Promise.all([
     fetchPods(clusterId),
     fetchNodes(clusterId),
@@ -1002,7 +1025,29 @@ export async function applyManifestYaml(
 export async function fetchDashboardOverview(clusterId: string): Promise<DashboardQueryResult> {
   const clients = getClusterApiClients(clusterId);
   if (!clients) {
-    return getMockDashboardOverview(clusterId);
+    return {
+      overview: {
+        totalClusters: 0,
+        healthyClusters: 0,
+        provisioningClusters: 0,
+        failedClusters: 0,
+      },
+      resources: {
+        nodes: 0,
+        pods: 0,
+        namespaces: 0,
+        deployments: 0,
+      },
+      utilization: {
+        cpu: 0,
+        memory: 0,
+        storage: 0,
+      },
+      utilizationHistory: [],
+      clusters: [],
+      activities: [],
+      events: [],
+    };
   }
 
   try {
@@ -1065,7 +1110,29 @@ export async function fetchDashboardOverview(clusterId: string): Promise<Dashboa
       events: [],
     };
   } catch {
-    return getMockDashboardOverview(clusterId);
+    return {
+      overview: {
+        totalClusters: 0,
+        healthyClusters: 0,
+        provisioningClusters: 0,
+        failedClusters: 0,
+      },
+      resources: {
+        nodes: 0,
+        pods: 0,
+        namespaces: 0,
+        deployments: 0,
+      },
+      utilization: {
+        cpu: 0,
+        memory: 0,
+        storage: 0,
+      },
+      utilizationHistory: [],
+      clusters: [],
+      activities: [],
+      events: [],
+    };
   }
 }
 

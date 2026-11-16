@@ -94,68 +94,33 @@ function ensureStoreDir(): void {
   }
 }
 
-const DEFAULT_INITIAL_CLUSTERS: StoredClusterRecord[] = [
-  {
-    id: 'management-cluster',
-    name: 'Management Cluster',
-    type: 'management',
-    managedType: 'provisioned',
-    provider: 'GCP',
-    environment: 'production',
-    status: 'Healthy',
-    version: 'v1.32.0',
-    nodeCount: 6,
-    fleetId: 'fleet-prod',
-    labels: { tier: 'production', environment: 'production', provider: 'gcp' },
-    createdAt: '2026-08-01T10:00:00Z',
-  },
-  {
-    id: 'production-gcp',
-    name: 'GCP GKE Production US-East',
-    type: 'workload',
-    managedType: 'provisioned',
-    provider: 'GCP',
-    environment: 'production',
-    status: 'Healthy',
-    version: 'v1.31.2',
-    nodeCount: 18,
-    fleetId: 'fleet-prod',
-    labels: { tier: 'production', environment: 'production', provider: 'gcp', region: 'us-east1' },
-    createdAt: '2026-08-05T12:00:00Z',
-  },
-  {
-    id: 'staging-aws',
-    name: 'AWS EKS Staging EU-West',
-    type: 'workload',
-    managedType: 'provisioned',
-    provider: 'AWS',
-    environment: 'staging',
-    status: 'Healthy',
-    version: 'v1.31.1',
-    nodeCount: 4,
-    fleetId: 'fleet-staging',
-    labels: { tier: 'staging', environment: 'staging', provider: 'aws', region: 'eu-west-1' },
-    createdAt: '2026-08-10T14:30:00Z',
-  },
-];
+const DEFAULT_INITIAL_CLUSTERS: StoredClusterRecord[] = [];
 
 function readStoredClusters(): StoredClusterRecord[] {
   ensureStoreDir();
   if (!fs.existsSync(STORE_FILE)) {
     try {
-      fs.writeFileSync(STORE_FILE, JSON.stringify(DEFAULT_INITIAL_CLUSTERS, null, 2), 'utf-8');
-      return DEFAULT_INITIAL_CLUSTERS;
+      fs.writeFileSync(STORE_FILE, JSON.stringify([], null, 2), 'utf-8');
+      return [];
     } catch {
-      return DEFAULT_INITIAL_CLUSTERS;
+      return [];
     }
   }
 
   try {
     const raw = fs.readFileSync(STORE_FILE, 'utf-8');
-    return JSON.parse(raw);
+    const records: StoredClusterRecord[] = JSON.parse(raw);
+    // Only return clusters that have encrypted vault credentials attached via Kubeconfig
+    const valid = records.filter(
+      (r) => Boolean(r.encryptedData && r.iv && r.tag)
+    );
+    if (valid.length !== records.length) {
+      writeStoredClusters(valid);
+    }
+    return valid;
   } catch (err) {
     console.error('[ClusterVault] Failed to read store file:', err);
-    return DEFAULT_INITIAL_CLUSTERS;
+    return [];
   }
 }
 
@@ -166,55 +131,28 @@ function writeStoredClusters(records: StoredClusterRecord[]): void {
 
 /**
  * Builds an active @kubernetes/client-node KubeConfig from an AttachedClusterPayload.
+ * Kubeconfig is the strictly enforced single connection method.
  */
 export function buildKubeConfig(payload: {
-  method: 'kubeconfig' | 'serviceToken' | 'agent';
+  method?: string;
   kubeconfigRaw?: string;
   contextName?: string;
-  serverUrl?: string;
-  serviceToken?: string;
-  caCert?: string;
-  skipTls?: boolean;
 }): { kc: k8s.KubeConfig; serverUrl?: string } {
   const kc = new k8s.KubeConfig();
   let serverUrl: string | undefined;
 
-  if (payload.method === 'kubeconfig' && payload.kubeconfigRaw) {
+  if (payload.kubeconfigRaw) {
     kc.loadFromString(payload.kubeconfigRaw);
     if (payload.contextName) {
       kc.setCurrentContext(payload.contextName);
     }
     const current = kc.getCurrentCluster();
+    if (current && current.server?.startsWith('http://') && !current.skipTLSVerify) {
+      (current as any).skipTLSVerify = true;
+    }
     serverUrl = current?.server;
-  } else if (payload.method === 'serviceToken' && payload.serverUrl && payload.serviceToken) {
-    const cleanUrl = payload.serverUrl.replace(/\/$/, '');
-    serverUrl = cleanUrl;
-    kc.loadFromOptions({
-      clusters: [
-        {
-          name: 'target-cluster',
-          server: cleanUrl,
-          skipTLSVerify: Boolean(payload.skipTls),
-          caData: payload.caCert ? Buffer.from(payload.caCert.trim()).toString('base64') : undefined,
-        },
-      ],
-      users: [
-        {
-          name: 'service-account-user',
-          token: payload.serviceToken.trim(),
-        },
-      ],
-      contexts: [
-        {
-          name: 'nextkube-context',
-          cluster: 'target-cluster',
-          user: 'service-account-user',
-        },
-      ],
-      currentContext: 'nextkube-context',
-    });
   } else {
-    throw new Error('Incomplete cluster connection credentials.');
+    throw new Error('A valid Kubeconfig YAML file or text is required to connect to the cluster.');
   }
 
   return { kc, serverUrl };
@@ -308,6 +246,10 @@ export async function saveClusterToVault(
   payload: AttachedClusterPayload
 ): Promise<{ success: boolean; cluster?: SanitizedClusterInfo; error?: string }> {
   try {
+    if (payload.method !== 'kubeconfig' || !payload.kubeconfigRaw?.trim()) {
+      return { success: false, error: 'Only Kubeconfig files are allowed to connect to the cluster.' };
+    }
+
     const clusterId = payload.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
 
     // Run connection test

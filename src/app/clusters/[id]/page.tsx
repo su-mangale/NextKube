@@ -69,6 +69,7 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import HistoryIcon from '@mui/icons-material/History';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
+import LinkOffIcon from '@mui/icons-material/LinkOff';
 import { useQueryClient } from '@tanstack/react-query';
 
 import {
@@ -125,6 +126,7 @@ import {
   YamlIdeEditor,
   YamlEditorDialog,
   AddClusterDialog,
+  NoClusterView,
   getZoneUrl,
 } from '@/shared';
 
@@ -252,10 +254,10 @@ spec:
   const [toastSeverity, setToastSeverity] = useState<'success' | 'error' | 'warning' | 'info'>('success');
 
   // Fetch cluster profile & metadata
-  const { availableClusters } = useCluster();
+  const { availableClusters, disconnectCluster } = useCluster();
   const { data: currentUser } = useCurrentUser();
   const clusterMeta = useMemo(() => {
-    return availableClusters.find((c) => c.id === id) || null;
+    return availableClusters.find((c) => c.id === id) || availableClusters[0] || null;
   }, [availableClusters, id]);
 
   const {
@@ -314,7 +316,7 @@ spec:
 
   // Phase 5: Live Watch SSE Stream Connection
   useEffect(() => {
-    if (!id) return;
+    if (!id || availableClusters.length === 0) return;
     let es: EventSource | null = null;
     try {
       es = new EventSource(`/api/clusters/${id}/watch`);
@@ -1748,6 +1750,26 @@ users:
     } catch (e) { }
   };
 
+  const handleDisconnectCluster = async () => {
+    if (!clusterMeta?.id) return;
+    const ok = window.confirm(`Disconnect cluster "${clusterMeta.name}" from NextKube?`);
+    if (!ok) return;
+
+    try {
+      await disconnectCluster(clusterMeta.id);
+      await queryClient.invalidateQueries({ queryKey: ['clustersList'] });
+      setToastSeverity('info');
+      setToastMessage(`Cluster "${clusterMeta.name}" disconnected.`);
+    } catch (err: any) {
+      setToastSeverity('error');
+      setToastMessage(err.message || 'Failed to disconnect cluster.');
+    }
+  };
+
+  if (availableClusters.length === 0) {
+    return <NoClusterView />;
+  }
+
   if (metricsError && !clusterMeta) {
     return (
       <Box sx={{ p: 4, textAlign: 'center' }}>
@@ -1782,106 +1804,60 @@ users:
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
-          {/* Interactive Cluster Switcher Dropdown */}
-          <FormControl size="small" sx={{ minWidth: 220 }}>
-            <Select
-              value={id}
-              onChange={(e) => {
-                const targetId = e.target.value;
-                if (targetId && targetId !== id) {
-                  router.push(`/clusters/${targetId}`);
-                }
-              }}
-              displayEmpty
-              renderValue={() => (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2 }}>
-                  <Box
-                    sx={{
-                      width: 9,
-                      height: 9,
-                      borderRadius: '50%',
-                      bgcolor: status === 'Healthy' ? '#10b981' : '#f59e0b',
-                      boxShadow: status === 'Healthy' ? '0 0 8px #10b981' : '0 0 8px #f59e0b',
-                    }}
-                  />
-                  <Typography variant="body2" sx={{ fontWeight: 800, color: 'text.primary', fontSize: '0.92rem' }}>
-                    {name}
-                  </Typography>
-                </Box>
-              )}
-              sx={{
-                borderRadius: 2,
-                bgcolor: 'background.paper',
-                '& .MuiSelect-select': { py: 0.8, px: 1.5 },
-              }}
-            >
-              {availableClusters.map((c) => (
-                <MenuItem key={c.id} value={c.id} sx={{ py: 1, px: 1.5 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 1.5 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2 }}>
-                      <Box
-                        sx={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: '50%',
-                          bgcolor: c.status === 'Healthy' ? '#10b981' : '#f59e0b',
-                        }}
-                      />
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {c.name}
-                      </Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
-                      <Chip
-                        label={c.provider || 'K8s'}
-                        size="small"
-                        sx={{ height: 18, fontSize: '0.62rem', fontWeight: 600 }}
-                      />
-                      <Chip
-                        label={c.labels?.tier || c.labels?.environment || 'prod'}
-                        size="small"
-                        color={c.labels?.tier === 'production' ? 'primary' : 'default'}
-                        variant="outlined"
-                        sx={{ height: 18, fontSize: '0.62rem' }}
-                      />
-                    </Box>
-                  </Box>
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-
-          {/* Quick Add Cluster Button */}
-          <Button
-            variant="outlined"
-            size="small"
-            color="info"
-            startIcon={<AddIcon fontSize="small" />}
-            onClick={() => setAddClusterOpen(true)}
+          <Box
             sx={{
-              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.9,
+              px: 1.4,
+              py: 0.6,
               borderRadius: 2,
-              textTransform: 'none',
-              borderColor: 'rgba(56, 189, 248, 0.4)',
-              color: '#38bdf8',
-              '&:hover': { borderColor: '#38bdf8', bgcolor: 'rgba(56, 189, 248, 0.08)' },
+              bgcolor: 'action.hover',
+              border: '1px solid',
+              borderColor: 'divider',
             }}
           >
-            Add Cluster
-          </Button>
-
-          <Chip
-            label={type === 'management' ? 'Management Cluster' : 'Workload Cluster'}
-            color={type === 'management' ? 'secondary' : 'default'}
-            size="small"
-            sx={{ fontWeight: 700, borderRadius: 1.5, fontSize: '0.68rem', height: 22 }}
-          />
-          <Chip
-            label={status}
-            color={status === 'Healthy' ? 'success' : 'warning'}
-            size="small"
-            sx={{ fontWeight: 700, borderRadius: 1.5, fontSize: '0.68rem', height: 22 }}
-          />
+            <Box
+              sx={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                bgcolor: status === 'Healthy' ? '#10b981' : '#f59e0b',
+                boxShadow: status === 'Healthy' ? '0 0 8px #10b981' : '0 0 8px #f59e0b',
+              }}
+            />
+            <Typography variant="body2" sx={{ fontWeight: 750, color: 'text.primary', fontSize: '0.85rem' }}>
+              {clusterMeta?.name || 'Kubernetes Cluster'}
+            </Typography>
+            <Chip
+              label={status}
+              size="small"
+              color={status === 'Healthy' ? 'success' : 'warning'}
+              sx={{ fontWeight: 700, height: 18, fontSize: '0.62rem', borderRadius: 1 }}
+            />
+            <Tooltip title="Disconnect this Kubernetes cluster from NextKube">
+              <Button
+                variant="outlined"
+                color="error"
+                size="small"
+                startIcon={<LinkOffIcon sx={{ fontSize: '0.9rem !important' }} />}
+                onClick={handleDisconnectCluster}
+                sx={{
+                  fontWeight: 700,
+                  fontSize: '0.68rem',
+                  height: 22,
+                  py: 0,
+                  px: 0.8,
+                  borderRadius: 1,
+                  textTransform: 'none',
+                  borderColor: 'rgba(239, 68, 68, 0.4)',
+                  '&:hover': { borderColor: 'error.main', bgcolor: 'rgba(239, 68, 68, 0.08)' },
+                }}
+              >
+                Disconnect
+              </Button>
+            </Tooltip>
+          </Box>
         </Box>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, ml: 'auto' }}>

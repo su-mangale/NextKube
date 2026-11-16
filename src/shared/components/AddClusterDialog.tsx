@@ -8,8 +8,6 @@ import {
   DialogActions,
   Box,
   Typography,
-  Tabs,
-  Tab,
   TextField,
   Button,
   FormControl,
@@ -19,25 +17,17 @@ import {
   Alert,
   CircularProgress,
   IconButton,
-  Tooltip,
-  Checkbox,
-  FormControlLabel,
   Chip,
-  InputAdornment,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
-import Visibility from '@mui/icons-material/Visibility';
-import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import HubIcon from '@mui/icons-material/Hub';
-import KeyIcon from '@mui/icons-material/Key';
-import DescriptionIcon from '@mui/icons-material/Description';
 import NetworkCheckIcon from '@mui/icons-material/NetworkCheck';
 import jsyaml from 'js-yaml';
 import { useQueryClient } from '@tanstack/react-query';
-import { AttachedClusterPayload, ClusterConnectionTestResult, FleetEnvironment } from '../types/fleet.types';
+import { AttachedClusterPayload, ClusterConnectionTestResult } from '../types/fleet.types';
 import { useCluster } from '../context/cluster-context';
 
 export interface AddClusterDialogProps {
@@ -48,29 +38,17 @@ export interface AddClusterDialogProps {
 
 export function AddClusterDialog({ open, onClose, onClusterAdded }: AddClusterDialogProps) {
   const queryClient = useQueryClient();
-  const { availableFleets, attachCluster, setActiveClusterId } = useCluster();
+  const { attachCluster, setActiveClusterId } = useCluster();
 
-  // Active Tab: 0 = Kubeconfig, 1 = ServiceAccount Token
-  const [activeTab, setActiveTab] = useState(0);
-
-  // Common metadata
+  // Cluster metadata
   const [clusterName, setClusterName] = useState('');
   const [provider, setProvider] = useState<'GCP' | 'AWS' | 'Azure' | 'Nutanix' | 'OpenShift' | 'Baremetal' | 'Kind' | 'Minikube' | 'Custom'>('Custom');
-  const [environment, setEnvironment] = useState<FleetEnvironment>('production');
-  const [fleetId, setFleetId] = useState('fleet-prod');
 
-  // Kubeconfig tab states
+  // Kubeconfig states
   const [kubeconfigRaw, setKubeconfigRaw] = useState('');
   const [selectedContext, setSelectedContext] = useState('');
   const [parsedContexts, setParsedContexts] = useState<string[]>([]);
   const [kubeconfigFileName, setKubeconfigFileName] = useState<string | null>(null);
-
-  // ServiceAccount Token tab states
-  const [serverUrl, setServerUrl] = useState('');
-  const [serviceToken, setServiceToken] = useState('');
-  const [showToken, setShowToken] = useState(false);
-  const [caCert, setCaCert] = useState('');
-  const [skipTls, setSkipTls] = useState(false);
 
   // Test Connection & Save states
   const [testing, setTesting] = useState(false);
@@ -128,13 +106,9 @@ export function AddClusterDialog({ open, onClose, onClusterAdded }: AddClusterDi
     setErrorMessage(null);
 
     const payload: Partial<AttachedClusterPayload> = {
-      method: activeTab === 0 ? 'kubeconfig' : 'serviceToken',
-      kubeconfigRaw: activeTab === 0 ? kubeconfigRaw : undefined,
-      contextName: activeTab === 0 ? selectedContext : undefined,
-      serverUrl: activeTab === 1 ? serverUrl : undefined,
-      serviceToken: activeTab === 1 ? serviceToken : undefined,
-      caCert: activeTab === 1 ? caCert : undefined,
-      skipTls: activeTab === 1 ? skipTls : undefined,
+      method: 'kubeconfig',
+      kubeconfigRaw,
+      contextName: selectedContext || undefined,
     };
 
     try {
@@ -163,13 +137,8 @@ export function AddClusterDialog({ open, onClose, onClusterAdded }: AddClusterDi
       return;
     }
 
-    if (activeTab === 0 && !kubeconfigRaw.trim()) {
-      setErrorMessage('Kubeconfig content is required.');
-      return;
-    }
-
-    if (activeTab === 1 && (!serverUrl.trim() || !serviceToken.trim())) {
-      setErrorMessage('API Server URL and ServiceAccount Token are both required.');
+    if (!kubeconfigRaw.trim()) {
+      setErrorMessage('Kubeconfig YAML file or text is required.');
       return;
     }
 
@@ -179,15 +148,11 @@ export function AddClusterDialog({ open, onClose, onClusterAdded }: AddClusterDi
     const payload: AttachedClusterPayload = {
       name: clusterName.trim(),
       provider,
-      environment,
-      fleetId,
-      method: activeTab === 0 ? 'kubeconfig' : 'serviceToken',
-      kubeconfigRaw: activeTab === 0 ? kubeconfigRaw : undefined,
-      contextName: activeTab === 0 ? selectedContext : undefined,
-      serverUrl: activeTab === 1 ? serverUrl.trim() : undefined,
-      serviceToken: activeTab === 1 ? serviceToken.trim() : undefined,
-      caCert: activeTab === 1 ? caCert.trim() : undefined,
-      skipTls: activeTab === 1 ? skipTls : undefined,
+      environment: 'production',
+      fleetId: 'default',
+      method: 'kubeconfig',
+      kubeconfigRaw,
+      contextName: selectedContext || undefined,
       version: testResult?.version,
       nodeCount: testResult?.nodeCount,
     };
@@ -231,21 +196,14 @@ export function AddClusterDialog({ open, onClose, onClusterAdded }: AddClusterDi
     setKubeconfigFileName(null);
     setParsedContexts([]);
     setSelectedContext('');
-    setServerUrl('');
-    setServiceToken('');
-    setCaCert('');
-    setSkipTls(false);
     setTestResult(null);
     setErrorMessage(null);
     onClose();
   };
 
   const isFormValid = useMemo(() => {
-    if (!clusterName.trim()) return false;
-    if (activeTab === 0) return Boolean(kubeconfigRaw.trim());
-    if (activeTab === 1) return Boolean(serverUrl.trim() && serviceToken.trim());
-    return false;
-  }, [clusterName, activeTab, kubeconfigRaw, serverUrl, serviceToken]);
+    return Boolean(clusterName.trim() && kubeconfigRaw.trim());
+  }, [clusterName, kubeconfigRaw]);
 
   return (
     <Dialog
@@ -286,7 +244,7 @@ export function AddClusterDialog({ open, onClose, onClusterAdded }: AddClusterDi
               Connect Kubernetes Cluster
             </Typography>
             <Typography variant="body2" sx={{ color: '#94a3b8', fontSize: '0.8rem' }}>
-              Add a cluster via Kubeconfig or ServiceAccount Bearer Token
+              Connect via Kubeconfig file or raw YAML configuration
             </Typography>
           </Box>
         </Box>
@@ -296,46 +254,11 @@ export function AddClusterDialog({ open, onClose, onClusterAdded }: AddClusterDi
       </DialogTitle>
 
       <DialogContent dividers sx={{ borderColor: 'rgba(255, 255, 255, 0.08)', py: 2 }}>
-        {/* Method Switcher Tabs */}
-        <Box sx={{ borderBottom: 1, borderColor: 'rgba(255, 255, 255, 0.1)', mb: 3 }}>
-          <Tabs
-            value={activeTab}
-            onChange={(_, val) => {
-              setActiveTab(val);
-              setTestResult(null);
-              setErrorMessage(null);
-            }}
-            sx={{
-              minHeight: 44,
-              '& .MuiTab-root': {
-                color: '#94a3b8',
-                fontWeight: 600,
-                fontSize: '0.88rem',
-                textTransform: 'none',
-                minHeight: 44,
-                '&.Mui-selected': { color: '#38bdf8' },
-              },
-              '& .MuiTabs-indicator': { bgcolor: '#38bdf8' },
-            }}
-          >
-            <Tab
-              icon={<DescriptionIcon sx={{ fontSize: '1.1rem !important', mr: 0.8 }} />}
-              iconPosition="start"
-              label="Kubeconfig File / YAML"
-            />
-            <Tab
-              icon={<KeyIcon sx={{ fontSize: '1.1rem !important', mr: 0.8 }} />}
-              iconPosition="start"
-              label="ServiceAccount Token"
-            />
-          </Tabs>
-        </Box>
-
-        {/* Common Cluster Details */}
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 2.5 }}>
+        {/* Cluster Details */}
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr' }, gap: 2, mb: 2.5 }}>
           <TextField
             label="Cluster Display Name"
-            placeholder="e.g. Production US-East GKE"
+            placeholder="e.g. My-Production-Cluster"
             size="small"
             required
             value={clusterName}
@@ -363,336 +286,214 @@ export function AddClusterDialog({ open, onClose, onClusterAdded }: AddClusterDi
               <MenuItem value="Azure">Azure Kubernetes Service (AKS)</MenuItem>
               <MenuItem value="Kind">KinD (Kubernetes in Docker)</MenuItem>
               <MenuItem value="Minikube">Minikube</MenuItem>
-              <MenuItem value="Nutanix">Nutanix AHV</MenuItem>
-              <MenuItem value="OpenShift">Red Hat OpenShift</MenuItem>
               <MenuItem value="Baremetal">Baremetal / K3s</MenuItem>
+              <MenuItem value="OpenShift">Red Hat OpenShift</MenuItem>
               <MenuItem value="Custom">Custom / Other</MenuItem>
-            </Select>
-          </FormControl>
-
-          <FormControl size="small">
-            <InputLabel id="env-select-label" sx={{ color: '#94a3b8' }}>
-              Environment Tier
-            </InputLabel>
-            <Select
-              labelId="env-select-label"
-              value={environment}
-              label="Environment Tier"
-              onChange={(e) => setEnvironment(e.target.value as any)}
-              sx={{ color: '#f8fafc', bgcolor: 'rgba(15, 23, 42, 0.6)', borderRadius: 2 }}
-            >
-              <MenuItem value="production">Production</MenuItem>
-              <MenuItem value="staging">Staging</MenuItem>
-              <MenuItem value="development">Development</MenuItem>
-              <MenuItem value="edge">Edge / Branch</MenuItem>
-            </Select>
-          </FormControl>
-
-          <FormControl size="small">
-            <InputLabel id="fleet-select-label" sx={{ color: '#94a3b8' }}>
-              Target Fleet
-            </InputLabel>
-            <Select
-              labelId="fleet-select-label"
-              value={fleetId}
-              label="Target Fleet"
-              onChange={(e) => setFleetId(e.target.value)}
-              sx={{ color: '#f8fafc', bgcolor: 'rgba(15, 23, 42, 0.6)', borderRadius: 2 }}
-            >
-              {availableFleets.map((fleet) => (
-                <MenuItem key={fleet.id} value={fleet.id}>
-                  {fleet.displayName} ({fleet.environment})
-                </MenuItem>
-              ))}
             </Select>
           </FormControl>
         </Box>
 
-        {/* TAB 0: Kubeconfig Method */}
-        {activeTab === 0 && (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {/* File Upload Drop Zone */}
-            <Box
-              component="label"
-              sx={{
-                p: 2,
-                borderRadius: 2,
-                border: '1px dashed rgba(56, 189, 248, 0.3)',
-                bgcolor: 'rgba(56, 189, 248, 0.04)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexDirection: 'column',
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-                '&:hover': {
-                  borderColor: '#38bdf8',
-                  bgcolor: 'rgba(56, 189, 248, 0.08)',
-                },
-              }}
-            >
-              <input type="file" accept=".yaml,.yml,.conf" hidden onChange={handleFileUpload} />
-              <CloudUploadIcon sx={{ color: '#38bdf8', fontSize: 28, mb: 0.5 }} />
-              <Typography variant="body2" sx={{ fontWeight: 600, color: '#f8fafc' }}>
-                {kubeconfigFileName ? `Selected: ${kubeconfigFileName}` : 'Drop .kube/config file here, or click to browse'}
-              </Typography>
-              <Typography variant="caption" sx={{ color: '#94a3b8' }}>
-                Supports standard multi-cluster kubeconfig files
-              </Typography>
-            </Box>
+        {/* Kubeconfig Upload Drop Zone */}
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <Box
+            component="label"
+            sx={{
+              p: 2.5,
+              borderRadius: 2,
+              border: '1px dashed rgba(56, 189, 248, 0.35)',
+              bgcolor: 'rgba(56, 189, 248, 0.04)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexDirection: 'column',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              '&:hover': {
+                borderColor: '#38bdf8',
+                bgcolor: 'rgba(56, 189, 248, 0.08)',
+              },
+            }}
+          >
+            <input type="file" accept=".yaml,.yml,.conf" hidden onChange={handleFileUpload} />
+            <CloudUploadIcon sx={{ color: '#38bdf8', fontSize: 32, mb: 0.5 }} />
+            <Typography variant="body2" sx={{ fontWeight: 600, color: '#f8fafc' }}>
+              {kubeconfigFileName ? `Selected: ${kubeconfigFileName}` : 'Drop .kube/config file here, or click to browse'}
+            </Typography>
+            <Typography variant="caption" sx={{ color: '#94a3b8' }}>
+              Supports standard Kubernetes kubeconfig files (.yaml, .yml, .conf)
+            </Typography>
+          </Box>
 
-            {/* Context Selector if multiple contexts found */}
-            {parsedContexts.length > 0 && (
-              <FormControl size="small" fullWidth>
-                <InputLabel id="context-select-label" sx={{ color: '#94a3b8' }}>
-                  Target Kubeconfig Context ({parsedContexts.length} detected)
-                </InputLabel>
-                <Select
-                  labelId="context-select-label"
-                  value={selectedContext}
-                  label={`Target Kubeconfig Context (${parsedContexts.length} detected)`}
-                  onChange={(e) => setSelectedContext(e.target.value)}
-                  sx={{ color: '#f8fafc', bgcolor: 'rgba(15, 23, 42, 0.6)', borderRadius: 2 }}
-                >
-                  {parsedContexts.map((ctx) => (
-                    <MenuItem key={ctx} value={ctx}>
-                      {ctx}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            )}
+          {/* Context Selector if multiple contexts found */}
+          {parsedContexts.length > 0 && (
+            <FormControl size="small" fullWidth>
+              <InputLabel id="context-select-label" sx={{ color: '#94a3b8' }}>
+                Target Context ({parsedContexts.length} detected)
+              </InputLabel>
+              <Select
+                labelId="context-select-label"
+                value={selectedContext}
+                label={`Target Context (${parsedContexts.length} detected)`}
+                onChange={(e) => setSelectedContext(e.target.value)}
+                sx={{ color: '#f8fafc', bgcolor: 'rgba(15, 23, 42, 0.6)', borderRadius: 2 }}
+              >
+                {parsedContexts.map((ctx) => (
+                  <MenuItem key={ctx} value={ctx}>
+                    {ctx}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
 
-            {/* Raw YAML Paste Area */}
-            <Box>
-              <Typography variant="caption" sx={{ color: '#94a3b8', fontWeight: 600, mb: 0.5, display: 'block' }}>
-                Or paste Kubeconfig YAML text:
-              </Typography>
-              <TextField
-                fullWidth
-                multiline
-                rows={7}
-                placeholder="apiVersion: v1
+          {/* Raw YAML Paste Area */}
+          <Box>
+            <Typography variant="caption" sx={{ color: '#94a3b8', fontWeight: 600, mb: 0.5, display: 'block' }}>
+              Or paste Kubeconfig YAML text:
+            </Typography>
+            <TextField
+              fullWidth
+              multiline
+              rows={8}
+              placeholder={`apiVersion: v1
 kind: Config
 clusters:
 - cluster:
     server: https://127.0.0.1:6443
     certificate-authority-data: ...
-  name: local-kind
+  name: kubernetes
 contexts:
 - context:
-    cluster: local-kind
-    user: kind-admin
-  name: kind-local
-current-context: kind-local
+    cluster: kubernetes
+    user: admin
+  name: default
+current-context: default
 users:
-- name: kind-admin
+- name: admin
   user:
-    client-certificate-data: ..."
-                value={kubeconfigRaw}
-                onChange={(e) => handleKubeconfigChange(e.target.value)}
-                slotProps={{
-                  input: {
-                    sx: {
-                      fontFamily: 'monospace',
-                      fontSize: '0.8rem',
-                      color: '#f8fafc',
-                      bgcolor: 'rgba(15, 23, 42, 0.7)',
-                      borderRadius: 2,
-                    },
-                  },
-                }}
-              />
-            </Box>
-          </Box>
-        )}
-
-        {/* TAB 1: ServiceAccount Token Method */}
-        {activeTab === 1 && (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <TextField
-              fullWidth
-              label="Kubernetes API Server URL"
-              placeholder="https://kubernetes.default.svc:443 or https://34.120.45.10:6443"
-              size="small"
-              required
-              value={serverUrl}
-              onChange={(e) => setServerUrl(e.target.value)}
-              slotProps={{
-                input: {
-                  sx: { color: '#f8fafc', bgcolor: 'rgba(15, 23, 42, 0.6)', borderRadius: 2 },
-                },
-              }}
-            />
-
-            <TextField
-              fullWidth
-              multiline
-              rows={3}
-              label="ServiceAccount Bearer Token"
-              placeholder="eyJhbGciOiJSUzI1NiIsImtpZCI6..."
-              size="small"
-              required
-              type={showToken ? 'text' : 'password'}
-              value={serviceToken}
-              onChange={(e) => setServiceToken(e.target.value)}
+    client-certificate-data: ...`}
+              value={kubeconfigRaw}
+              onChange={(e) => handleKubeconfigChange(e.target.value)}
               slotProps={{
                 input: {
                   sx: {
                     fontFamily: 'monospace',
                     fontSize: '0.8rem',
                     color: '#f8fafc',
-                    bgcolor: 'rgba(15, 23, 42, 0.6)',
-                    borderRadius: 2,
-                  },
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton
-                        aria-label="toggle token visibility"
-                        onClick={() => setShowToken(!showToken)}
-                        edge="end"
-                        size="small"
-                        sx={{ color: '#64748b' }}
-                      >
-                        {showToken ? <VisibilityOff sx={{ fontSize: 18 }} /> : <Visibility sx={{ fontSize: 18 }} />}
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                },
-              }}
-            />
-
-            <TextField
-              fullWidth
-              multiline
-              rows={3}
-              label="Certificate Authority Data (PEM, Optional)"
-              placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
-              size="small"
-              value={caCert}
-              onChange={(e) => setCaCert(e.target.value)}
-              slotProps={{
-                input: {
-                  sx: {
-                    fontFamily: 'monospace',
-                    fontSize: '0.78rem',
-                    color: '#f8fafc',
-                    bgcolor: 'rgba(15, 23, 42, 0.6)',
+                    bgcolor: 'rgba(15, 23, 42, 0.7)',
                     borderRadius: 2,
                   },
                 },
               }}
             />
+          </Box>
+        </Box>
 
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={skipTls}
-                  onChange={(e) => setSkipTls(e.target.checked)}
-                  sx={{ color: '#38bdf8', '&.Mui-checked': { color: '#38bdf8' } }}
-                />
-              }
-              label={
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Typography variant="body2" sx={{ color: '#f8fafc' }}>
-                    Insecure Skip TLS Verify
-                  </Typography>
-                  <Chip
-                    label="Dev / Kind Only"
-                    size="small"
-                    sx={{
-                      height: 20,
-                      fontSize: '0.65rem',
-                      bgcolor: 'rgba(245, 158, 11, 0.15)',
-                      color: '#fbbf24',
-                      border: '1px solid rgba(245, 158, 11, 0.3)',
-                    }}
-                  />
+        {/* Pre-flight Connection Result Alerts */}
+        {testResult && (
+          <Box sx={{ mt: 2.5 }}>
+            {testResult.success ? (
+              <Alert
+                severity="success"
+                icon={<CheckCircleIcon fontSize="inherit" />}
+                sx={{
+                  bgcolor: 'rgba(16, 185, 129, 0.1)',
+                  color: '#34d399',
+                  border: '1px solid rgba(16, 185, 129, 0.25)',
+                  borderRadius: 2,
+                }}
+              >
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                  Pre-flight Connection Successful!
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 1.5, mt: 0.5, flexWrap: 'wrap' }}>
+                  {testResult.version && <Chip label={`K8s ${testResult.version}`} size="small" color="success" />}
+                  {testResult.nodeCount !== undefined && (
+                    <Chip label={`${testResult.nodeCount} Node${testResult.nodeCount === 1 ? '' : 's'}`} size="small" color="success" />
+                  )}
+                  {testResult.latencyMs !== undefined && (
+                    <Chip label={`${testResult.latencyMs}ms latency`} size="small" variant="outlined" sx={{ color: '#34d399' }} />
+                  )}
                 </Box>
-              }
-            />
+              </Alert>
+            ) : (
+              <Alert
+                severity="error"
+                icon={<ErrorIcon fontSize="inherit" />}
+                sx={{
+                  bgcolor: 'rgba(239, 68, 68, 0.1)',
+                  color: '#f87171',
+                  border: '1px solid rgba(239, 68, 68, 0.25)',
+                  borderRadius: 2,
+                }}
+              >
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                  Connection Failed
+                </Typography>
+                <Typography variant="caption">{testResult.error}</Typography>
+              </Alert>
+            )}
           </Box>
         )}
 
-        {/* Live Feedback: Test Results / Errors */}
-        {testResult && testResult.success && (
-          <Alert
-            icon={<CheckCircleIcon fontSize="inherit" />}
-            severity="success"
-            sx={{
-              mt: 2.5,
-              bgcolor: 'rgba(16, 185, 129, 0.15)',
-              color: '#6ee7b7',
-              border: '1px solid rgba(16, 185, 129, 0.3)',
-              borderRadius: 2,
-            }}
-          >
-            Connected to API Server successfully! Detected Kubernetes{' '}
-            <Box component="strong" sx={{ color: '#ffffff' }}>
-              {testResult.version || 'v1.31.0'}
-            </Box>
-            {testResult.nodeCount !== undefined && ` • ${testResult.nodeCount} Nodes`}
-            {testResult.latencyMs !== undefined && ` (${testResult.latencyMs}ms latency)`}
-          </Alert>
-        )}
-
-        {errorMessage && (
-          <Alert
-            icon={<ErrorIcon fontSize="inherit" />}
-            severity="error"
-            sx={{
-              mt: 2.5,
-              bgcolor: 'rgba(239, 68, 68, 0.15)',
-              color: '#fca5a5',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
-              borderRadius: 2,
-            }}
-          >
-            {errorMessage}
-          </Alert>
+        {errorMessage && !testResult && (
+          <Box sx={{ mt: 2 }}>
+            <Alert
+              severity="error"
+              sx={{
+                bgcolor: 'rgba(239, 68, 68, 0.1)',
+                color: '#f87171',
+                border: '1px solid rgba(239, 68, 68, 0.25)',
+                borderRadius: 2,
+              }}
+            >
+              {errorMessage}
+            </Alert>
+          </Box>
         )}
       </DialogContent>
 
-      <DialogActions sx={{ p: 2.5, display: 'flex', justifyContent: 'space-between', bgcolor: '#0b0f19' }}>
+      <DialogActions sx={{ px: 3, py: 2, borderColor: 'rgba(255, 255, 255, 0.08)', gap: 1.5 }}>
+        <Button onClick={handleResetAndClose} sx={{ color: '#94a3b8', textTransform: 'none', fontWeight: 600 }}>
+          Cancel
+        </Button>
+
         <Button
           variant="outlined"
           color="info"
-          startIcon={testing ? <CircularProgress size={16} sx={{ color: '#38bdf8' }} /> : <NetworkCheckIcon />}
-          disabled={testing || saving || !isFormValid}
           onClick={handleTestConnection}
+          disabled={testing || !isFormValid}
+          startIcon={testing ? <CircularProgress size={16} color="inherit" /> : <NetworkCheckIcon />}
           sx={{
-            borderRadius: 2,
+            borderColor: 'rgba(56, 189, 248, 0.4)',
+            color: '#38bdf8',
             textTransform: 'none',
             fontWeight: 700,
-            color: '#38bdf8',
-            borderColor: 'rgba(56, 189, 248, 0.4)',
+            borderRadius: 2,
             '&:hover': { borderColor: '#38bdf8', bgcolor: 'rgba(56, 189, 248, 0.08)' },
           }}
         >
-          {testing ? 'Testing Connection...' : 'Test Connection'}
+          {testing ? 'Testing Connectivity...' : 'Test Connection'}
         </Button>
 
-        <Box sx={{ display: 'flex', gap: 1.5 }}>
-          <Button onClick={handleResetAndClose} disabled={saving} sx={{ color: '#94a3b8', textTransform: 'none' }}>
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            disabled={saving || !isFormValid}
-            onClick={handleSaveCluster}
-            sx={{
-              borderRadius: 2,
-              textTransform: 'none',
-              fontWeight: 700,
-              bgcolor: '#0891b2',
-              color: '#ffffff',
-              boxShadow: '0 4px 14px rgba(8, 145, 178, 0.4)',
-              '&:hover': { bgcolor: '#0e7490' },
-            }}
-          >
-            {saving ? <CircularProgress size={20} sx={{ color: '#ffffff' }} /> : 'Attach Cluster'}
-          </Button>
-        </Box>
+        <Button
+          variant="contained"
+          color="primary"
+          onClick={handleSaveCluster}
+          disabled={saving || !isFormValid}
+          startIcon={saving ? <CircularProgress size={16} color="inherit" /> : <HubIcon />}
+          sx={{
+            bgcolor: '#0284c7',
+            color: '#ffffff',
+            textTransform: 'none',
+            fontWeight: 700,
+            borderRadius: 2,
+            boxShadow: '0 4px 14px rgba(2, 132, 199, 0.35)',
+            '&:hover': { bgcolor: '#0369a1' },
+          }}
+        >
+          {saving ? 'Connecting...' : 'Connect Cluster'}
+        </Button>
       </DialogActions>
     </Dialog>
   );

@@ -4,30 +4,23 @@ import { saveClusterToVault } from '@/server/cluster-vault';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { name, method } = body;
+    const { name, method, kubeconfigRaw } = body;
 
     if (!name || !name.trim()) {
       return NextResponse.json({ success: false, error: 'Cluster name is required.' }, { status: 400 });
     }
 
-    if (!method) {
-      return NextResponse.json({ success: false, error: 'Connection method is required.' }, { status: 400 });
+    if (method !== 'kubeconfig' || !kubeconfigRaw || !kubeconfigRaw.trim()) {
+      return NextResponse.json(
+        { success: false, error: 'Kubeconfig is the only allowed connection method. Please upload or paste a valid kubeconfig file.' },
+        { status: 400 }
+      );
     }
 
-    if (method === 'kubeconfig' && !body.kubeconfigRaw) {
-      return NextResponse.json({ success: false, error: 'Kubeconfig YAML is required.' }, { status: 400 });
-    }
-
-    if (method === 'serviceToken') {
-      if (!body.serverUrl || !body.serviceToken) {
-        return NextResponse.json(
-          { success: false, error: 'Both API Server URL and ServiceAccount Token are required.' },
-          { status: 400 }
-        );
-      }
-    }
-
-    const saveResult = await saveClusterToVault(body);
+    const saveResult = await saveClusterToVault({
+      ...body,
+      method: 'kubeconfig',
+    });
 
     if (!saveResult.success) {
       return NextResponse.json({ success: false, error: saveResult.error }, { status: 400 });
