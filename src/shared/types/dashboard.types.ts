@@ -251,13 +251,30 @@ export interface K8sMachineDeployment {
   age: string;
 }
 
+export interface K8sHelmRevision {
+  revision: number;
+  updated: string;
+  status: string;
+  chart: string;
+  appVersion?: string;
+  description?: string;
+}
+
 export interface K8sHelmRelease {
   name: string;
   namespace: string;
-  status: string;
-  message: string;
-  version: string;
+  status: 'deployed' | 'failed' | 'superseded' | 'uninstalled' | string;
+  chart: string;
+  chartVersion?: string;
+  appVersion?: string;
+  revision: number;
+  updated: string;
   age: string;
+  message?: string;
+  version?: string;
+  values?: Record<string, any> | string;
+  manifest?: string;
+  revisions?: K8sHelmRevision[];
 }
 
 export interface K8sDaemonSet {
@@ -539,4 +556,42 @@ export interface PlatformAppInfo {
   status?: PlatformAppInfoStatus;
   age?: string;
 }
+
+export interface AuditLogEntry {
+  id: string;
+  timestamp: string;
+  clusterId: string;
+  user: string;
+  action: 'SCALE_REPLICAS' | 'ROLLOUT_RESTART' | 'SET_IMAGE' | 'DELETE_RESOURCE' | 'APPLY_MANIFEST' | 'BULK_DELETE' | 'EXEC_TERMINAL' | 'CUSTOM_OPERATION';
+  resourceType: string;
+  resourceName: string;
+  namespace: string;
+  details?: string;
+  status: 'SUCCESS' | 'FAILED';
+  errorMessage?: string;
+  ip?: string;
+}
+
+export interface ClusterAnomaly {
+  id: string;
+  severity: 'critical' | 'warning' | 'info';
+  type: 'pod' | 'node' | 'deployment' | 'event';
+  name: string;
+  namespace?: string;
+  message: string;
+  recommendation: string;
+  timestamp?: string;
+}
+
+export interface ClusterHealthReport {
+  score: number;
+  status: 'healthy' | 'degraded' | 'critical';
+  anomalies: ClusterAnomaly[];
+  counts: {
+    critical: number;
+    warning: number;
+    info: number;
+  };
+}
+
 

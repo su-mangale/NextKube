@@ -67,6 +67,9 @@ import SecurityIcon from '@mui/icons-material/Security';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import LogoutIcon from '@mui/icons-material/Logout';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
+import HistoryIcon from '@mui/icons-material/History';
+import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
+import { useQueryClient } from '@tanstack/react-query';
 
 import {
   useCluster,
@@ -99,6 +102,15 @@ import {
   useHPAs,
   useGateways,
   useHTTPRoutes,
+  useAuditLogs,
+  useClusterHealth,
+  useHelmReleases,
+  fetchHelmReleaseValues,
+  rollbackHelmRelease,
+  uninstallHelmRelease,
+  AuditLogEntry,
+  K8sHelmRelease,
+  K8sHelmRevision,
   fetchResourceYaml,
   updateResourceYaml,
   deleteResource,
@@ -280,6 +292,67 @@ spec:
   const { data: hpas = [], isLoading: hpasLoading, refetch: refetchHPAs } = useHPAs(id, selectedNamespace);
   const { data: gateways = [], isLoading: gatewaysLoading, refetch: refetchGateways } = useGateways(id, selectedNamespace);
   const { data: httpRoutes = [], isLoading: routesLoading, refetch: refetchHTTPRoutes } = useHTTPRoutes(id, selectedNamespace);
+  const { data: healthData, refetch: refetchHealth } = useClusterHealth(id);
+  const { data: auditLogs = [], isLoading: auditLoading, refetch: refetchAuditLogs } = useAuditLogs(id);
+  const { data: helmReleases = [], isLoading: helmLoading, refetch: refetchHelmReleases } = useHelmReleases(id, selectedNamespace);
+
+  const queryClient = useQueryClient();
+  const [liveWatchConnected, setLiveWatchConnected] = useState<boolean>(false);
+  const [healthBannerDismissed, setHealthBannerDismissed] = useState<boolean>(false);
+  const [auditActionFilter, setAuditActionFilter] = useState<string>('all');
+
+  // Phase 6: Helm Release Management Dialog State
+  const [helmValuesOpen, setHelmValuesOpen] = useState<boolean>(false);
+  const [helmValuesContent, setHelmValuesContent] = useState<string>('');
+  const [helmValuesLoading, setHelmValuesLoading] = useState<boolean>(false);
+  const [helmRollbackOpen, setHelmRollbackOpen] = useState<boolean>(false);
+  const [helmRollbackRev, setHelmRollbackRev] = useState<number>(1);
+  const [helmRollbackLoading, setHelmRollbackLoading] = useState<boolean>(false);
+  const [helmUninstallOpen, setHelmUninstallOpen] = useState<boolean>(false);
+  const [helmUninstallLoading, setHelmUninstallLoading] = useState<boolean>(false);
+  const [activeHelmRelease, setActiveHelmRelease] = useState<K8sHelmRelease | null>(null);
+
+  // Phase 5: Live Watch SSE Stream Connection
+  useEffect(() => {
+    if (!id) return;
+    let es: EventSource | null = null;
+    try {
+      es = new EventSource(`/api/clusters/${id}/watch`);
+      es.addEventListener('connected', () => {
+        setLiveWatchConnected(true);
+      });
+      es.addEventListener('health-update', (event) => {
+        try {
+          const report = JSON.parse(event.data);
+          queryClient.setQueryData(['clusterHealth', id], report);
+        } catch {}
+      });
+      es.addEventListener('new-events', (event) => {
+        try {
+          const evList = JSON.parse(event.data);
+          if (Array.isArray(evList) && evList.length > 0) {
+            const latest = evList[0];
+            if (latest.type === 'Warning') {
+              setToastSeverity('warning');
+              setToastMessage(`[Cluster Alert] ${latest.reason || 'Event'}: ${latest.message?.slice(0, 100)}`);
+            }
+          }
+          refetchEvents();
+        } catch {}
+      });
+      es.onerror = () => {
+        setLiveWatchConnected(false);
+      };
+    } catch {
+      setLiveWatchConnected(false);
+    }
+
+    return () => {
+      if (es) {
+        es.close();
+      }
+    };
+  }, [id, queryClient, refetchEvents]);
 
   const { data: rolloutRevisions = [], isLoading: rolloutsLoading, refetch: refetchRolloutHistory } = useRolloutHistory(
     id,
@@ -311,7 +384,9 @@ spec:
     saLoading ||
     rolesLoading ||
     rbLoading ||
-    crdLoading;
+    crdLoading ||
+    auditLoading ||
+    helmLoading;
 
   const handleRefreshAll = () => {
     refetchMetrics();
@@ -340,6 +415,9 @@ spec:
     refetchHPAs();
     refetchGateways();
     refetchHTTPRoutes();
+    refetchHealth();
+    refetchAuditLogs();
+    refetchHelmReleases();
     setToastSeverity('success');
     setToastMessage('Reloading cluster resources from API...');
   };
@@ -454,6 +532,7 @@ users:
       else if (tab === 21 || resource.kind === 'HorizontalPodAutoscaler') kind = 'HorizontalPodAutoscaler';
       else if (tab === 22 || resource.kind === 'PersistentVolume') kind = 'PersistentVolume';
       else if (tab === 23) kind = resource.kind || 'Gateway';
+      else if (tab === 24 || resource.kind === 'AuditLogEntry') kind = 'AuditLogEntry';
 
       let out = `Name:                   ${name}\n`;
       if (namespace && !['Node', 'StorageClass', 'ClusterRole', 'ClusterRoleBinding', 'CustomResourceDefinition', 'PersistentVolume'].includes(kind)) {
@@ -555,6 +634,21 @@ users:
         out += `OS Image:               Ubuntu 22.04 LTS\n`;
         out += `Container Runtime:      containerd://1.6.24\n`;
         out += `Kubelet Version:        v1.28.2\n`;
+      } else if (kind === 'AuditLogEntry') {
+        out += `Operator:               ${resource.user || 'admin'}\n`;
+        out += `Action:                 ${resource.action || 'OPERATION'}\n`;
+        out += `Resource:               ${resource.resourceType}/${resource.resourceName}\n`;
+        out += `Namespace:              ${resource.namespace || 'default'}\n`;
+        out += `Status:                 ${resource.status || 'SUCCESS'}\n`;
+        out += `Details:                ${resource.details || '-'}\n`;
+      } else if (kind === 'HelmRelease' || tab === 25) {
+        out += `Chart:                  ${resource.chart || '<unknown>'}\n`;
+        out += `Chart Version:          ${resource.chartVersion || '<unknown>'}\n`;
+        out += `App Version:            ${resource.appVersion || '<unknown>'}\n`;
+        out += `Revision:               ${resource.revision ?? 1}\n`;
+        out += `Status:                 ${resource.status || 'deployed'}\n`;
+        out += `Updated:                ${resource.updated || resource.age || '<unknown>'}\n`;
+        out += `Description:            ${resource.description || 'Helm release managed deployment'}\n`;
       }
 
       const matchingEvents = (Array.isArray(events) ? events : []).filter((e) => {
@@ -622,6 +716,7 @@ users:
     if (kind.includes('configmap')) return 'configmaps';
     if (kind.includes('secret')) return 'secrets';
     if (kind.includes('service')) return 'services';
+    if (kind.includes('helmrelease') || kind === 'helm' || tab === 25) return 'helmreleases';
 
     switch (tab) {
       case 1: return 'pods';
@@ -644,6 +739,11 @@ users:
       case 18: return 'rolebindings';
       case 19: return 'customresourcedefinitions';
       case 20: return 'events';
+      case 21: return 'horizontalpodautoscalers';
+      case 22: return 'persistentvolumes';
+      case 23: return 'gateways';
+      case 24: return 'audit';
+      case 25: return 'helmreleases';
       default: return 'pods';
     }
   };
@@ -1101,6 +1201,74 @@ users:
     }
   };
 
+  const handleOpenHelmValues = async (release: K8sHelmRelease) => {
+    setActiveHelmRelease(release);
+    setHelmValuesLoading(true);
+    setHelmValuesContent('');
+    setHelmValuesOpen(true);
+    try {
+      const values = await fetchHelmReleaseValues(id, release.name, release.namespace);
+      setHelmValuesContent(values || '# No custom values found for this release\n');
+    } catch (err: any) {
+      setToastSeverity('error');
+      setToastMessage(err.message || 'Failed to fetch Helm values');
+      setHelmValuesContent('# Error retrieving values:\n# ' + (err.message || 'Unknown error'));
+    } finally {
+      setHelmValuesLoading(false);
+    }
+  };
+
+  const handleOpenHelmRollback = (release: K8sHelmRelease) => {
+    setActiveHelmRelease(release);
+    const prevRev = release.revision > 1 ? release.revision - 1 : 1;
+    setHelmRollbackRev(prevRev);
+    setHelmRollbackOpen(true);
+  };
+
+  const handleApplyHelmRollback = async () => {
+    if (!activeHelmRelease) return;
+    setHelmRollbackLoading(true);
+    try {
+      const res = await rollbackHelmRelease(id, activeHelmRelease.name, helmRollbackRev, activeHelmRelease.namespace);
+      setToastSeverity('success');
+      setToastMessage(res.message || `Helm release "${activeHelmRelease.name}" rolled back to revision ${helmRollbackRev}.`);
+      setHelmRollbackOpen(false);
+      refetchHelmReleases();
+      refetchAuditLogs();
+    } catch (err: any) {
+      setToastSeverity('error');
+      setToastMessage(err.message || 'Failed to rollback Helm release');
+    } finally {
+      setHelmRollbackLoading(false);
+    }
+  };
+
+  const handleOpenHelmUninstall = (release: K8sHelmRelease) => {
+    setActiveHelmRelease(release);
+    setHelmUninstallOpen(true);
+  };
+
+  const handleApplyHelmUninstall = async () => {
+    if (!activeHelmRelease) return;
+    setHelmUninstallLoading(true);
+    try {
+      const res = await uninstallHelmRelease(id, activeHelmRelease.name, activeHelmRelease.namespace);
+      setToastSeverity('success');
+      setToastMessage(res.message || `Helm release "${activeHelmRelease.name}" uninstalled successfully.`);
+      setHelmUninstallOpen(false);
+      if (drawerOpen && selectedResource?.name === activeHelmRelease.name) {
+        setDrawerOpen(false);
+      }
+      refetchHelmReleases();
+      refetchAuditLogs();
+    } catch (err: any) {
+      setToastSeverity('error');
+      setToastMessage(err.message || 'Failed to uninstall Helm release');
+    } finally {
+      setHelmUninstallLoading(false);
+    }
+  };
+
   const getActiveTabResources = (): any[] => {
     if (activeTab === 0) return [];
     if (activeTab === 1) return filteredPods;
@@ -1126,6 +1294,8 @@ users:
     if (activeTab === 21) return filteredHPAs;
     if (activeTab === 22) return filteredPVs;
     if (activeTab === 23) return [...filteredGateways, ...filteredHTTPRoutes];
+    if (activeTab === 24) return filteredAuditLogs;
+    if (activeTab === 25) return filteredHelmReleases;
     return [];
   };
 
@@ -1303,6 +1473,33 @@ users:
     return (httpRoutes || []).filter((r) => r.name.toLowerCase().includes(searchQuery.toLowerCase()));
   }, [httpRoutes, searchQuery]);
 
+  const filteredAuditLogs = useMemo(() => {
+    return (auditLogs || []).filter((log) => {
+      const q = searchQuery.toLowerCase();
+      const matchesSearch =
+        !searchQuery ||
+        (log.resourceName && log.resourceName.toLowerCase().includes(q)) ||
+        (log.user && log.user.toLowerCase().includes(q)) ||
+        (log.action && log.action.toLowerCase().includes(q)) ||
+        (log.details && log.details.toLowerCase().includes(q));
+      const matchesAction = auditActionFilter === 'all' || log.action === auditActionFilter;
+      return matchesSearch && matchesAction;
+    });
+  }, [auditLogs, searchQuery, auditActionFilter]);
+
+  const filteredHelmReleases = useMemo(() => {
+    return (helmReleases || []).filter((r) => {
+      const q = searchQuery.toLowerCase();
+      return (
+        !searchQuery ||
+        (r.name && r.name.toLowerCase().includes(q)) ||
+        (r.chart && r.chart.toLowerCase().includes(q)) ||
+        (r.namespace && r.namespace.toLowerCase().includes(q)) ||
+        (r.appVersion && r.appVersion.toLowerCase().includes(q))
+      );
+    });
+  }, [helmReleases, searchQuery]);
+
   const getActiveTabFilteredResources = (): any[] => {
     if (activeTab === 0) return [];
     if (activeTab === 1) return filteredPods;
@@ -1328,6 +1525,8 @@ users:
     if (activeTab === 21) return filteredHPAs;
     if (activeTab === 22) return filteredPVs;
     if (activeTab === 23) return [...filteredGateways, ...filteredHTTPRoutes];
+    if (activeTab === 24) return filteredAuditLogs;
+    if (activeTab === 25) return filteredHelmReleases;
     return [];
   };
 
@@ -1736,6 +1935,32 @@ users:
 
           <Divider orientation="vertical" flexItem sx={{ height: 24, my: 'auto', mx: 0.5 }} />
 
+          {/* Phase 5: Real-Time Live Watch SSE Indicator */}
+          <Tooltip title={liveWatchConnected ? 'Live Watch active: Receiving real-time cluster notifications via Server-Sent Events.' : 'Connecting to cluster live watch stream...'}>
+            <Chip
+              icon={
+                <FiberManualRecordIcon
+                  sx={{
+                    fontSize: '9px !important',
+                    color: liveWatchConnected ? '#22c55e' : '#eab308',
+                  }}
+                />
+              }
+              label={liveWatchConnected ? 'LIVE SYNC' : 'CONNECTING'}
+              size="small"
+              variant="outlined"
+              sx={{
+                fontWeight: 800,
+                fontSize: '0.68rem',
+                height: 28,
+                borderRadius: 2,
+                borderColor: liveWatchConnected ? 'rgba(34, 197, 94, 0.4)' : 'rgba(234, 179, 8, 0.4)',
+                color: liveWatchConnected ? '#22c55e' : '#eab308',
+                bgcolor: liveWatchConnected ? 'rgba(34, 197, 94, 0.08)' : 'rgba(234, 179, 8, 0.08)',
+              }}
+            />
+          </Tooltip>
+
           {/* User Status Badge */}
           {currentUser && (
             <Chip
@@ -1871,11 +2096,120 @@ users:
             <Tab label="HorizontalPodAutoscalers" />
             <Tab label="PersistentVolumes" />
             <Tab label="Gateway API" />
+            <Tab label="Audit Trail" />
+            <Tab label="Helm Releases" />
           </Tabs>
         </Box>
 
         {/* Right Main Resource Content Panel */}
         <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', p: 3 }}>
+          {/* Phase 5: Cluster Health & Anomaly Alert Banner */}
+          {healthData && healthData.anomalies.length > 0 && !healthBannerDismissed && (
+            <Paper
+              variant="outlined"
+              sx={{
+                mb: 2.5,
+                p: 2,
+                borderRadius: 2,
+                bgcolor: healthData.status === 'critical' ? 'rgba(239, 68, 68, 0.08)' : 'rgba(245, 158, 11, 0.08)',
+                borderColor: healthData.status === 'critical' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(245, 158, 11, 0.3)',
+                borderLeft: `4px solid ${healthData.status === 'critical' ? '#ef4444' : '#f59e0b'}`,
+                flexShrink: 0,
+              }}
+            >
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <ReportProblemIcon sx={{ color: healthData.status === 'critical' ? '#ef4444' : '#f59e0b', fontSize: 20 }} />
+                  <Typography variant="subtitle2" sx={{ fontWeight: 800, color: healthData.status === 'critical' ? '#ef4444' : '#f59e0b' }}>
+                    Cluster Health Anomalies ({healthData.anomalies.length})
+                  </Typography>
+                  <Chip
+                    label={`Health Score: ${healthData.score}%`}
+                    size="small"
+                    sx={{
+                      fontWeight: 800,
+                      fontSize: '0.68rem',
+                      height: 20,
+                      bgcolor: healthData.score > 80 ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
+                      color: healthData.score > 80 ? '#22c55e' : '#ef4444',
+                    }}
+                  />
+                  {healthData.counts.critical > 0 && (
+                    <Chip label={`${healthData.counts.critical} Critical`} size="small" color="error" sx={{ fontWeight: 700, fontSize: '0.65rem', height: 20 }} />
+                  )}
+                  {healthData.counts.warning > 0 && (
+                    <Chip label={`${healthData.counts.warning} Warning`} size="small" color="warning" sx={{ fontWeight: 700, fontSize: '0.65rem', height: 20 }} />
+                  )}
+                </Box>
+                <IconButton size="small" onClick={() => setHealthBannerDismissed(true)} sx={{ color: 'text.secondary', p: 0.5 }}>
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              </Box>
+
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, mt: 1 }}>
+                {healthData.anomalies.slice(0, 3).map((anomaly) => (
+                  <Box
+                    key={anomaly.id}
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      bgcolor: 'action.hover',
+                      px: 1.5,
+                      py: 0.8,
+                      borderRadius: 1.5,
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, mr: 1 }}>
+                      <Chip
+                        label={anomaly.severity.toUpperCase()}
+                        size="small"
+                        color={anomaly.severity === 'critical' ? 'error' : 'warning'}
+                        sx={{ fontSize: '0.6rem', fontWeight: 800, height: 18 }}
+                      />
+                      <Typography variant="body2" sx={{ fontSize: '0.8rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                        {anomaly.type.toUpperCase()}: <span style={{ color: '#38bdf8' }}>{anomaly.name}</span>
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        — {anomaly.message}
+                      </Typography>
+                    </Box>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => {
+                        if (anomaly.type === 'pod') {
+                          setActiveTab(1);
+                          setSearchQuery(anomaly.name);
+                        } else if (anomaly.type === 'deployment') {
+                          setActiveTab(2);
+                          setSearchQuery(anomaly.name);
+                        } else if (anomaly.type === 'node') {
+                          setActiveTab(15);
+                          setSearchQuery(anomaly.name);
+                        } else {
+                          setActiveTab(20);
+                          setSearchQuery(anomaly.name);
+                        }
+                      }}
+                      sx={{
+                        fontSize: '0.7rem',
+                        fontWeight: 700,
+                        textTransform: 'none',
+                        py: 0.3,
+                        px: 1,
+                        height: 24,
+                        whiteSpace: 'nowrap',
+                        flexShrink: 0,
+                      }}
+                    >
+                      Troubleshoot
+                    </Button>
+                  </Box>
+                ))}
+              </Box>
+            </Paper>
+          )}
           {activeTab !== 0 && (
             <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
               <TextField
@@ -2811,6 +3145,229 @@ users:
                 </Table>
               )}
 
+              {/* TAB 24: AUDIT TRAIL */}
+              {activeTab === 24 && (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <HistoryIcon sx={{ color: 'primary.main', fontSize: 22 }} />
+                      <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
+                        Cluster Operational Audit Log
+                      </Typography>
+                      <Chip label={`${filteredAuditLogs.length} Records`} size="small" variant="outlined" sx={{ fontSize: '0.68rem', fontWeight: 700 }} />
+                    </Box>
+                    <FormControl size="small" sx={{ minWidth: 160 }}>
+                      <Select
+                        value={auditActionFilter}
+                        onChange={(e) => setAuditActionFilter(e.target.value)}
+                        sx={{ height: 32, fontSize: '0.78rem', borderRadius: 1.5 }}
+                      >
+                        <MenuItem value="all">All Operations</MenuItem>
+                        <MenuItem value="SCALE_REPLICAS">Scale Replicas</MenuItem>
+                        <MenuItem value="ROLLOUT_RESTART">Rollout Restart</MenuItem>
+                        <MenuItem value="APPLY_MANIFEST">Apply Manifest</MenuItem>
+                        <MenuItem value="DELETE_RESOURCE">Delete Resource</MenuItem>
+                        <MenuItem value="CUSTOM_OPERATION">Custom Operations</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Box>
+
+                  <Table stickyHeader size="small">
+                    <TableHead sx={{ bgcolor: 'action.hover' }}>
+                      <TableRow>
+                        <TableCell>Timestamp</TableCell>
+                        <TableCell>Operator</TableCell>
+                        <TableCell>Action</TableCell>
+                        <TableCell>Resource</TableCell>
+                        <TableCell>Namespace</TableCell>
+                        <TableCell>Operation Details</TableCell>
+                        <TableCell>Status</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {filteredAuditLogs.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={7} sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>
+                            No audit records found matching query.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        paginate(filteredAuditLogs).map((entry) => (
+                          <TableRow key={entry.id} hover onClick={() => handleRowClick(entry)} sx={{ cursor: 'pointer' }}>
+                            <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem', color: 'text.secondary', whiteSpace: 'nowrap' }}>
+                              {new Date(entry.timestamp).toLocaleString()}
+                            </TableCell>
+                            <TableCell>
+                              <Chip
+                                label={entry.user}
+                                size="small"
+                                variant="outlined"
+                                color="info"
+                                sx={{ fontSize: '0.68rem', fontWeight: 700, borderRadius: 1 }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Chip
+                                label={entry.action}
+                                size="small"
+                                color={
+                                  entry.action === 'DELETE_RESOURCE'
+                                    ? 'error'
+                                    : entry.action === 'SCALE_REPLICAS'
+                                    ? 'primary'
+                                    : entry.action === 'ROLLOUT_RESTART'
+                                    ? 'warning'
+                                    : 'info'
+                                }
+                                sx={{ fontSize: '0.65rem', fontWeight: 800, borderRadius: 1 }}
+                              />
+                            </TableCell>
+                            <TableCell sx={{ fontWeight: 700, color: 'primary.main', fontSize: '0.8rem' }}>
+                              {entry.resourceType}/{entry.resourceName}
+                            </TableCell>
+                            <TableCell>
+                              <Chip label={entry.namespace || 'default'} size="small" sx={{ fontSize: '0.65rem', borderRadius: 1 }} />
+                            </TableCell>
+                            <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem', color: 'text.secondary' }}>
+                              {entry.details || '-'}
+                            </TableCell>
+                            <TableCell>
+                              <Chip
+                                label={entry.status}
+                                size="small"
+                                color={entry.status === 'SUCCESS' ? 'success' : 'error'}
+                                sx={{ fontSize: '0.65rem', fontWeight: 800, height: 20, borderRadius: 1 }}
+                              />
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </Box>
+              )}
+
+              {/* TAB 25: HELM RELEASES */}
+              {activeTab === 25 && (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <StorageIcon sx={{ color: 'primary.main', fontSize: 22 }} />
+                      <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
+                        Installed Helm Releases (v3)
+                      </Typography>
+                      <Chip label={`${filteredHelmReleases.length} Releases`} size="small" variant="outlined" sx={{ fontSize: '0.68rem', fontWeight: 700 }} />
+                    </Box>
+                  </Box>
+
+                  <Table stickyHeader size="small">
+                    <TableHead sx={{ bgcolor: 'action.hover' }}>
+                      <TableRow>
+                        <TableCell>Release Name</TableCell>
+                        <TableCell>Namespace</TableCell>
+                        <TableCell>Chart</TableCell>
+                        <TableCell>App Version</TableCell>
+                        <TableCell>Revision</TableCell>
+                        <TableCell>Status</TableCell>
+                        <TableCell>Updated</TableCell>
+                        <TableCell align="right">Actions</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {filteredHelmReleases.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={8} sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>
+                            No Helm releases found in selected namespace.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        paginate(filteredHelmReleases).map((release) => (
+                          <TableRow key={`${release.namespace}-${release.name}`} hover onClick={() => handleRowClick(release)} sx={{ cursor: 'pointer' }}>
+                            <TableCell sx={{ fontWeight: 700, color: 'primary.main', fontSize: '0.82rem' }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <StorageIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+                                {release.name}
+                              </Box>
+                            </TableCell>
+                            <TableCell>
+                              <Chip label={release.namespace} size="small" sx={{ fontSize: '0.65rem', borderRadius: 1 }} />
+                            </TableCell>
+                            <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>
+                              {release.chart}
+                              {release.chartVersion ? ` (${release.chartVersion})` : ''}
+                            </TableCell>
+                            <TableCell>
+                              <Chip label={release.appVersion || '-'} size="small" variant="outlined" sx={{ fontSize: '0.65rem', borderRadius: 1 }} />
+                            </TableCell>
+                            <TableCell>
+                              <Chip
+                                label={`rev ${release.revision}`}
+                                size="small"
+                                sx={{
+                                  fontSize: '0.65rem',
+                                  fontWeight: 800,
+                                  bgcolor: 'rgba(56, 189, 248, 0.15)',
+                                  color: '#38bdf8',
+                                  borderRadius: 1,
+                                }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Chip
+                                label={release.status}
+                                size="small"
+                                color={
+                                  release.status === 'deployed'
+                                    ? 'success'
+                                    : release.status === 'failed'
+                                    ? 'error'
+                                    : 'warning'
+                                }
+                                sx={{ fontSize: '0.65rem', fontWeight: 800, height: 20, borderRadius: 1 }}
+                              />
+                            </TableCell>
+                            <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                              {release.updated || release.age || '-'}
+                            </TableCell>
+                            <TableCell align="right" onClick={(e) => e.stopPropagation()}>
+                              <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
+                                <Tooltip title="Inspect Values (values.yaml)">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleOpenHelmValues(release)}
+                                    sx={{ color: 'primary.main', p: 0.5 }}
+                                  >
+                                    <CodeIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                                <Tooltip title="Rollback Revision">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleOpenHelmRollback(release)}
+                                    sx={{ color: 'warning.main', p: 0.5 }}
+                                  >
+                                    <HistoryIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                                <Tooltip title="Uninstall Release">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleOpenHelmUninstall(release)}
+                                    sx={{ color: 'error.main', p: 0.5 }}
+                                  >
+                                    <ClearIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              </Box>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </Box>
+              )}
+
             </Box>
           )}
 
@@ -3009,20 +3566,22 @@ users:
 
                   <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1 }}>
                     {/* 1. Full-width Primary Action: View / Edit YAML */}
-                    <Button
-                      variant="outlined"
-                      startIcon={<CodeIcon />}
-                      onClick={handleOpenYaml}
-                      sx={{
-                        gridColumn: '1 / -1',
-                        fontWeight: 700,
-                        borderRadius: 1.5,
-                        py: 0.9,
-                        textTransform: 'none',
-                      }}
-                    >
-                      View / Edit YAML Manifest
-                    </Button>
+                    {activeTab !== 24 && activeTab !== 25 && (
+                      <Button
+                        variant="outlined"
+                        startIcon={<CodeIcon />}
+                        onClick={handleOpenYaml}
+                        sx={{
+                          gridColumn: '1 / -1',
+                          fontWeight: 700,
+                          borderRadius: 1.5,
+                          py: 0.9,
+                          textTransform: 'none',
+                        }}
+                      >
+                        View / Edit YAML Manifest
+                      </Button>
+                    )}
 
                     {/* 2. Logs & Exec (2-column pair for workloads) */}
                     {(activeTab === 1 || activeTab === 2 || activeTab === 3 || activeTab === 4 || activeTab === 6 || activeTab === 7) && (
@@ -3132,22 +3691,57 @@ users:
                       </Button>
                     )}
 
-                    {/* 6. Delete Resource: Always full width at the bottom */}
-                    <Button
-                      variant="outlined"
-                      color="error"
-                      onClick={handleOpenDelete}
-                      sx={{
-                        gridColumn: '1 / -1',
-                        fontWeight: 700,
-                        borderRadius: 1.5,
-                        py: 0.8,
-                        textTransform: 'none',
-                        fontSize: '0.8rem',
-                      }}
-                    >
-                      Delete Resource
-                    </Button>
+                    {/* Helm Release Actions (Tab 25) */}
+                    {activeTab === 25 && (
+                      <>
+                        <Button
+                          variant="outlined"
+                          color="primary"
+                          startIcon={<CodeIcon />}
+                          onClick={() => selectedResource && handleOpenHelmValues(selectedResource)}
+                          sx={{ gridColumn: '1 / -1', fontWeight: 700, borderRadius: 1.5, py: 0.8, textTransform: 'none', fontSize: '0.8rem' }}
+                        >
+                          Inspect Values (values.yaml)
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          color="warning"
+                          startIcon={<HistoryIcon />}
+                          onClick={() => selectedResource && handleOpenHelmRollback(selectedResource)}
+                          sx={{ fontWeight: 700, borderRadius: 1.5, py: 0.8, textTransform: 'none', fontSize: '0.8rem' }}
+                        >
+                          Rollback Revision
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          color="error"
+                          startIcon={<ClearIcon />}
+                          onClick={() => selectedResource && handleOpenHelmUninstall(selectedResource)}
+                          sx={{ fontWeight: 700, borderRadius: 1.5, py: 0.8, textTransform: 'none', fontSize: '0.8rem' }}
+                        >
+                          Uninstall Release
+                        </Button>
+                      </>
+                    )}
+
+                    {/* 6. Delete Resource: Always full width at the bottom (Tab 1-23) */}
+                    {activeTab !== 24 && activeTab !== 25 && (
+                      <Button
+                        variant="outlined"
+                        color="error"
+                        onClick={handleOpenDelete}
+                        sx={{
+                          gridColumn: '1 / -1',
+                          fontWeight: 700,
+                          borderRadius: 1.5,
+                          py: 0.8,
+                          textTransform: 'none',
+                          fontSize: '0.8rem',
+                        }}
+                      >
+                        Delete Resource
+                      </Button>
+                    )}
                   </Box>
                 </Box>
               )}
@@ -3917,6 +4511,201 @@ users:
           <Button onClick={() => setBulkDeleteDialogOpen(false)} disabled={bulkDeleteLoading} sx={{ fontWeight: 700 }}>Cancel</Button>
           <Button onClick={handleApplyBulkDelete} color="error" variant="contained" disabled={bulkDeleteLoading} sx={{ fontWeight: 700 }}>
             {bulkDeleteLoading ? <CircularProgress size={20} color="inherit" /> : 'Delete All'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Phase 6: Helm Values Inspection Dialog */}
+      <Dialog
+        open={helmValuesOpen}
+        onClose={() => setHelmValuesOpen(false)}
+        maxWidth="md"
+        fullWidth
+        slotProps={{
+          paper: {
+            sx: {
+              bgcolor: (theme) => (theme.palette.mode === 'dark' ? '#0f1422' : '#ffffff'),
+              borderRadius: 2,
+              border: '1px solid',
+              borderColor: 'divider',
+            },
+          },
+        }}
+      >
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <StorageIcon sx={{ color: 'primary.main', fontSize: 22 }} />
+            <Typography variant="h6" sx={{ fontWeight: 800 }}>
+              Helm Release Values: {activeHelmRelease?.name}
+            </Typography>
+            <Chip label={activeHelmRelease?.namespace || 'default'} size="small" sx={{ fontSize: '0.65rem' }} />
+            <Chip label={`rev ${activeHelmRelease?.revision || 1}`} size="small" color="primary" sx={{ fontSize: '0.65rem', fontWeight: 750 }} />
+          </Box>
+          <IconButton size="small" onClick={() => setHelmValuesOpen(false)} sx={{ color: 'text.secondary' }}>
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers sx={{ p: 2 }}>
+          {helmValuesLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 8 }}>
+              <CircularProgress size={32} />
+            </Box>
+          ) : (
+            <Paper
+              variant="outlined"
+              sx={{
+                bgcolor: 'action.hover',
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 1.5,
+                overflow: 'hidden',
+              }}
+            >
+              <Box
+                component="pre"
+                sx={{
+                  m: 0,
+                  p: 2,
+                  fontFamily: 'Consolas, Monaco, "Liberation Mono", monospace',
+                  fontSize: '0.8rem',
+                  lineHeight: 1.55,
+                  color: 'text.primary',
+                  maxHeight: 460,
+                  overflowX: 'auto',
+                  overflowY: 'auto',
+                  whiteSpace: 'pre',
+                }}
+              >
+                {helmValuesContent}
+              </Box>
+            </Paper>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 1.5 }}>
+          <Button
+            startIcon={<ContentCopyIcon fontSize="small" />}
+            onClick={() => {
+              navigator.clipboard.writeText(helmValuesContent);
+              setToastSeverity('success');
+              setToastMessage('Helm release values copied to clipboard.');
+            }}
+            sx={{ fontWeight: 700, textTransform: 'none' }}
+          >
+            Copy Values
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => setHelmValuesOpen(false)}
+            sx={{ fontWeight: 700, textTransform: 'none' }}
+          >
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Phase 6: Helm Rollback Dialog */}
+      <Dialog
+        open={helmRollbackOpen}
+        onClose={() => !helmRollbackLoading && setHelmRollbackOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        slotProps={{
+          paper: {
+            sx: {
+              bgcolor: (theme) => (theme.palette.mode === 'dark' ? '#0f1422' : '#ffffff'),
+              borderRadius: 2,
+              border: '1px solid',
+              borderColor: 'divider',
+            },
+          },
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: 1 }}>
+          <HistoryIcon sx={{ color: 'warning.main' }} />
+          Rollback Helm Release
+        </DialogTitle>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+          <Typography variant="body2" color="text.secondary">
+            Rollback release <b>{activeHelmRelease?.name}</b> (current revision: <b>{activeHelmRelease?.revision}</b>) to a prior release revision.
+          </Typography>
+          <TextField
+            label="Target Revision"
+            type="number"
+            size="small"
+            fullWidth
+            value={helmRollbackRev}
+            onChange={(e) => setHelmRollbackRev(Math.max(1, parseInt(e.target.value, 10) || 1))}
+            slotProps={{
+              htmlInput: { min: 1 },
+            }}
+            helperText="Enter the historical release revision number to restore."
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button
+            onClick={() => setHelmRollbackOpen(false)}
+            disabled={helmRollbackLoading}
+            sx={{ fontWeight: 700, color: 'text.secondary' }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="warning"
+            onClick={handleApplyHelmRollback}
+            disabled={helmRollbackLoading || helmRollbackRev <= 0}
+            sx={{ fontWeight: 700, textTransform: 'none' }}
+          >
+            {helmRollbackLoading ? <CircularProgress size={20} color="inherit" /> : `Rollback to Rev ${helmRollbackRev}`}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Phase 6: Helm Uninstall Dialog */}
+      <Dialog
+        open={helmUninstallOpen}
+        onClose={() => !helmUninstallLoading && setHelmUninstallOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        slotProps={{
+          paper: {
+            sx: {
+              bgcolor: (theme) => (theme.palette.mode === 'dark' ? '#0f1422' : '#ffffff'),
+              borderRadius: 2,
+              border: '1px solid',
+              borderColor: 'divider',
+            },
+          },
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: 1, color: 'error.main' }}>
+          <ClearIcon />
+          Uninstall Helm Release
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            Are you sure you want to uninstall Helm release <b>{activeHelmRelease?.name}</b> in namespace <b>{activeHelmRelease?.namespace}</b>?
+          </Typography>
+          <Typography variant="caption" sx={{ color: 'error.main', mt: 1, display: 'block', fontWeight: 600 }}>
+            Warning: This will delete all Kubernetes resources (Deployments, Services, ConfigMaps, Secrets) managed by this release.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button
+            onClick={() => setHelmUninstallOpen(false)}
+            disabled={helmUninstallLoading}
+            sx={{ fontWeight: 700, color: 'text.secondary' }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleApplyHelmUninstall}
+            disabled={helmUninstallLoading}
+            sx={{ fontWeight: 700, textTransform: 'none' }}
+          >
+            {helmUninstallLoading ? <CircularProgress size={20} color="inherit" /> : 'Uninstall Release'}
           </Button>
         </DialogActions>
       </Dialog>

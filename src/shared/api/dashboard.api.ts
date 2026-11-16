@@ -112,6 +112,9 @@ import {
   PlatformApp,
   PlatformAppSpec,
   PlatformAppInfo,
+  AuditLogEntry,
+  ClusterAnomaly,
+  ClusterHealthReport,
 } from '../types/dashboard.types';
 
 // Fetch Namespaces
@@ -194,12 +197,65 @@ export const fetchMachineDeployments = async (clusterId: string, namespace?: str
   return res.json();
 };
 
-// Fetch HelmReleases (FluxCD Applications)
+// Fetch HelmReleases (FluxCD Applications / Helm v3)
 export const fetchHelmReleases = async (clusterId: string, namespace?: string): Promise<K8sHelmRelease[]> => {
   const baseUrl = getBackendUrl();
   const nsQuery = namespace && namespace !== 'all' ? `?namespace=${namespace}` : '';
   const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/helmreleases${nsQuery}`);
   if (!res.ok) throw new Error('Failed to retrieve helm releases from cluster API');
+  return res.json();
+};
+
+// Fetch Helm Release Values (values.yaml)
+export const fetchHelmReleaseValues = async (
+  clusterId: string,
+  releaseName: string,
+  namespace?: string
+): Promise<string> => {
+  const baseUrl = getBackendUrl();
+  const nsQuery = namespace && namespace !== 'all' ? `?namespace=${namespace}` : '';
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/helmreleases/${releaseName}/values${nsQuery}`);
+  if (!res.ok) throw new Error('Failed to retrieve Helm release values');
+  const data = await res.json();
+  return data.values || '';
+};
+
+// Rollback Helm Release
+export const rollbackHelmRelease = async (
+  clusterId: string,
+  releaseName: string,
+  revision: number,
+  namespace?: string
+): Promise<{ success: boolean; message: string }> => {
+  const baseUrl = getBackendUrl();
+  const nsQuery = namespace && namespace !== 'all' ? `?namespace=${namespace}` : '';
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/helmreleases/${releaseName}/rollback${nsQuery}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ revision }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Failed to rollback Helm release' }));
+    throw new Error(err.error || 'Failed to rollback Helm release');
+  }
+  return res.json();
+};
+
+// Uninstall Helm Release
+export const uninstallHelmRelease = async (
+  clusterId: string,
+  releaseName: string,
+  namespace?: string
+): Promise<{ success: boolean; message: string }> => {
+  const baseUrl = getBackendUrl();
+  const nsQuery = namespace && namespace !== 'all' ? `?namespace=${namespace}` : '';
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/helmreleases/${releaseName}${nsQuery}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Failed to uninstall Helm release' }));
+    throw new Error(err.error || 'Failed to uninstall Helm release');
+  }
   return res.json();
 };
 
@@ -1425,6 +1481,42 @@ export const usePlatformAppInfo = (clusterId: string, name: string) => {
     queryKey: ['platformappinfo', clusterId, name],
     queryFn: () => fetchPlatformAppInfo(clusterId, name),
     enabled: !!clusterId && !!name,
+  });
+};
+
+// ==========================================
+// Phase 5: Cluster Health & Audit Trail API
+// ==========================================
+
+export const fetchAuditLogs = async (clusterId: string): Promise<AuditLogEntry[]> => {
+  const baseUrl = getBackendUrl();
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/audit`);
+  if (!res.ok) throw new Error('Failed to fetch audit logs');
+  return res.json();
+};
+
+export const useAuditLogs = (clusterId: string) => {
+  return useQuery<AuditLogEntry[]>({
+    queryKey: ['auditLogs', clusterId],
+    queryFn: () => fetchAuditLogs(clusterId),
+    enabled: !!clusterId,
+    refetchInterval: 10000,
+  });
+};
+
+export const fetchClusterHealth = async (clusterId: string): Promise<ClusterHealthReport> => {
+  const baseUrl = getBackendUrl();
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/health`);
+  if (!res.ok) throw new Error('Failed to fetch cluster health');
+  return res.json();
+};
+
+export const useClusterHealth = (clusterId: string) => {
+  return useQuery<ClusterHealthReport>({
+    queryKey: ['clusterHealth', clusterId],
+    queryFn: () => fetchClusterHealth(clusterId),
+    enabled: !!clusterId,
+    refetchInterval: 15000,
   });
 };
 
