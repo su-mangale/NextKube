@@ -20,14 +20,13 @@ import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import PersonIcon from '@mui/icons-material/Person';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import SecurityIcon from '@mui/icons-material/Security';
-import KeyIcon from '@mui/icons-material/Key';
 
 function LoginForm() {
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get('callbackUrl') || '/clusters';
 
-  const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('admin123');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -150,7 +149,7 @@ function LoginForm() {
                   textAlign: 'center',
                 }}
               >
-                Kubernetes Cluster Fleet Operations Console
+                Kubernetes Operations & Cluster Management Dashboard
               </Typography>
               <Chip
                 icon={<SecurityIcon sx={{ fontSize: '0.9rem !important', color: '#38bdf8' }} />}
@@ -292,34 +291,8 @@ function LoginForm() {
                   },
                 }}
               >
-                {loading ? <CircularProgress size={22} sx={{ color: '#ffffff' }} /> : 'Sign In to Console'}
+                {loading ? <CircularProgress size={22} sx={{ color: '#ffffff' }} /> : 'Sign In to Dashboard'}
               </Button>
-            </Box>
-
-            {/* Quick Demo Credentials Info Tip */}
-            <Box
-              sx={{
-                mt: 3.5,
-                p: 1.5,
-                borderRadius: 2,
-                bgcolor: 'rgba(30, 41, 59, 0.6)',
-                border: '1px dashed rgba(255, 255, 255, 0.12)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1.2,
-              }}
-            >
-              <KeyIcon sx={{ color: '#38bdf8', fontSize: 18, flexShrink: 0 }} />
-              <Typography variant="caption" sx={{ color: '#94a3b8', fontSize: '0.74rem' }}>
-                Default bootstrap credentials:{' '}
-                <Box component="strong" sx={{ color: '#f8fafc' }}>
-                  admin
-                </Box>{' '}
-                /{' '}
-                <Box component="strong" sx={{ color: '#f8fafc' }}>
-                  admin123
-                </Box>
-              </Typography>
             </Box>
           </Box>
         </Card>
