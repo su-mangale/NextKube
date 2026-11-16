@@ -96,6 +96,9 @@ import {
   useRoles,
   useRoleBindings,
   useCRDs,
+  useHPAs,
+  useGateways,
+  useHTTPRoutes,
   fetchResourceYaml,
   updateResourceYaml,
   deleteResource,
@@ -199,6 +202,7 @@ spec:
   const [logsPrevious, setLogsPrevious] = useState<boolean>(false);
   const [logsResourceType, setLogsResourceType] = useState<'pod' | 'deployment'>('pod');
   const [logsTimeMode, setLogsTimeMode] = useState<'local' | 'utc'>('local');
+  const [selectedContainer, setSelectedContainer] = useState<string>('');
   const userTimezone = useMemo(() => {
     try {
       return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local';
@@ -273,6 +277,9 @@ spec:
   const { data: roles = [], isLoading: rolesLoading, refetch: refetchRoles } = useRoles(id, selectedNamespace);
   const { data: roleBindings = [], isLoading: rbLoading, refetch: refetchRoleBindings } = useRoleBindings(id, selectedNamespace);
   const { data: crds = [], isLoading: crdLoading, refetch: refetchCRDs } = useCRDs(id);
+  const { data: hpas = [], isLoading: hpasLoading, refetch: refetchHPAs } = useHPAs(id, selectedNamespace);
+  const { data: gateways = [], isLoading: gatewaysLoading, refetch: refetchGateways } = useGateways(id, selectedNamespace);
+  const { data: httpRoutes = [], isLoading: routesLoading, refetch: refetchHTTPRoutes } = useHTTPRoutes(id, selectedNamespace);
 
   const { data: rolloutRevisions = [], isLoading: rolloutsLoading, refetch: refetchRolloutHistory } = useRolloutHistory(
     id,
@@ -330,6 +337,9 @@ spec:
     refetchRoles();
     refetchRoleBindings();
     refetchCRDs();
+    refetchHPAs();
+    refetchGateways();
+    refetchHTTPRoutes();
     setToastSeverity('success');
     setToastMessage('Reloading cluster resources from API...');
   };
@@ -441,6 +451,9 @@ users:
         else kind = 'RoleBinding';
       } else if (tab === 19 || resource.kind === 'CustomResourceDefinition') kind = 'CustomResourceDefinition';
       else if (tab === 20 || resource.kind === 'Event') kind = 'Event';
+      else if (tab === 21 || resource.kind === 'HorizontalPodAutoscaler') kind = 'HorizontalPodAutoscaler';
+      else if (tab === 22 || resource.kind === 'PersistentVolume') kind = 'PersistentVolume';
+      else if (tab === 23) kind = resource.kind || 'Gateway';
 
       let out = `Name:                   ${name}\n`;
       if (namespace && !['Node', 'StorageClass', 'ClusterRole', 'ClusterRoleBinding', 'CustomResourceDefinition', 'PersistentVolume'].includes(kind)) {
@@ -475,17 +488,51 @@ users:
         out += `Status:                 ${typeof resource.status === 'string' ? resource.status : resource.status?.phase || 'Running'}\n`;
         out += `IP:                     ${resource.ip || '10.244.0.15'}\n`;
         out += `Node:                   ${resource.node || 'worker-node-1'}\n`;
+        if (resource.cpuUsage || resource.memoryUsage) {
+          out += `Metrics:                CPU: ${resource.cpuUsage || '<10m'} | Mem: ${resource.memoryUsage || '<64Mi'}\n`;
+        }
         out += `Containers:\n`;
-        out += `  app:\n`;
-        out += `    Image:              ${resource.image || 'nginx:latest'}\n`;
-        out += `    Ready:              ${resource.ready || 'True'}\n`;
-        out += `    Restart Count:      ${resource.restarts ?? 0}\n`;
+        if (Array.isArray(resource.containers) && resource.containers.length > 0) {
+          resource.containers.forEach((c: string) => {
+            out += `  ${c}:\n`;
+            out += `    Image:              ${resource.image || 'nginx:latest'}\n`;
+            out += `    Ready:              ${resource.ready || 'True'}\n`;
+            out += `    Restart Count:      ${resource.restarts ?? 0}\n`;
+          });
+        } else {
+          out += `  app:\n`;
+          out += `    Image:              ${resource.image || 'nginx:latest'}\n`;
+          out += `    Ready:              ${resource.ready || 'True'}\n`;
+          out += `    Restart Count:      ${resource.restarts ?? 0}\n`;
+        }
         out += `Conditions:\n`;
         out += `  Type              Status\n`;
         out += `  Initialized       True\n`;
         out += `  Ready             True\n`;
         out += `  ContainersReady   True\n`;
         out += `  PodScheduled      True\n`;
+      } else if (kind === 'HorizontalPodAutoscaler') {
+        out += `Reference:              ${resource.reference || 'Deployment/' + name}\n`;
+        out += `Targets:                ${resource.targets || '<unknown>'}\n`;
+        out += `Min Replicas:           ${resource.minReplicas ?? 1}\n`;
+        out += `Max Replicas:           ${resource.maxReplicas ?? 10}\n`;
+        out += `Replicas:               ${resource.replicas ?? 1} current / ${resource.desiredReplicas ?? 1} desired\n`;
+      } else if (kind === 'PersistentVolume') {
+        out += `Capacity:               ${resource.capacity || '10Gi'}\n`;
+        out += `Access Modes:           ${resource.accessModes || 'RWO'}\n`;
+        out += `Reclaim Policy:         ${resource.reclaimPolicy || 'Retain'}\n`;
+        out += `Status:                 ${resource.status || 'Bound'}\n`;
+        out += `Claim:                  ${resource.claim || '<none>'}\n`;
+        out += `StorageClass:           ${resource.storageClass || 'standard'}\n`;
+      } else if (kind === 'Gateway') {
+        out += `Class:                  ${resource.gatewayClassName || 'istio'}\n`;
+        out += `Listeners:              ${resource.listeners ? JSON.stringify(resource.listeners) : '80/HTTP'}\n`;
+        out += `Addresses:              ${resource.addresses?.join(', ') || '<pending>'}\n`;
+        out += `Status:                 ${resource.status || 'Programmed'}\n`;
+      } else if (kind === 'HTTPRoute') {
+        out += `Hostnames:              ${resource.hostnames?.join(', ') || '*'}\n`;
+        out += `ParentRefs:             ${resource.parentRefs ? JSON.stringify(resource.parentRefs) : 'default-gateway'}\n`;
+        out += `Rules:                  ${resource.rulesCount ?? 1} rules configured\n`;
       } else if (kind === 'DaemonSet') {
         out += `Selector:               name=${name}\n`;
         out += `Number of Nodes:        ${resource.desired || resource.ready || 3} desired | ${resource.ready || 3} current | ${resource.ready || 3} ready\n`;
@@ -783,6 +830,9 @@ users:
     if (activeTab === 1 || resource.kind === 'Pod') {
       setTerminalResourceName(resource.name);
       setTerminalResourceType('pod');
+      if (resource.containers && resource.containers.length > 0 && !selectedContainer) {
+        setSelectedContainer(resource.containers[0]);
+      }
       setTerminalOpen(true);
       return;
     }
@@ -797,6 +847,9 @@ users:
     if (matchingPod) {
       setTerminalResourceName(matchingPod.name);
       setTerminalResourceType('pod');
+      if (matchingPod.containers && matchingPod.containers.length > 0 && !selectedContainer) {
+        setSelectedContainer(matchingPod.containers[0]);
+      }
       setTerminalOpen(true);
     } else {
       setToastSeverity('warning');
@@ -811,6 +864,8 @@ users:
     const isWorkload = ['deployments', 'daemonsets', 'statefulsets', 'jobs'].includes(rType);
     setLogsResourceType(isWorkload ? 'deployment' : 'pod');
     setSelectedResource(resource);
+    const initialContainer = (resource.containers && resource.containers.length > 0) ? resource.containers[0] : '';
+    setSelectedContainer(initialContainer);
     setDrawerOpen(false);
     setLogsDialogOpen(true);
     setLogsLoading(true);
@@ -825,6 +880,7 @@ users:
         data = await fetchPodLogs(id, resource.name, namespace, {
           previous: isPre,
           since: !isPre && logsTimeFrame !== 'all' ? logsTimeFrame : undefined,
+          container: initialContainer || undefined,
         });
       } else if (rType === 'deployments') {
         try {
@@ -881,9 +937,10 @@ users:
     }
   };
 
-  const handleRefreshLogs = async (timeFrameVal?: string) => {
+  const handleRefreshLogs = async (timeFrameVal?: string, containerVal?: string) => {
     if (!selectedResource) return;
     const tf = timeFrameVal !== undefined ? timeFrameVal : logsTimeFrame;
+    const cont = containerVal !== undefined ? containerVal : selectedContainer;
     const isPre = tf === 'pre';
     const resource = selectedResource;
     const rType = getResourceType(resource, activeTab);
@@ -896,6 +953,7 @@ users:
         data = await fetchPodLogs(id, resource.name, namespace, {
           previous: isPre,
           since: !isPre && tf !== 'all' ? tf : undefined,
+          container: cont || undefined,
         });
       } else if (rType === 'deployments') {
         try {
@@ -1050,18 +1108,24 @@ users:
     if (activeTab === 3) return filteredDaemonSets;
     if (activeTab === 4) return filteredStatefulSets;
     if (activeTab === 5) return filteredReplicaSets;
-    if (activeTab === 6) return [...filteredCronJobs, ...filteredJobs];
-    if (activeTab === 7) return filteredServices;
-    if (activeTab === 8) return filteredIngresses;
-    if (activeTab === 9) return filteredNetworkPolicies;
-    if (activeTab === 10) return filteredConfigMaps;
-    if (activeTab === 11) return filteredSecrets;
-    if (activeTab === 12) return filteredPVCs;
-    if (activeTab === 13) return filteredStorageClasses;
-    if (activeTab === 14) return filteredNodes;
-    if (activeTab === 15) return [...filteredServiceAccounts, ...filteredRoles];
-    if (activeTab === 16) return filteredCRDs;
-    if (activeTab === 17) return [];
+    if (activeTab === 6) return filteredJobs;
+    if (activeTab === 7) return filteredCronJobs;
+    if (activeTab === 8) return filteredServices;
+    if (activeTab === 9) return filteredIngresses;
+    if (activeTab === 10) return filteredNetworkPolicies;
+    if (activeTab === 11) return filteredConfigMaps;
+    if (activeTab === 12) return filteredSecrets;
+    if (activeTab === 13) return filteredPVCs;
+    if (activeTab === 14) return filteredStorageClasses;
+    if (activeTab === 15) return filteredNodes;
+    if (activeTab === 16) return filteredServiceAccounts;
+    if (activeTab === 17) return filteredRoles;
+    if (activeTab === 18) return filteredRoleBindings;
+    if (activeTab === 19) return filteredCRDs;
+    if (activeTab === 20) return filteredEvents;
+    if (activeTab === 21) return filteredHPAs;
+    if (activeTab === 22) return filteredPVs;
+    if (activeTab === 23) return [...filteredGateways, ...filteredHTTPRoutes];
     return [];
   };
 
@@ -1223,6 +1287,22 @@ users:
     return (crds || []).filter((c) => c.name.toLowerCase().includes(searchQuery.toLowerCase()));
   }, [crds, searchQuery]);
 
+  const filteredPVs = useMemo(() => {
+    return (pvs || []).filter((p) => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  }, [pvs, searchQuery]);
+
+  const filteredHPAs = useMemo(() => {
+    return (hpas || []).filter((h) => h.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  }, [hpas, searchQuery]);
+
+  const filteredGateways = useMemo(() => {
+    return (gateways || []).filter((g) => g.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  }, [gateways, searchQuery]);
+
+  const filteredHTTPRoutes = useMemo(() => {
+    return (httpRoutes || []).filter((r) => r.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  }, [httpRoutes, searchQuery]);
+
   const getActiveTabFilteredResources = (): any[] => {
     if (activeTab === 0) return [];
     if (activeTab === 1) return filteredPods;
@@ -1245,6 +1325,9 @@ users:
     if (activeTab === 18) return filteredRoleBindings;
     if (activeTab === 19) return filteredCRDs;
     if (activeTab === 20) return filteredEvents;
+    if (activeTab === 21) return filteredHPAs;
+    if (activeTab === 22) return filteredPVs;
+    if (activeTab === 23) return [...filteredGateways, ...filteredHTTPRoutes];
     return [];
   };
 
@@ -1785,6 +1868,9 @@ users:
             <Tab label="RoleBindings" />
             <Tab label="Custom Resource Definitions" />
             <Tab label="Events" />
+            <Tab label="HorizontalPodAutoscalers" />
+            <Tab label="PersistentVolumes" />
+            <Tab label="Gateway API" />
           </Tabs>
         </Box>
 
@@ -1933,8 +2019,10 @@ users:
                       </TableCell>
                       <TableCell>Pod Name</TableCell>
                       <TableCell>Namespace</TableCell>
+                      <TableCell>Containers</TableCell>
                       <TableCell>Ready</TableCell>
                       <TableCell>Status</TableCell>
+                      <TableCell>CPU / Mem</TableCell>
                       <TableCell>Restarts</TableCell>
                       <TableCell>Node</TableCell>
                       <TableCell>IP</TableCell>
@@ -1950,9 +2038,32 @@ users:
                         </TableCell>
                         <TableCell sx={{ fontWeight: 700, color: 'primary.main' }}>{pod.name}</TableCell>
                         <TableCell><Chip label={pod.namespace} size="small" sx={{ fontSize: '0.65rem', borderRadius: 1 }} /></TableCell>
+                        <TableCell>
+                          <Chip
+                            label={`${pod.containers?.length || 1} ctr`}
+                            size="small"
+                            variant="outlined"
+                            color="info"
+                            sx={{ fontSize: '0.65rem', borderRadius: 1, height: 20 }}
+                          />
+                        </TableCell>
                         <TableCell sx={{ fontWeight: 650, color: 'text.secondary', fontSize: '0.8rem' }}>{pod.ready || '1/1'}</TableCell>
                         <TableCell>
                           <Chip label={pod.status} size="small" color={pod.status === 'Running' ? 'success' : pod.status === 'Pending' ? 'warning' : 'error'} sx={{ fontSize: '0.65rem', fontWeight: 700, borderRadius: 1 }} />
+                        </TableCell>
+                        <TableCell sx={{ fontSize: '0.75rem', fontFamily: 'monospace' }}>
+                          {pod.cpuUsage || pod.memoryUsage ? (
+                            <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+                              {pod.cpuUsage && (
+                                <Chip label={`CPU: ${pod.cpuUsage}`} size="small" variant="outlined" sx={{ fontSize: '0.62rem', height: 18 }} />
+                              )}
+                              {pod.memoryUsage && (
+                                <Chip label={`Mem: ${pod.memoryUsage}`} size="small" variant="outlined" sx={{ fontSize: '0.62rem', height: 18 }} />
+                              )}
+                            </Box>
+                          ) : (
+                            <Typography variant="caption" color="text.secondary">-</Typography>
+                          )}
                         </TableCell>
                         <TableCell sx={{ color: pod.restarts > 0 ? 'warning.main' : 'inherit', fontWeight: pod.restarts > 0 ? 700 : 'inherit' }}>
                           {pod.restarts}
@@ -2423,6 +2534,7 @@ users:
                       <TableCell>Node Name</TableCell>
                       <TableCell>Status</TableCell>
                       <TableCell>Roles</TableCell>
+                      <TableCell>Capacity (CPU/Mem)</TableCell>
                       <TableCell>IP Address</TableCell>
                       <TableCell>Version</TableCell>
                       <TableCell>Age</TableCell>
@@ -2437,12 +2549,28 @@ users:
                           <Chip label={node.status} size="small" color={node.status === 'Ready' ? 'success' : 'error'} sx={{ fontSize: '0.65rem', fontWeight: 700, borderRadius: 1 }} />
                         </TableCell>
                         <TableCell><Chip label={node.roles ?? node.role} size="small" variant="outlined" sx={{ fontSize: '0.65rem' }} /></TableCell>
+                        <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                          {node.cpuCapacity ? (
+                            <Box sx={{ display: 'flex', gap: 0.5 }}>
+                              <Chip label={`${node.cpuCapacity} CPU`} size="small" variant="outlined" sx={{ fontSize: '0.62rem', height: 18 }} />
+                              <Chip label={node.memoryCapacity || '-'} size="small" variant="outlined" sx={{ fontSize: '0.62rem', height: 18 }} />
+                            </Box>
+                          ) : (
+                            '-'
+                          )}
+                        </TableCell>
                         <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>Int: {node.internalIp} <br /> Ext: {node.externalIp}</TableCell>
                         <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{node.version}</TableCell>
                         <TableCell>{node.age}</TableCell>
                         <TableCell>
-                          {!node.cpuPressure && !node.memoryPressure && !node.diskPressure && !node.pidPressure && (
+                          {!node.cpuPressure && !node.memoryPressure && !node.diskPressure && !node.pidPressure ? (
                             <Chip label="Healthy" size="small" color="success" variant="outlined" sx={{ fontSize: '0.6rem', height: 18 }} />
+                          ) : (
+                            <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                              {node.memoryPressure && <Chip label="MemPressure" size="small" color="warning" sx={{ fontSize: '0.6rem', height: 18 }} />}
+                              {node.diskPressure && <Chip label="DiskPressure" size="small" color="error" sx={{ fontSize: '0.6rem', height: 18 }} />}
+                              {node.pidPressure && <Chip label="PIDPressure" size="small" color="error" sx={{ fontSize: '0.6rem', height: 18 }} />}
+                            </Box>
                           )}
                         </TableCell>
                       </TableRow>
@@ -2582,6 +2710,107 @@ users:
                   </TableBody>
                 </Table>
               )}
+
+              {/* TAB 21: HORIZONTAL POD AUTOSCALERS (HPA) */}
+              {activeTab === 21 && (
+                <Table stickyHeader size="small">
+                  <TableHead sx={{ bgcolor: 'action.hover' }}>
+                    <TableRow>
+                      <TableCell>HPA Name</TableCell>
+                      <TableCell>Namespace</TableCell>
+                      <TableCell>Target Reference</TableCell>
+                      <TableCell>Min / Max Replicas</TableCell>
+                      <TableCell>Current / Desired</TableCell>
+                      <TableCell>Target Metrics</TableCell>
+                      <TableCell>Age</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {paginate(filteredHPAs).map((hpa) => (
+                      <TableRow key={hpa.name} hover onClick={() => handleRowClick(hpa)} sx={{ cursor: 'pointer' }}>
+                        <TableCell sx={{ fontWeight: 700, color: 'primary.main' }}>{hpa.name}</TableCell>
+                        <TableCell><Chip label={hpa.namespace} size="small" sx={{ fontSize: '0.65rem', borderRadius: 1 }} /></TableCell>
+                        <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>{hpa.reference}</TableCell>
+                        <TableCell sx={{ fontSize: '0.8rem' }}>{hpa.minReplicas} / {hpa.maxReplicas}</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>
+                          <Chip label={`${hpa.currentReplicas} / ${hpa.desiredReplicas}`} size="small" color="primary" variant="outlined" sx={{ fontSize: '0.68rem', height: 20 }} />
+                        </TableCell>
+                        <TableCell>
+                          <Chip label={hpa.metrics} size="small" sx={{ fontSize: '0.68rem', bgcolor: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8' }} />
+                        </TableCell>
+                        <TableCell>{hpa.age}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+
+              {/* TAB 22: PERSISTENT VOLUMES (PV) */}
+              {activeTab === 22 && (
+                <Table stickyHeader size="small">
+                  <TableHead sx={{ bgcolor: 'action.hover' }}>
+                    <TableRow>
+                      <TableCell>PV Name</TableCell>
+                      <TableCell>Capacity</TableCell>
+                      <TableCell>Access Modes</TableCell>
+                      <TableCell>Reclaim Policy</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell>Claim</TableCell>
+                      <TableCell>StorageClass</TableCell>
+                      <TableCell>Age</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {paginate(filteredPVs).map((pv) => (
+                      <TableRow key={pv.name} hover onClick={() => handleRowClick(pv)} sx={{ cursor: 'pointer' }}>
+                        <TableCell sx={{ fontWeight: 700, color: 'primary.main', fontFamily: 'monospace' }}>{pv.name}</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>{pv.capacity}</TableCell>
+                        <TableCell sx={{ fontSize: '0.78rem' }}>{pv.accessModes}</TableCell>
+                        <TableCell sx={{ fontSize: '0.78rem' }}>{pv.reclaimPolicy}</TableCell>
+                        <TableCell>
+                          <Chip label={pv.status} size="small" color={pv.status === 'Bound' ? 'success' : pv.status === 'Available' ? 'info' : 'warning'} sx={{ fontSize: '0.65rem', fontWeight: 700, borderRadius: 1 }} />
+                        </TableCell>
+                        <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>{pv.claim}</TableCell>
+                        <TableCell sx={{ fontSize: '0.78rem' }}>{pv.storageClass}</TableCell>
+                        <TableCell>{pv.age}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+
+              {/* TAB 23: GATEWAY API */}
+              {activeTab === 23 && (
+                <Table stickyHeader size="small">
+                  <TableHead sx={{ bgcolor: 'action.hover' }}>
+                    <TableRow>
+                      <TableCell>Name</TableCell>
+                      <TableCell>Namespace</TableCell>
+                      <TableCell>Gateway Class / Hostnames</TableCell>
+                      <TableCell>Listeners / ParentRefs</TableCell>
+                      <TableCell>Address</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell>Age</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {paginate([...filteredGateways, ...filteredHTTPRoutes]).map((gw: any) => (
+                      <TableRow key={gw.name} hover onClick={() => handleRowClick(gw)} sx={{ cursor: 'pointer' }}>
+                        <TableCell sx={{ fontWeight: 700, color: 'primary.main' }}>{gw.name}</TableCell>
+                        <TableCell><Chip label={gw.namespace} size="small" sx={{ fontSize: '0.65rem', borderRadius: 1 }} /></TableCell>
+                        <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>{gw.className || gw.hostnames || '-'}</TableCell>
+                        <TableCell sx={{ fontSize: '0.78rem' }}>{gw.listeners || gw.parentRefs || '-'}</TableCell>
+                        <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>{gw.addresses || '-'}</TableCell>
+                        <TableCell>
+                          <Chip label={gw.status || 'Active'} size="small" color={gw.status === 'Programmed' ? 'success' : 'info'} sx={{ fontSize: '0.65rem', fontWeight: 700, borderRadius: 1 }} />
+                        </TableCell>
+                        <TableCell>{gw.age}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+
             </Box>
           )}
 
@@ -3048,6 +3277,73 @@ users:
 
           {/* Center: Controls Stack in Uniform Height */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+            {/* Container Selector if Pod has multiple containers or container list */}
+            {selectedResource?.containers && selectedResource.containers.length > 0 && (
+              <FormControl size="small" sx={{ minWidth: 120 }}>
+                <Select
+                  value={selectedContainer || selectedResource.containers[0] || ''}
+                  onChange={(e) => {
+                    const newCont = e.target.value;
+                    setSelectedContainer(newCont);
+                    handleRefreshLogs(logsTimeFrame, newCont);
+                  }}
+                  MenuProps={{
+                    slotProps: {
+                      paper: {
+                        sx: {
+                          bgcolor: '#0f1422',
+                          color: '#f0f6fc',
+                          border: '1px solid rgba(255, 255, 255, 0.08)',
+                          borderRadius: 1.5,
+                          boxShadow: '0 20px 40px -10px rgba(0, 0, 0, 0.85)',
+                          backgroundImage: 'none',
+                          mt: 0.5,
+                          '& .MuiMenuItem-root': {
+                            fontSize: '0.8rem',
+                            color: '#cbd5e1',
+                            borderRadius: 1,
+                            py: 0.6,
+                            px: 1.25,
+                            my: 0.2,
+                            '&:hover': {
+                              bgcolor: 'rgba(255, 255, 255, 0.06)',
+                              color: '#f8fafc',
+                            },
+                            '&.Mui-selected': {
+                              bgcolor: 'rgba(56, 189, 248, 0.15)',
+                              color: '#38bdf8',
+                              fontWeight: 700,
+                            },
+                          },
+                        },
+                      },
+                    },
+                  }}
+                  sx={{
+                    height: 30,
+                    bgcolor: '#0a0e17',
+                    color: '#38bdf8',
+                    fontSize: '0.75rem',
+                    borderRadius: 1.5,
+                    fontWeight: 700,
+                    '& .MuiOutlinedInput-notchedOutline': {
+                      borderColor: 'rgba(56, 189, 248, 0.4)',
+                    },
+                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                      borderColor: '#38bdf8',
+                    },
+                    '& .MuiSvgIcon-root': { color: '#38bdf8', fontSize: 18 },
+                  }}
+                >
+                  {selectedResource.containers.map((cName: string) => (
+                    <MenuItem key={cName} value={cName} sx={{ fontSize: '0.8rem' }}>
+                      {cName}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+
             {/* Time Frame & Pre Selector */}
             <FormControl size="small" sx={{ minWidth: 95 }}>
               <Select
@@ -3633,6 +3929,7 @@ users:
         resourceType={terminalResourceType}
         clusterId={id}
         namespace={selectedResource?.namespace || selectedNamespace || 'default'}
+        container={selectedContainer || undefined}
       />
 
       {/* Toast Feedback */}

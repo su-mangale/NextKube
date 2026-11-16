@@ -31,6 +31,7 @@ export interface TerminalWindowProps {
   resourceType: 'pod' | 'node';
   clusterId: string;
   namespace?: string;
+  container?: string;
 }
 
 export function TerminalWindow({
@@ -40,6 +41,7 @@ export function TerminalWindow({
   resourceType,
   clusterId,
   namespace = 'default',
+  container,
 }: TerminalWindowProps) {
   const [maximized, setMaximized] = useState(false);
   const [minimized, setMinimized] = useState(false);
@@ -95,7 +97,8 @@ export function TerminalWindow({
       const protocol = backendUrl ? (backendUrl.startsWith('https') ? 'wss:' : 'ws:') : (window.location.protocol === 'https:' ? 'wss:' : 'ws:');
       let wsUrl = `${protocol}//${wsHost}/api/clusters/${clusterId}`;
       if (resourceType === 'pod') {
-        wsUrl += `/pods/${namespace}/${resourceName}/exec`;
+        const queryParams = container ? `?container=${encodeURIComponent(container)}` : '';
+        wsUrl += `/pods/${namespace}/${resourceName}/exec${queryParams}`;
       } else {
         wsUrl += `/nodes/${resourceName}/ssh`;
       }
@@ -263,7 +266,9 @@ export function TerminalWindow({
                 sx={{ color: connected ? '#34d399' : '#94a3b8', fontSize: 10 }}
               />
               <Typography variant="caption" sx={{ color: '#94a3b8', fontSize: '0.7rem', fontWeight: 600 }}>
-                {connected ? `Connected  ·  ${resourceType}  ·  ${namespace}` : 'Connecting…'}
+                {connected
+                  ? `Connected  ·  ${resourceType}  ·  ${namespace}${container ? `  ·  container: ${container}` : ''}`
+                  : `Connecting…${container ? ` [${container}]` : ''}`}
               </Typography>
             </Box>
           </Box>

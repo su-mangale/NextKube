@@ -106,6 +106,9 @@ import {
   K8sRole,
   K8sRoleBinding,
   K8sCRD,
+  K8sHPA,
+  K8sGateway,
+  K8sHTTPRoute,
   PlatformApp,
   PlatformAppSpec,
   PlatformAppInfo,
@@ -944,6 +947,54 @@ export const useCRDs = (clusterId: string) => {
   return useQuery<K8sCRD[]>({
     queryKey: ['crds', clusterId],
     queryFn: () => fetchCRDs(clusterId),
+    enabled: !!clusterId,
+  });
+};
+
+export const fetchHPAs = async (clusterId: string, namespace?: string): Promise<K8sHPA[]> => {
+  const baseUrl = getBackendUrl();
+  const nsQuery = namespace && namespace !== 'all' ? `?namespace=${namespace}` : '';
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/hpas${nsQuery}`);
+  if (!res.ok) throw new Error('Failed to fetch HPAs');
+  return res.json();
+};
+
+export const useHPAs = (clusterId: string, namespace?: string) => {
+  return useQuery<K8sHPA[]>({
+    queryKey: ['hpas', clusterId, namespace],
+    queryFn: () => fetchHPAs(clusterId, namespace),
+    enabled: !!clusterId,
+  });
+};
+
+export const fetchGateways = async (clusterId: string, namespace?: string): Promise<K8sGateway[]> => {
+  const baseUrl = getBackendUrl();
+  const nsQuery = namespace && namespace !== 'all' ? `?namespace=${namespace}` : '';
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/gateways${nsQuery}`);
+  if (!res.ok) throw new Error('Failed to fetch Gateways');
+  return res.json();
+};
+
+export const useGateways = (clusterId: string, namespace?: string) => {
+  return useQuery<K8sGateway[]>({
+    queryKey: ['gateways', clusterId, namespace],
+    queryFn: () => fetchGateways(clusterId, namespace),
+    enabled: !!clusterId,
+  });
+};
+
+export const fetchHTTPRoutes = async (clusterId: string, namespace?: string): Promise<K8sHTTPRoute[]> => {
+  const baseUrl = getBackendUrl();
+  const nsQuery = namespace && namespace !== 'all' ? `?namespace=${namespace}` : '';
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/httproutes${nsQuery}`);
+  if (!res.ok) throw new Error('Failed to fetch HTTPRoutes');
+  return res.json();
+};
+
+export const useHTTPRoutes = (clusterId: string, namespace?: string) => {
+  return useQuery<K8sHTTPRoute[]>({
+    queryKey: ['httproutes', clusterId, namespace],
+    queryFn: () => fetchHTTPRoutes(clusterId, namespace),
     enabled: !!clusterId,
   });
 };

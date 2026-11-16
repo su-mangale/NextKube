@@ -152,6 +152,9 @@ export interface K8sPod {
   node: string;
   age: string;
   image?: string;
+  containers?: string[];
+  cpuUsage?: string;
+  memoryUsage?: string;
 }
 
 export interface K8sIngress {
@@ -194,6 +197,11 @@ export interface K8sNode {
   memoryPressure: boolean;
   diskPressure: boolean;
   pidPressure: boolean;
+  cpuCapacity?: string;
+  memoryCapacity?: string;
+  podsCapacity?: string;
+  cpuAllocatable?: string;
+  memoryAllocatable?: string;
 }
 
 export interface K8sEvent {
@@ -386,6 +394,37 @@ export interface K8sCRD {
   scope: 'Namespaced' | 'Cluster';
   kind: string;
   instancesCount: number;
+  age: string;
+}
+
+export interface K8sHPA {
+  name: string;
+  namespace: string;
+  reference: string;
+  minReplicas: number;
+  maxReplicas: number;
+  currentReplicas: number;
+  desiredReplicas: number;
+  metrics: string;
+  age: string;
+}
+
+export interface K8sGateway {
+  name: string;
+  namespace: string;
+  className: string;
+  listeners: string;
+  addresses: string;
+  status: 'Programmed' | 'Pending' | 'NotProgrammed';
+  age: string;
+}
+
+export interface K8sHTTPRoute {
+  name: string;
+  namespace: string;
+  hostnames: string;
+  parentRefs: string;
+  rulesCount: number;
   age: string;
 }
 
