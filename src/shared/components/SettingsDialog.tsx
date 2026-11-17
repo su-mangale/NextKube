@@ -52,6 +52,8 @@ import { DraggablePaper } from './DraggablePaper';
 export interface SettingsDialogProps {
   open: boolean;
   onClose: () => void;
+  zIndex?: number;
+  onFocus?: () => void;
 }
 
 interface UserRecord {
@@ -61,7 +63,7 @@ interface UserRecord {
   createdAt?: string;
 }
 
-export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
+export function SettingsDialog({ open, onClose, zIndex, onFocus }: SettingsDialogProps) {
   const muiTheme = useTheme();
   const isDark = muiTheme.palette.mode === 'dark';
   const queryClient = useQueryClient();
@@ -210,13 +212,29 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
     <>
       <Dialog
         open={open}
-        onClose={onClose}
+        onClose={(e, reason) => {
+          if (reason === 'backdropClick') return;
+          onClose();
+        }}
         PaperComponent={DraggablePaper}
         maxWidth="md"
         fullWidth
-        disableEnforceFocus
+        hideBackdrop={true}
+        disableEnforceFocus={true}
+        sx={{
+          zIndex: zIndex || 1315,
+          pointerEvents: 'none',
+          '& .MuiDialog-container': {
+            pointerEvents: 'none',
+          },
+          '& .MuiPaper-root': {
+            pointerEvents: 'auto',
+          },
+        }}
         slotProps={{
           paper: {
+            onClick: onFocus,
+            onMouseDown: onFocus,
             sx: {
               bgcolor: isDark ? '#0a0e17' : '#ffffff',
               backgroundImage: 'none',

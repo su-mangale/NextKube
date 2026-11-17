@@ -281,14 +281,32 @@ export function KubectlTerminalDrawer({
     }
   }, [isDark]);
 
-  // Re-fit terminal when size/state changes
+  // Re-fit terminal dynamically on window resize or cursor drag expansion
   useEffect(() => {
-    if (open) {
-      const timer = setTimeout(() => {
-        fitAddonRef.current?.fit();
-      }, 150);
-      return () => clearTimeout(timer);
+    if (!open) return;
+    const timer = setTimeout(() => {
+      fitAddonRef.current?.fit();
+    }, 150);
+
+    const termEl = terminalRef.current;
+    if (termEl && typeof ResizeObserver !== 'undefined') {
+      const observer = new ResizeObserver(() => {
+        if (fitAddonRef.current) {
+          fitAddonRef.current.fit();
+          const term = termInstanceRef.current;
+          if (term && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({ resize: { cols: term.cols, rows: term.rows } }));
+          }
+        }
+      });
+      observer.observe(termEl);
+      return () => {
+        clearTimeout(timer);
+        observer.disconnect();
+      };
     }
+
+    return () => clearTimeout(timer);
   }, [maximized, open]);
 
   const sendQuickCommand = (cmd: string) => {
@@ -650,7 +668,8 @@ export function KubectlTerminalDrawer({
           ref={terminalRef}
           sx={{
             flexGrow: 1,
-            height: maximized ? 'calc(100vh - 180px)' : '480px',
+            minHeight: 320,
+            height: maximized ? 'calc(100vh - 180px)' : '100%',
             px: 2,
             py: 1.5,
             bgcolor: isDark ? '#090d16' : '#ffffff',

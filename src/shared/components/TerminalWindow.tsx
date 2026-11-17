@@ -268,9 +268,25 @@ export function TerminalWindow({
         }
       }, 180);
 
+      const termEl = terminalRef.current;
+      let observer: ResizeObserver | null = null;
+      if (termEl && typeof ResizeObserver !== 'undefined') {
+        observer = new ResizeObserver(() => {
+          if (fitAddonRef.current) {
+            fitAddonRef.current.fit();
+            const term = termInstanceRef.current;
+            if (term && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+              wsRef.current.send(JSON.stringify({ resize: { cols: term.cols, rows: term.rows } }));
+            }
+          }
+        });
+        observer.observe(termEl);
+      }
+
       return () => {
         clearTimeout(timer1);
         clearTimeout(timer2);
+        if (observer) observer.disconnect();
       };
     }
   }, [maximized, open, isMinimized]);
@@ -452,11 +468,13 @@ export function TerminalWindow({
             flexGrow: 1,
             p: 0,
             minHeight: 340,
-            maxHeight: maximized ? 'calc(100vh - 76px)' : 500,
+            height: maximized ? 'calc(100vh - 76px)' : '100%',
+            maxHeight: maximized ? 'calc(100vh - 76px)' : 'none',
             bgcolor: isDark ? '#0a0e17' : '#ffffff',
             overflow: 'hidden',
             '& .xterm': {
               padding: '16px',
+              height: '100%',
             },
             '& .xterm-viewport': {
               bgcolor: isDark ? '#0a0e17 !important' : '#ffffff !important',

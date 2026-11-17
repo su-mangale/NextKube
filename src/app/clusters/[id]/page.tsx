@@ -1672,14 +1672,14 @@ users:
       return (
         <Box
           sx={{
-            color: '#38bdf8',
+            color: isDark ? '#38bdf8' : '#0284c7',
             fontWeight: 800,
             py: 0.4,
-            bgcolor: 'rgba(56,189,248,0.1)',
+            bgcolor: isDark ? 'rgba(56,189,248,0.1)' : '#e0f2fe',
             px: 1,
             borderRadius: 1,
             my: 0.6,
-            border: '1px solid rgba(56,189,248,0.2)',
+            border: isDark ? '1px solid rgba(56,189,248,0.2)' : '1px solid #bae6fd',
           }}
         >
           {line}
@@ -1700,7 +1700,7 @@ users:
         <Box
           component="span"
           sx={{
-            color: '#64748b',
+            color: isDark ? '#64748b' : '#64748b',
             pr: 1.5,
             userSelect: 'none',
             fontFamily: 'monospace',
@@ -1724,18 +1724,18 @@ users:
         let bgcolor: string | null = null;
 
         if (['ERROR', 'FATAL', 'PANIC', 'CRITICAL', 'EXCEPTION'].includes(upper)) {
-          color = '#f87171';
-          bgcolor = 'rgba(239, 68, 68, 0.18)';
+          color = isDark ? '#f87171' : '#dc2626';
+          bgcolor = isDark ? 'rgba(239, 68, 68, 0.18)' : '#fee2e2';
         } else if (['WARN', 'WARNING'].includes(upper)) {
-          color = '#fbbf24';
-          bgcolor = 'rgba(245, 158, 11, 0.18)';
+          color = isDark ? '#fbbf24' : '#d97706';
+          bgcolor = isDark ? 'rgba(245, 158, 11, 0.18)' : '#fef3c7';
         } else if (['INFO', 'NOTICE'].includes(upper)) {
-          color = '#38bdf8';
+          color = isDark ? '#38bdf8' : '#0284c7';
         } else if (['DEBUG', 'TRACE'].includes(upper)) {
-          color = '#a78bfa';
+          color = isDark ? '#a78bfa' : '#7c3aed';
         } else if (['GET', 'POST', 'PUT', 'DELETE', 'PATCH'].includes(upper)) {
-          color = '#34d399';
-          bgcolor = 'rgba(52, 211, 153, 0.12)';
+          color = isDark ? '#34d399' : '#059669';
+          bgcolor = isDark ? 'rgba(52, 211, 153, 0.12)' : '#d1fae5';
         }
 
         if (color) {
@@ -1770,8 +1770,8 @@ users:
               component="mark"
               key={i}
               sx={{
-                bgcolor: 'rgba(234, 179, 8, 0.35)',
-                color: '#fde047',
+                bgcolor: isDark ? 'rgba(234, 179, 8, 0.35)' : 'rgba(250, 204, 21, 0.4)',
+                color: isDark ? '#fde047' : '#854d0e',
                 borderRadius: '2px',
                 px: '3px',
                 fontWeight: 800,
@@ -3758,6 +3758,7 @@ users:
         slotProps={{
           paper: {
             onClick: () => setTopWindow('yamlCreate'),
+            onMouseDown: () => setTopWindow('yamlCreate'),
             sx: {
               bgcolor: isDark ? '#0a0e17' : '#ffffff',
               backgroundImage: 'none',
@@ -3807,19 +3808,21 @@ users:
             <CloseIcon fontSize="small" />
           </IconButton>
         </DialogTitle>
-        <DialogContent sx={{ p: 0, bgcolor: isDark ? '#0a0e17' : '#ffffff' }}>
+        <DialogContent sx={{ p: 0, bgcolor: isDark ? '#0a0e17' : '#ffffff', display: 'flex', flexDirection: 'column', flexGrow: 1, minHeight: 460 }}>
           <Box sx={{ p: 2, bgcolor: isDark ? '#0f1422' : '#f8fafc', borderBottom: isDark ? '1px solid rgba(255,255,255,0.06)' : '1px solid #e2e8f0' }}>
             <Typography variant="body2" sx={{ color: isDark ? '#8b949e' : '#64748b' }}>
               Paste or edit a Kubernetes YAML/JSON manifest to apply directly to cluster namespace <b style={{ color: isDark ? '#e6edf3' : '#0f172a' }}>{selectedNamespace === 'all' ? 'default' : selectedNamespace}</b>.
             </Typography>
           </Box>
-          <YamlIdeEditor
-            value={createYamlVal}
-            onChange={(val) => setCreateYamlVal(val)}
-            height="420px"
-            embedded
-            hideHeader
-          />
+          <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: 400 }}>
+            <YamlIdeEditor
+              value={createYamlVal}
+              onChange={(val) => setCreateYamlVal(val)}
+              height="100%"
+              embedded
+              hideHeader
+            />
+          </Box>
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2, bgcolor: isDark ? '#0f1422' : '#f8fafc', borderTop: isDark ? '1px solid rgba(255,255,255,0.06)' : '1px solid #e2e8f0' }}>
           <Button onClick={() => setCreateDialogOpen(false)} disabled={createLoading} sx={{ fontWeight: 700, color: isDark ? '#94a3b8' : '#64748b' }}>
@@ -3886,6 +3889,7 @@ users:
         slotProps={{
           paper: {
             onClick: () => setTopWindow('logs'),
+            onMouseDown: () => setTopWindow('logs'),
             sx: {
               bgcolor: isDark ? '#0a0e17' : '#ffffff',
               backgroundImage: 'none',
@@ -3938,27 +3942,27 @@ users:
                     slotProps: {
                       paper: {
                         sx: {
-                          bgcolor: '#0f1422',
-                          color: '#f0f6fc',
-                          border: '1px solid rgba(255, 255, 255, 0.08)',
+                          bgcolor: isDark ? '#0f1422' : '#ffffff',
+                          color: isDark ? '#f0f6fc' : '#0f172a',
+                          border: isDark ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid #e2e8f0',
                           borderRadius: 1.5,
-                          boxShadow: '0 20px 40px -10px rgba(0, 0, 0, 0.85)',
+                          boxShadow: isDark ? '0 20px 40px -10px rgba(0, 0, 0, 0.85)' : '0 20px 40px -10px rgba(15, 23, 42, 0.15)',
                           backgroundImage: 'none',
                           mt: 0.5,
                           '& .MuiMenuItem-root': {
                             fontSize: '0.8rem',
-                            color: '#cbd5e1',
+                            color: isDark ? '#cbd5e1' : '#334155',
                             borderRadius: 1,
                             py: 0.6,
                             px: 1.25,
                             my: 0.2,
                             '&:hover': {
-                              bgcolor: 'rgba(255, 255, 255, 0.06)',
-                              color: '#f8fafc',
+                              bgcolor: isDark ? 'rgba(255, 255, 255, 0.06)' : '#f1f5f9',
+                              color: isDark ? '#f8fafc' : '#0f172a',
                             },
                             '&.Mui-selected': {
-                              bgcolor: 'rgba(56, 189, 248, 0.15)',
-                              color: '#38bdf8',
+                              bgcolor: isDark ? 'rgba(56, 189, 248, 0.15)' : 'rgba(2, 132, 199, 0.1)',
+                              color: isDark ? '#38bdf8' : '#0284c7',
                               fontWeight: 700,
                             },
                           },
@@ -3968,18 +3972,18 @@ users:
                   }}
                   sx={{
                     height: 30,
-                    bgcolor: '#0a0e17',
-                    color: '#38bdf8',
+                    bgcolor: isDark ? '#0a0e17' : '#ffffff',
+                    color: isDark ? '#38bdf8' : '#0284c7',
                     fontSize: '0.75rem',
                     borderRadius: 1.5,
                     fontWeight: 700,
                     '& .MuiOutlinedInput-notchedOutline': {
-                      borderColor: 'rgba(56, 189, 248, 0.4)',
+                      borderColor: isDark ? 'rgba(56, 189, 248, 0.4)' : '#bae6fd',
                     },
                     '&:hover .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#38bdf8',
+                      borderColor: isDark ? '#38bdf8' : '#0284c7',
                     },
-                    '& .MuiSvgIcon-root': { color: '#38bdf8', fontSize: 18 },
+                    '& .MuiSvgIcon-root': { color: isDark ? '#38bdf8' : '#0284c7', fontSize: 18 },
                   }}
                 >
                   {selectedResource.containers.map((cName: string) => (
@@ -4005,11 +4009,13 @@ users:
                   slotProps: {
                     paper: {
                       sx: {
-                        bgcolor: '#0f1422',
-                        color: '#f0f6fc',
-                        border: '1px solid rgba(255, 255, 255, 0.08)',
+                        bgcolor: isDark ? '#0f1422' : '#ffffff',
+                        color: isDark ? '#f0f6fc' : '#0f172a',
+                        border: isDark ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid #e2e8f0',
                         borderRadius: 1.5,
-                        boxShadow: '0 20px 40px -10px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.06)',
+                        boxShadow: isDark
+                          ? '0 20px 40px -10px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.06)'
+                          : '0 20px 40px -10px rgba(15, 23, 42, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05)',
                         backgroundImage: 'none',
                         mt: 0.5,
                         '& .MuiList-root': {
@@ -4017,27 +4023,27 @@ users:
                         },
                         '& .MuiMenuItem-root': {
                           fontSize: '0.8rem',
-                          color: '#cbd5e1',
+                          color: isDark ? '#cbd5e1' : '#334155',
                           borderRadius: 1,
                           py: 0.6,
                           px: 1.25,
                           my: 0.2,
                           '&:hover': {
-                            bgcolor: 'rgba(255, 255, 255, 0.06)',
-                            color: '#f8fafc',
+                            bgcolor: isDark ? 'rgba(255, 255, 255, 0.06)' : '#f1f5f9',
+                            color: isDark ? '#f8fafc' : '#0f172a',
                           },
                           '&.Mui-selected': {
-                            bgcolor: 'rgba(56, 189, 248, 0.15)',
-                            color: '#38bdf8',
+                            bgcolor: isDark ? 'rgba(56, 189, 248, 0.15)' : 'rgba(2, 132, 199, 0.1)',
+                            color: isDark ? '#38bdf8' : '#0284c7',
                             fontWeight: 700,
                             '&:hover': {
-                              bgcolor: 'rgba(56, 189, 248, 0.22)',
+                              bgcolor: isDark ? 'rgba(56, 189, 248, 0.22)' : 'rgba(2, 132, 199, 0.16)',
                             },
                           },
                         },
                         '& .MuiDivider-root': {
                           my: 0.5,
-                          borderColor: 'rgba(255, 255, 255, 0.08)',
+                          borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#e2e8f0',
                         },
                       },
                     },
@@ -4045,18 +4051,18 @@ users:
                 }}
                 sx={{
                   height: 30,
-                  bgcolor: '#0a0e17',
-                  color: logsTimeFrame === 'pre' ? '#f59e0b' : '#f0f6fc',
+                  bgcolor: isDark ? '#0a0e17' : '#ffffff',
+                  color: logsTimeFrame === 'pre' ? '#f59e0b' : isDark ? '#f0f6fc' : '#0f172a',
                   fontSize: '0.75rem',
                   borderRadius: 1.5,
                   fontWeight: 700,
                   '& .MuiOutlinedInput-notchedOutline': {
-                    borderColor: logsTimeFrame === 'pre' ? 'rgba(245,158,11,0.5)' : 'rgba(255,255,255,0.12)',
+                    borderColor: logsTimeFrame === 'pre' ? 'rgba(245,158,11,0.5)' : isDark ? 'rgba(255,255,255,0.12)' : '#cbd5e1',
                   },
                   '&:hover .MuiOutlinedInput-notchedOutline': {
-                    borderColor: logsTimeFrame === 'pre' ? '#f59e0b' : 'rgba(255,255,255,0.25)',
+                    borderColor: logsTimeFrame === 'pre' ? '#f59e0b' : isDark ? 'rgba(255,255,255,0.25)' : '#94a3b8',
                   },
-                  '& .MuiSvgIcon-root': { color: logsTimeFrame === 'pre' ? '#f59e0b' : '#94a3b8', fontSize: 18 },
+                  '& .MuiSvgIcon-root': { color: logsTimeFrame === 'pre' ? '#f59e0b' : isDark ? '#94a3b8' : '#64748b', fontSize: 18 },
                 }}
               >
                 <MenuItem value="all" sx={{ fontSize: '0.8rem' }}>All Logs</MenuItem>
@@ -4066,7 +4072,7 @@ users:
                 <MenuItem value="1h" sx={{ fontSize: '0.8rem' }}>Since 1h</MenuItem>
                 <MenuItem value="6h" sx={{ fontSize: '0.8rem' }}>Since 6h</MenuItem>
                 <MenuItem value="24h" sx={{ fontSize: '0.8rem' }}>Since 24h</MenuItem>
-                <Divider sx={{ my: 0.5, borderColor: 'rgba(255,255,255,0.08)' }} />
+                <Divider sx={{ my: 0.5, borderColor: isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0' }} />
                 <MenuItem value="pre" sx={{ fontSize: '0.8rem', color: '#f59e0b', fontWeight: 800 }}>
                   pre (Previous)
                 </MenuItem>
@@ -4080,9 +4086,9 @@ users:
                 onClick={() => setLogsTimeMode(logsTimeMode === 'local' ? 'utc' : 'local')}
                 startIcon={<AccessTimeIcon sx={{ fontSize: 15 }} />}
                 sx={{
-                  color: logsTimeMode === 'local' ? '#38bdf8' : '#94a3b8',
-                  bgcolor: logsTimeMode === 'local' ? 'rgba(56, 189, 248, 0.12)' : '#0a0e17',
-                  border: `1px solid ${logsTimeMode === 'local' ? 'rgba(56, 189, 248, 0.35)' : 'rgba(255,255,255,0.12)'}`,
+                  color: logsTimeMode === 'local' ? (isDark ? '#38bdf8' : '#0284c7') : (isDark ? '#94a3b8' : '#64748b'),
+                  bgcolor: logsTimeMode === 'local' ? (isDark ? 'rgba(56, 189, 248, 0.12)' : '#e0f2fe') : (isDark ? '#0a0e17' : '#ffffff'),
+                  border: `1px solid ${logsTimeMode === 'local' ? (isDark ? 'rgba(56, 189, 248, 0.35)' : '#7dd3fc') : (isDark ? 'rgba(255,255,255,0.12)' : '#cbd5e1')}`,
                   borderRadius: 1.5,
                   height: 30,
                   px: 1.2,
@@ -4091,8 +4097,8 @@ users:
                   textTransform: 'none',
                   whiteSpace: 'nowrap',
                   '&:hover': {
-                    bgcolor: logsTimeMode === 'local' ? 'rgba(56, 189, 248, 0.2)' : 'rgba(255,255,255,0.06)',
-                    borderColor: logsTimeMode === 'local' ? '#38bdf8' : 'rgba(255,255,255,0.25)',
+                    bgcolor: logsTimeMode === 'local' ? (isDark ? 'rgba(56, 189, 248, 0.2)' : '#bae6fd') : (isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9'),
+                    borderColor: logsTimeMode === 'local' ? '#38bdf8' : (isDark ? 'rgba(255,255,255,0.25)' : '#94a3b8'),
                   },
                 }}
               >
@@ -4108,12 +4114,12 @@ users:
               onChange={(e) => setLogsSearchQuery(e.target.value)}
               slotProps={{
                 input: {
-                  startAdornment: <SearchIcon sx={{ color: 'rgba(255,255,255,0.4)', fontSize: 16, mr: 0.5 }} />,
+                  startAdornment: <SearchIcon sx={{ color: isDark ? 'rgba(255,255,255,0.4)' : '#94a3b8', fontSize: 16, mr: 0.5 }} />,
                   endAdornment: logsSearchQuery ? (
                     <IconButton
                       size="small"
                       onClick={() => setLogsSearchQuery('')}
-                      sx={{ color: 'rgba(255,255,255,0.4)', p: 0.2, '&:hover': { color: '#f8fafc' } }}
+                      sx={{ color: isDark ? 'rgba(255,255,255,0.4)' : '#94a3b8', p: 0.2, '&:hover': { color: isDark ? '#f8fafc' : '#0f172a' } }}
                     >
                       <ClearIcon sx={{ fontSize: 14 }} />
                     </IconButton>
@@ -4123,14 +4129,14 @@ users:
               sx={{
                 width: 170,
                 '& .MuiOutlinedInput-root': {
-                  bgcolor: '#0a0e17',
-                  color: '#f0f6fc',
+                  bgcolor: isDark ? '#0a0e17' : '#ffffff',
+                  color: isDark ? '#f0f6fc' : '#0f172a',
                   fontSize: '0.78rem',
                   height: 30,
                   borderRadius: 1.5,
                   pr: 0.5,
-                  '& fieldset': { borderColor: 'rgba(255,255,255,0.12)' },
-                  '&:hover fieldset': { borderColor: 'rgba(255,255,255,0.25)' },
+                  '& fieldset': { borderColor: isDark ? 'rgba(255,255,255,0.12)' : '#cbd5e1' },
+                  '&:hover fieldset': { borderColor: isDark ? 'rgba(255,255,255,0.25)' : '#94a3b8' },
                 },
               }}
             />
@@ -4235,10 +4241,13 @@ users:
                 size="small"
                 onClick={() => setLogsDialogMaximized(!logsDialogMaximized)}
                 sx={{
-                  color: '#e2e8f0',
-                  border: '1px solid rgba(255,255,255,0.12)',
+                  color: isDark ? '#e2e8f0' : '#475569',
+                  border: isDark ? '1px solid rgba(255,255,255,0.12)' : '1px solid #cbd5e1',
                   borderRadius: 1.5,
                   p: 0.6,
+                  '&:hover': {
+                    bgcolor: isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9',
+                  },
                 }}
               >
                 {logsDialogMaximized ? <FullscreenExitIcon fontSize="small" /> : <FullscreenIcon fontSize="small" />}
@@ -4251,10 +4260,15 @@ users:
                 size="small"
                 onClick={() => setLogsDialogOpen(false)}
                 sx={{
-                  color: '#e2e8f0',
-                  border: '1px solid rgba(255,255,255,0.12)',
+                  color: isDark ? '#e2e8f0' : '#475569',
+                  border: isDark ? '1px solid rgba(255,255,255,0.12)' : '1px solid #cbd5e1',
                   borderRadius: 1.5,
                   p: 0.6,
+                  '&:hover': {
+                    bgcolor: 'rgba(239, 68, 68, 0.15)',
+                    borderColor: 'rgba(239, 68, 68, 0.4)',
+                    color: '#f87171',
+                  },
                 }}
               >
                 <CloseIcon fontSize="small" />
@@ -4266,22 +4280,24 @@ users:
         {/* Log Stream Content */}
         <DialogContent
           sx={{
-            bgcolor: '#0a0e17',
-            color: '#c9d1d9',
+            bgcolor: isDark ? '#0a0e17' : '#f8fafc',
+            color: isDark ? '#c9d1d9' : '#0f172a',
             p: 2,
             fontFamily: 'Consolas, Monaco, monospace',
             fontSize: '0.8rem',
-            height: logsDialogMaximized ? 'calc(100vh - 128px)' : '480px',
+            minHeight: 380,
+            height: logsDialogMaximized ? 'calc(100vh - 128px)' : '100%',
+            flexGrow: 1,
             overflowY: 'auto',
           }}
         >
           {logsLoading ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-              <CircularProgress sx={{ color: '#38bdf8' }} />
+              <CircularProgress sx={{ color: isDark ? '#38bdf8' : '#0284c7' }} />
             </Box>
           ) : filteredLogsLines.length === 0 ? (
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', py: 6, gap: 1.5 }}>
-              <Typography variant="body2" sx={{ color: '#94a3b8', fontWeight: 600 }}>
+              <Typography variant="body2" sx={{ color: isDark ? '#8b949e' : '#64748b', fontWeight: 600 }}>
                 {logsSearchQuery.trim()
                   ? `No log lines matching "${logsSearchQuery}"`
                   : 'No logs available for this resource.'}
@@ -4291,7 +4307,7 @@ users:
                   size="small"
                   variant="outlined"
                   onClick={() => setLogsSearchQuery('')}
-                  sx={{ color: '#38bdf8', borderColor: 'rgba(56,189,248,0.3)', textTransform: 'none', fontSize: '0.75rem', fontWeight: 700 }}
+                  sx={{ color: isDark ? '#38bdf8' : '#0284c7', borderColor: isDark ? 'rgba(56,189,248,0.3)' : '#bae6fd', textTransform: 'none', fontSize: '0.75rem', fontWeight: 700 }}
                 >
                   Clear Search Filter
                 </Button>
@@ -4313,8 +4329,8 @@ users:
           sx={{
             px: 3,
             py: 1.25,
-            bgcolor: '#0f1422',
-            borderTop: '1px solid rgba(255,255,255,0.06)',
+            bgcolor: isDark ? '#0f1422' : '#f8fafc',
+            borderTop: isDark ? '1px solid rgba(255,255,255,0.06)' : '1px solid #e2e8f0',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
@@ -4328,8 +4344,8 @@ users:
               label={`${logsResourceType === 'deployment' ? 'Deployment' : 'Pod'}: ${selectedResource?.name}`}
               size="small"
               sx={{
-                bgcolor: 'rgba(56,189,248,0.15)',
-                color: '#38bdf8',
+                bgcolor: isDark ? 'rgba(56,189,248,0.15)' : '#e0f2fe',
+                color: isDark ? '#38bdf8' : '#0284c7',
                 fontSize: '0.72rem',
                 fontWeight: 800,
                 fontFamily: 'monospace',
@@ -4341,8 +4357,8 @@ users:
               label={`Namespace: ${selectedResource?.namespace || 'default'}`}
               size="small"
               sx={{
-                bgcolor: 'rgba(148,163,184,0.12)',
-                color: '#cbd5e1',
+                bgcolor: isDark ? 'rgba(148,163,184,0.12)' : '#e2e8f0',
+                color: isDark ? '#cbd5e1' : '#475569',
                 fontSize: '0.7rem',
                 fontWeight: 700,
                 height: 24,
@@ -4366,7 +4382,7 @@ users:
 
           {/* Right: Line Count Telemetry */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography variant="caption" sx={{ color: '#8b949e', fontWeight: 600, fontFamily: 'monospace' }}>
+            <Typography variant="caption" sx={{ color: isDark ? '#8b949e' : '#64748b', fontWeight: 600, fontFamily: 'monospace' }}>
               {logsSearchQuery.trim()
                 ? `${filteredLogsLines.length} matched / ${logsContent ? logsContent.split('\n').length : 0} lines`
                 : `${logsContent ? logsContent.split('\n').length : 0} lines`}
@@ -4819,7 +4835,6 @@ users:
       <ActionDock
         isConsoleOpen={kubectlShellOpen}
         onToggleConsole={() => {
-          if (settingsDialogOpen) setSettingsDialogOpen(false);
           if (!kubectlShellOpen) {
             setKubectlShellOpen(true);
             setTopWindow('console');
@@ -4832,18 +4847,24 @@ users:
           }
         }}
         onCreateResource={() => {
-          if (settingsDialogOpen) setSettingsDialogOpen(false);
           setCreateDialogOpen(true);
           setTopWindow('yamlCreate');
         }}
         onOpenSettings={() => {
-          setSettingsDialogOpen((prev) => !prev);
-          setTopWindow('settings');
+          if (!settingsDialogOpen) {
+            setSettingsDialogOpen(true);
+            setTopWindow('settings');
+          } else {
+            if (topWindow !== 'settings') {
+              setTopWindow('settings');
+            } else {
+              setSettingsDialogOpen(false);
+            }
+          }
         }}
         onLogout={() => logout()}
         execSessions={execSessions}
         onToggleSession={(sessionId) => {
-          if (settingsDialogOpen) setSettingsDialogOpen(false);
           handleToggleExecSession(sessionId);
           setTopWindow(sessionId);
         }}
@@ -4863,6 +4884,8 @@ users:
       <SettingsDialog
         open={settingsDialogOpen}
         onClose={() => setSettingsDialogOpen(false)}
+        zIndex={topWindow === 'settings' ? 1330 : 1315}
+        onFocus={() => setTopWindow('settings')}
       />
 
       {/* Toast Feedback */}

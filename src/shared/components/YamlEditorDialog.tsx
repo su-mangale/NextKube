@@ -139,6 +139,7 @@ export default function YamlEditorDialog({
       slotProps={{
         paper: {
           onClick: onFocus,
+          onMouseDown: onFocus,
           sx: {
             bgcolor: isDark ? '#0a0e17' : '#ffffff',
             backgroundImage: 'none',
@@ -301,7 +302,17 @@ export default function YamlEditorDialog({
         </Box>
       </DialogTitle>
 
-        <DialogContent sx={{ p: 0, bgcolor: isDark ? '#0a0e17' : '#ffffff', overflow: 'hidden' }}>
+        <DialogContent
+          sx={{
+            p: 0,
+            bgcolor: isDark ? '#0a0e17' : '#ffffff',
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+            flexGrow: 1,
+            minHeight: height,
+          }}
+        >
           {error && (
             <Box sx={{ p: 1.5, bgcolor: 'rgba(239, 68, 68, 0.12)', borderBottom: '1px solid rgba(239, 68, 68, 0.25)' }}>
               <Alert severity="error" sx={{ bgcolor: 'transparent', color: '#fca5a5', py: 0 }}>
@@ -317,7 +328,8 @@ export default function YamlEditorDialog({
                 flexDirection: 'column',
                 justifyContent: 'center',
                 alignItems: 'center',
-                height: maximized ? 'calc(100vh - 140px)' : height,
+                height: maximized ? 'calc(100vh - 140px)' : '100%',
+                flexGrow: 1,
                 gap: 2,
               }}
             >
@@ -331,7 +343,7 @@ export default function YamlEditorDialog({
               value={value}
               onChange={onChange}
               readOnly={readOnly}
-              height={maximized ? 'calc(100vh - 140px)' : height}
+              height="100%"
               embedded
               hideHeader
             />
