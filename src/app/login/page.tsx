@@ -366,10 +366,10 @@ export default function LoginPage() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            bgcolor: '#0a0e17',
+            bgcolor: 'background.default',
           }}
         >
-          <CircularProgress size={36} sx={{ color: '#38bdf8' }} />
+          <CircularProgress size={36} color="primary" />
         </Box>
       }
     >
