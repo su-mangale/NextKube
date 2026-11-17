@@ -943,12 +943,16 @@ users:
     if (!selectedResource) return;
     setScaleLoading(true);
     try {
-      await scaleDeployment(id, selectedResource.name, selectedResource.namespace, scaleReplicas);
+      const ns = selectedResource.namespace || (selectedNamespace !== 'all' ? selectedNamespace : 'default');
+      const rType = selectedResource.kind || (activeTab === 4 ? 'statefulsets' : activeTab === 5 ? 'replicasets' : 'deployments');
+      await scaleDeployment(id, selectedResource.name, ns, scaleReplicas, rType);
       setToastSeverity('success');
-      setToastMessage(`Scaled to ${scaleReplicas} replicas.`);
+      setToastMessage(`Scaled ${selectedResource.name} to ${scaleReplicas} replicas.`);
       setScaleDialogOpen(false);
       refetchDeployments();
       refetchStatefulSets();
+      refetchReplicaSets();
+      refetchPods();
     } catch (e: any) {
       setToastSeverity('error');
       setToastMessage(e.message || 'Failed to scale resource.');
@@ -4718,10 +4722,12 @@ users:
 
       {/* Scale Deployment Dialog */}
       <Dialog open={scaleDialogOpen} onClose={() => !scaleLoading && setScaleDialogOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontWeight: 700 }}>Scale Deployment</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 700 }}>
+          Scale {selectedResource?.kind || (activeTab === 4 ? 'StatefulSet' : activeTab === 5 ? 'ReplicaSet' : 'Deployment')}
+        </DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
-            Set target replicas count for <b>{selectedResource?.name}</b> in namespace <b>{selectedResource?.namespace}</b>.
+            Set target replicas count for <b>{selectedResource?.name}</b> in namespace <b>{selectedResource?.namespace || (selectedNamespace !== 'all' ? selectedNamespace : 'default')}</b>.
           </Typography>
           <Box sx={{ px: 2 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>

@@ -15,6 +15,7 @@ import {
   rollbackHelmRelease,
   uninstallHelmRelease,
   scaleDeploymentResource,
+  restartDeploymentResource,
   restartPodResource,
   deleteResourceObject,
   evaluateClusterHealth,
@@ -186,31 +187,33 @@ export async function POST(
         status: res.success ? 'SUCCESS' : 'FAILED',
         errorMessage: res.success ? undefined : res.message,
       });
-      return NextResponse.json(res);
+      return NextResponse.json(res, { status: res.success ? 200 : 400 });
     }
 
-    // 2. Deployment scale: /deployments/[name]/scale
-    if (segment0 === 'deployments' && resource.length >= 3 && resource[2] === 'scale') {
+    // 2. Deployment scale: /deployments/[name]/scale or statefulsets / replicasets
+    if (['deployments', 'statefulsets', 'replicasets'].includes(segment0) && resource.length >= 3 && resource[2] === 'scale') {
       const name = resource[1];
       const replicas = typeof body.replicas === 'number' ? body.replicas : 1;
-      const res = await scaleDeploymentResource(clusterId, namespace, name, replicas);
+      const typeLabel = segment0 === 'statefulsets' ? 'StatefulSet' : segment0 === 'replicasets' ? 'ReplicaSet' : 'Deployment';
+      const res = await scaleDeploymentResource(clusterId, namespace, name, replicas, typeLabel);
       await recordAuditEvent({
         clusterId,
         user,
         action: 'SCALE_REPLICAS',
-        resourceType: 'Deployment',
+        resourceType: typeLabel,
         resourceName: name,
         namespace,
         details: `Scaled replicas to ${replicas}`,
         status: res.success ? 'SUCCESS' : 'FAILED',
         errorMessage: res.success ? undefined : res.message,
       });
-      return NextResponse.json(res);
+      return NextResponse.json(res, { status: res.success ? 200 : 400 });
     }
 
     // 3. Deployment rollout restart: /deployments/[name]/rollout
     if (segment0 === 'deployments' && resource.length >= 3 && resource[2] === 'rollout') {
       const name = resource[1];
+      const res = await restartDeploymentResource(clusterId, namespace, name);
       await recordAuditEvent({
         clusterId,
         user,
@@ -219,9 +222,10 @@ export async function POST(
         resourceName: name,
         namespace,
         details: 'Triggered rolling update restart',
-        status: 'SUCCESS',
+        status: res.success ? 'SUCCESS' : 'FAILED',
+        errorMessage: res.success ? undefined : res.message,
       });
-      return NextResponse.json({ success: true, message: `Rollout restarted for ${name}` });
+      return NextResponse.json(res, { status: res.success ? 200 : 400 });
     }
 
     // 4. Apply Resource Manifest: /resources/apply
@@ -333,8 +337,9 @@ export async function DELETE(
         namespace,
         details: `Deleted ${type}/${name}`,
         status: res.success ? 'SUCCESS' : 'FAILED',
+        errorMessage: res.success ? undefined : res.message,
       });
-      return NextResponse.json(res);
+      return NextResponse.json(res, { status: res.success ? 200 : 400 });
     }
 
     // Uninstall Helm Release: /helmreleases/[name]

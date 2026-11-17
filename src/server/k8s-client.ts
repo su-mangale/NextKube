@@ -664,24 +664,93 @@ export async function scaleDeploymentResource(
   clusterId: string,
   namespace: string,
   name: string,
-  replicas: number
+  replicas: number,
+  resourceType: 'Deployment' | 'StatefulSet' | 'ReplicaSet' | string = 'Deployment'
 ): Promise<{ success: boolean; message: string }> {
   const clients = getClusterApiClients(clusterId);
 
   if (clients) {
-    try {
-      await (clients.appsApi as any).patchNamespacedDeployment({
-        name,
-        namespace,
-        body: { spec: { replicas } },
-      });
-      return { success: true, message: `Successfully scaled deployment ${name} to ${replicas} replicas.` };
-    } catch {
-      // Graceful fallback if cluster API is simulated or offline
+    const patch = [{ op: 'replace', path: '/spec/replicas', value: replicas }];
+    let lastError: any = null;
+
+    const normType = (resourceType || 'deployment').toLowerCase();
+
+    if (normType.includes('stateful')) {
+      try {
+        await clients.appsApi.patchNamespacedStatefulSet({ name, namespace, body: patch });
+        return { success: true, message: `Successfully scaled StatefulSet ${name} to ${replicas} replicas.` };
+      } catch (err: any) {
+        lastError = err;
+      }
+    } else if (normType.includes('replica')) {
+      try {
+        await clients.appsApi.patchNamespacedReplicaSet({ name, namespace, body: patch });
+        return { success: true, message: `Successfully scaled ReplicaSet ${name} to ${replicas} replicas.` };
+      } catch (err: any) {
+        lastError = err;
+      }
+    } else {
+      // Default: try Deployment first
+      try {
+        await clients.appsApi.patchNamespacedDeployment({ name, namespace, body: patch });
+        return { success: true, message: `Successfully scaled Deployment ${name} to ${replicas} replicas.` };
+      } catch (err: any) {
+        lastError = err;
+        // Fallback: check if it might be a StatefulSet or ReplicaSet
+        try {
+          await clients.appsApi.patchNamespacedStatefulSet({ name, namespace, body: patch });
+          return { success: true, message: `Successfully scaled StatefulSet ${name} to ${replicas} replicas.` };
+        } catch {
+          try {
+            await clients.appsApi.patchNamespacedReplicaSet({ name, namespace, body: patch });
+            return { success: true, message: `Successfully scaled ReplicaSet ${name} to ${replicas} replicas.` };
+          } catch {}
+        }
+      }
     }
+
+    const errorDetails = lastError?.body?.message || lastError?.message || 'Cluster API rejected scale request.';
+    console.error(`[K8sClient] scaleDeploymentResource failed for ${name} in ${namespace}:`, errorDetails);
+    return { success: false, message: `Failed to scale ${name}: ${errorDetails}` };
   }
 
-  return { success: true, message: `Scaled deployment ${name} to ${replicas} replicas.` };
+  return { success: false, message: `Cluster ${clusterId} is not connected or offline.` };
+}
+
+export async function restartDeploymentResource(
+  clusterId: string,
+  namespace: string,
+  name: string
+): Promise<{ success: boolean; message: string }> {
+  const clients = getClusterApiClients(clusterId);
+  if (!clients) {
+    return { success: false, message: `Cluster ${clusterId} is not connected or offline.` };
+  }
+
+  try {
+    const deployment = await clients.appsApi.readNamespacedDeployment({ name, namespace });
+    if (!deployment.spec?.template) {
+      return { success: false, message: `Deployment ${name} template not found.` };
+    }
+    if (!deployment.spec.template.metadata) {
+      deployment.spec.template.metadata = {};
+    }
+    if (!deployment.spec.template.metadata.annotations) {
+      deployment.spec.template.metadata.annotations = {};
+    }
+    deployment.spec.template.metadata.annotations['kubectl.kubernetes.io/restartedAt'] = new Date().toISOString();
+
+    await clients.appsApi.replaceNamespacedDeployment({
+      name,
+      namespace,
+      body: deployment,
+    });
+    return { success: true, message: `Successfully restarted rollout for deployment ${name}.` };
+  } catch (err: any) {
+    const errorDetails = err?.body?.message || err?.message || 'Cluster API rejected restart request.';
+    console.error(`[K8sClient] restartDeploymentResource failed for ${name} in ${namespace}:`, errorDetails);
+    return { success: false, message: `Failed to restart deployment ${name}: ${errorDetails}` };
+  }
 }
 
 export async function restartPodResource(
@@ -695,12 +764,13 @@ export async function restartPodResource(
       // Deleting the pod in Kubernetes causes its managing Deployment/ReplicaSet to immediately spawn a replacement
       await clients.coreApi.deleteNamespacedPod({ name, namespace });
       return { success: true, message: `Pod ${name} deleted; replica controller will re-spawn.` };
-    } catch {
-      // Fallback
+    } catch (err: any) {
+      const errorDetails = err?.body?.message || err?.message || 'Cluster API rejected pod delete request.';
+      return { success: false, message: `Failed to restart pod ${name}: ${errorDetails}` };
     }
   }
 
-  return { success: true, message: `Pod ${name} restart initiated.` };
+  return { success: false, message: `Cluster ${clusterId} is not connected or offline.` };
 }
 
 export async function deleteResourceObject(
@@ -724,14 +794,24 @@ export async function deleteResourceObject(
         await clients.coreApi.deleteNamespacedConfigMap({ name, namespace });
       } else if (norm.includes('secret')) {
         await clients.coreApi.deleteNamespacedSecret({ name, namespace });
+      } else if (norm.includes('statefulset')) {
+        await clients.appsApi.deleteNamespacedStatefulSet({ name, namespace });
+      } else if (norm.includes('replicaset')) {
+        await clients.appsApi.deleteNamespacedReplicaSet({ name, namespace });
+      } else if (norm.includes('daemonset')) {
+        await clients.appsApi.deleteNamespacedDaemonSet({ name, namespace });
+      } else if (norm.includes('job')) {
+        await clients.batchApi.deleteNamespacedJob({ name, namespace });
       }
       return { success: true, message: `Resource ${name} (${type}) deleted successfully.` };
     } catch (err: any) {
       console.warn(`[K8sClient] Delete ${type}/${name} error:`, err);
+      const errorDetails = err?.body?.message || err?.message || `Failed to delete ${type}/${name}`;
+      return { success: false, message: errorDetails };
     }
   }
 
-  return { success: true, message: `Resource ${name} (${type}) marked for deletion.` };
+  return { success: false, message: `Cluster ${clusterId} is not connected or offline.` };
 }
 
 export interface ClusterAnomaly {

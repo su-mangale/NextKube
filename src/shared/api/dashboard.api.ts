@@ -346,16 +346,27 @@ export const fetchResourceYaml = async (clusterId: string, type: string, name: s
   return data.yaml;
 };
 
-// Scale Deployment
-export const scaleDeployment = async (clusterId: string, name: string, namespace: string, replicas: number): Promise<void> => {
+// Scale Deployment / Workload
+export const scaleDeployment = async (
+  clusterId: string,
+  name: string,
+  namespace: string,
+  replicas: number,
+  resourceType = 'deployments'
+): Promise<void> => {
   const baseUrl = getBackendUrl();
-  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/deployments/${name}/scale`, {
+  const endpoint = resourceType.toLowerCase().includes('stateful')
+    ? 'statefulsets'
+    : resourceType.toLowerCase().includes('replica')
+    ? 'replicasets'
+    : 'deployments';
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/${endpoint}/${name}/scale`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ replicas, namespace }),
   });
   if (!res.ok) {
-    let errorMsg = `Failed to scale deployment (${res.status})`;
+    let errorMsg = `Failed to scale ${resourceType} (${res.status})`;
     try {
       const errorJson = await res.json();
       if (errorJson.detail) errorMsg = errorJson.detail;
