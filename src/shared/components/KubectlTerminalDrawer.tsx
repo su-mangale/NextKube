@@ -38,6 +38,8 @@ export interface KubectlTerminalDrawerProps {
   onClose: () => void;
   onOpen?: () => void;
   clusterId: string;
+  zIndex?: number;
+  onFocus?: () => void;
 }
 
 // Light theme inspired by VS Code Light+ / GitHub Light
@@ -97,6 +99,8 @@ export function KubectlTerminalDrawer({
   onClose,
   onOpen,
   clusterId,
+  zIndex,
+  onFocus,
 }: KubectlTerminalDrawerProps) {
   const muiTheme = useTheme();
   const isDark = muiTheme.palette.mode === 'dark';
@@ -336,14 +340,29 @@ export function KubectlTerminalDrawer({
   return (
     <Dialog
       open={open}
-      onClose={onClose}
+      onClose={(e, reason) => {
+        if (reason === 'backdropClick') return;
+        onClose();
+      }}
       PaperComponent={DraggablePaper}
       maxWidth={maximized ? false : 'lg'}
       fullWidth
       fullScreen={maximized}
-      disableEnforceFocus
+      hideBackdrop={true}
+      disableEnforceFocus={true}
+      sx={{
+        zIndex: zIndex || 1315,
+        pointerEvents: 'none',
+        '& .MuiDialog-container': {
+          pointerEvents: 'none',
+        },
+        '& .MuiPaper-root': {
+          pointerEvents: 'auto',
+        },
+      }}
       slotProps={{
         paper: {
+          onClick: onFocus,
           sx: {
             bgcolor: isDark ? '#0a0e17' : '#ffffff',
             backgroundImage: 'none',

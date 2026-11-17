@@ -247,6 +247,7 @@ spec:
   }
   const [execSessions, setExecSessions] = useState<ExecSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [topWindow, setTopWindow] = useState<string | null>('console');
   const [kubectlShellOpen, setKubectlShellOpen] = useState<boolean>(false);
 
   const [imageDialogOpen, setImageDialogOpen] = useState<boolean>(false);
@@ -3735,12 +3736,28 @@ users:
       {/* Apply / Create Resource Manifest Modal */}
       <Dialog
         open={createDialogOpen}
-        onClose={() => !createLoading && setCreateDialogOpen(false)}
+        onClose={(e, reason) => {
+          if (reason === 'backdropClick') return;
+          if (!createLoading) setCreateDialogOpen(false);
+        }}
         PaperComponent={DraggablePaper}
         maxWidth="md"
         fullWidth
+        hideBackdrop={true}
+        disableEnforceFocus={true}
+        sx={{
+          zIndex: topWindow === 'yamlCreate' ? 1330 : 1315,
+          pointerEvents: 'none',
+          '& .MuiDialog-container': {
+            pointerEvents: 'none',
+          },
+          '& .MuiPaper-root': {
+            pointerEvents: 'auto',
+          },
+        }}
         slotProps={{
           paper: {
+            onClick: () => setTopWindow('yamlCreate'),
             sx: {
               bgcolor: isDark ? '#0a0e17' : '#ffffff',
               backgroundImage: 'none',
@@ -3839,18 +3856,36 @@ users:
         showSecretToggle={activeTab === 12 || selectedResource?.kind === 'Secret' || (selectedResource && 'dataCount' in selectedResource)}
         secretDecoded={secretDecoded}
         onToggleSecretDecode={handleToggleSecretDecode}
+        zIndex={topWindow === 'yamlEditor' ? 1330 : 1315}
+        onFocus={() => setTopWindow('yamlEditor')}
       />
 
       {/* Logs Dialog */}
       <Dialog
         open={logsDialogOpen}
-        onClose={() => setLogsDialogOpen(false)}
+        onClose={(e, reason) => {
+          if (reason === 'backdropClick') return;
+          setLogsDialogOpen(false);
+        }}
         PaperComponent={DraggablePaper}
         maxWidth={logsDialogMaximized ? false : "md"}
         fullWidth
         fullScreen={logsDialogMaximized}
+        hideBackdrop={true}
+        disableEnforceFocus={true}
+        sx={{
+          zIndex: topWindow === 'logs' ? 1330 : 1315,
+          pointerEvents: 'none',
+          '& .MuiDialog-container': {
+            pointerEvents: 'none',
+          },
+          '& .MuiPaper-root': {
+            pointerEvents: 'auto',
+          },
+        }}
         slotProps={{
           paper: {
+            onClick: () => setTopWindow('logs'),
             sx: {
               bgcolor: isDark ? '#0a0e17' : '#ffffff',
               backgroundImage: 'none',
@@ -4761,11 +4796,17 @@ users:
           key={session.id}
           open={true}
           minimized={session.minimized}
-          zIndex={session.id === activeSessionId ? 1320 : 1310 + index}
+          zIndex={topWindow === session.id || session.id === activeSessionId ? 1330 : 1310 + index}
           onMinimize={() => handleMinimizeExecSession(session.id)}
-          onRestore={() => handleRestoreExecSession(session.id)}
+          onRestore={() => {
+            handleRestoreExecSession(session.id);
+            setTopWindow(session.id);
+          }}
           onClose={() => handleCloseExecSession(session.id)}
-          onFocus={() => setActiveSessionId(session.id)}
+          onFocus={() => {
+            setActiveSessionId(session.id);
+            setTopWindow(session.id);
+          }}
           resourceName={session.resourceName}
           resourceType={session.resourceType}
           clusterId={id}
@@ -4779,16 +4820,33 @@ users:
         isConsoleOpen={kubectlShellOpen}
         onToggleConsole={() => {
           if (settingsDialogOpen) setSettingsDialogOpen(false);
-          setKubectlShellOpen(!kubectlShellOpen);
+          if (!kubectlShellOpen) {
+            setKubectlShellOpen(true);
+            setTopWindow('console');
+          } else {
+            if (topWindow !== 'console') {
+              setTopWindow('console');
+            } else {
+              setKubectlShellOpen(false);
+            }
+          }
         }}
         onCreateResource={() => {
           if (settingsDialogOpen) setSettingsDialogOpen(false);
           setCreateDialogOpen(true);
+          setTopWindow('yamlCreate');
         }}
-        onOpenSettings={() => setSettingsDialogOpen((prev) => !prev)}
+        onOpenSettings={() => {
+          setSettingsDialogOpen((prev) => !prev);
+          setTopWindow('settings');
+        }}
         onLogout={() => logout()}
         execSessions={execSessions}
-        onToggleSession={handleToggleExecSession}
+        onToggleSession={(sessionId) => {
+          if (settingsDialogOpen) setSettingsDialogOpen(false);
+          handleToggleExecSession(sessionId);
+          setTopWindow(sessionId);
+        }}
       />
 
       {/* KubeConsole Window */}
@@ -4797,6 +4855,8 @@ users:
         open={kubectlShellOpen}
         onClose={() => setKubectlShellOpen(false)}
         clusterId={id}
+        zIndex={topWindow === 'console' ? 1330 : 1315}
+        onFocus={() => setTopWindow('console')}
       />
 
       {/* System & Workspace Settings Dialog */}

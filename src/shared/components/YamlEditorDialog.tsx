@@ -45,6 +45,8 @@ export interface YamlEditorDialogProps {
   secretDecoded?: boolean;
   onToggleSecretDecode?: () => void;
   initialMaximized?: boolean;
+  zIndex?: number;
+  onFocus?: () => void;
 }
 
 export default function YamlEditorDialog({
@@ -66,6 +68,8 @@ export default function YamlEditorDialog({
   secretDecoded = false,
   onToggleSecretDecode,
   initialMaximized = false,
+  zIndex,
+  onFocus,
 }: YamlEditorDialogProps) {
   const muiTheme = useTheme();
   const isDark = muiTheme.palette.mode === 'dark';
@@ -112,13 +116,29 @@ export default function YamlEditorDialog({
   return (
     <Dialog
       open={open}
-      onClose={onClose}
+      onClose={(e, reason) => {
+        if (reason === 'backdropClick') return;
+        onClose();
+      }}
       PaperComponent={DraggablePaper}
       maxWidth={maximized ? false : 'md'}
       fullWidth
       fullScreen={maximized}
+      hideBackdrop={true}
+      disableEnforceFocus={true}
+      sx={{
+        zIndex: zIndex || 1315,
+        pointerEvents: 'none',
+        '& .MuiDialog-container': {
+          pointerEvents: 'none',
+        },
+        '& .MuiPaper-root': {
+          pointerEvents: 'auto',
+        },
+      }}
       slotProps={{
         paper: {
+          onClick: onFocus,
           sx: {
             bgcolor: isDark ? '#0a0e17' : '#ffffff',
             backgroundImage: 'none',
