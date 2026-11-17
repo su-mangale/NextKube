@@ -25,6 +25,8 @@ import LanOutlinedIcon from '@mui/icons-material/LanOutlined';
 import EventNoteOutlinedIcon from '@mui/icons-material/EventNoteOutlined';
 import CodeIcon from '@mui/icons-material/Code';
 import CloseIcon from '@mui/icons-material/Close';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import CheckIcon from '@mui/icons-material/Check';
 
 import '@xterm/xterm/css/xterm.css';
 import type { Terminal } from '@xterm/xterm';
@@ -299,6 +301,37 @@ export function KubectlTerminalDrawer({
     }
   };
 
+  const [outputCopied, setOutputCopied] = useState(false);
+  const handleCopyAllOutput = async () => {
+    try {
+      let outputText = '';
+      if (termInstanceRef.current) {
+        const buffer = termInstanceRef.current.buffer.active;
+        const lines: string[] = [];
+        for (let i = 0; i < buffer.length; i++) {
+          const line = buffer.getLine(i);
+          if (line) lines.push(line.translateToString(true));
+        }
+        while (lines.length > 0 && lines[lines.length - 1].trim() === '') {
+          lines.pop();
+        }
+        outputText = lines.join('\n');
+      }
+      if (!outputText && termInstanceRef.current) {
+        termInstanceRef.current.selectAll();
+        outputText = termInstanceRef.current.getSelection();
+        termInstanceRef.current.clearSelection();
+      }
+      if (outputText) {
+        await navigator.clipboard.writeText(outputText);
+        setOutputCopied(true);
+        setTimeout(() => setOutputCopied(false), 2000);
+      }
+    } catch (e) {
+      console.error('Failed to copy terminal output:', e);
+    }
+  };
+
   return (
     <Dialog
       open={open}
@@ -306,6 +339,7 @@ export function KubectlTerminalDrawer({
       maxWidth={maximized ? false : 'lg'}
       fullWidth
       fullScreen={maximized}
+      disableEnforceFocus
       slotProps={{
         paper: {
           sx: {
@@ -477,6 +511,30 @@ export function KubectlTerminalDrawer({
 
         {/* Right: Window Controls */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
+          <Tooltip title={outputCopied ? 'Copied Output to Clipboard!' : 'Copy All Output'}>
+            <Button
+              size="small"
+              onClick={handleCopyAllOutput}
+              startIcon={outputCopied ? <CheckIcon sx={{ fontSize: 16 }} /> : <ContentCopyIcon sx={{ fontSize: 16 }} />}
+              sx={{
+                color: outputCopied ? '#22c55e' : (isDark ? '#cbd5e1' : '#475569'),
+                border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #cbd5e1',
+                borderRadius: 1.5,
+                px: 1.2,
+                py: 0.3,
+                fontSize: '0.75rem',
+                fontWeight: 650,
+                textTransform: 'none',
+                bgcolor: outputCopied ? (isDark ? 'rgba(34,197,94,0.12)' : '#f0fdf4') : 'transparent',
+                '&:hover': {
+                  bgcolor: isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9',
+                },
+              }}
+            >
+              {outputCopied ? 'Copied' : 'Copy Output'}
+            </Button>
+          </Tooltip>
+
           <Tooltip title="Clear Screen (Ctrl+L)">
             <Button
               size="small"

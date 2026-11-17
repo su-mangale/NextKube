@@ -17,6 +17,8 @@ import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
 import CloseIcon from '@mui/icons-material/Close';
 import RemoveIcon from '@mui/icons-material/Remove';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import CheckIcon from '@mui/icons-material/Check';
 
 // Import Xterm.js styles globally in the client bundle
 import '@xterm/xterm/css/xterm.css';
@@ -32,8 +34,10 @@ export interface TerminalWindowProps {
   namespace?: string;
   container?: string;
   minimized?: boolean;
+  zIndex?: number;
   onMinimize?: () => void;
   onRestore?: () => void;
+  onFocus?: () => void;
 }
 
 export function TerminalWindow({
@@ -45,7 +49,9 @@ export function TerminalWindow({
   namespace = 'default',
   container,
   minimized: controlledMinimized,
+  zIndex,
   onMinimize,
+  onFocus,
 }: TerminalWindowProps) {
   const muiTheme = useTheme();
   const isDark = muiTheme.palette.mode === 'dark';
@@ -53,8 +59,41 @@ export function TerminalWindow({
   const [maximized, setMaximized] = useState(false);
   const [internalMinimized, setInternalMinimized] = useState(false);
   const [connected, setConnected] = useState(false);
+  const [copiedOutput, setCopiedOutput] = useState(false);
 
   const isMinimized = controlledMinimized !== undefined ? controlledMinimized : internalMinimized;
+
+  const handleCopyAllOutput = async () => {
+    try {
+      let outputText = '';
+      if (termInstanceRef.current) {
+        const buffer = termInstanceRef.current.buffer.active;
+        const lines: string[] = [];
+        for (let i = 0; i < buffer.length; i++) {
+          const line = buffer.getLine(i);
+          if (line) {
+            lines.push(line.translateToString(true));
+          }
+        }
+        while (lines.length > 0 && lines[lines.length - 1].trim() === '') {
+          lines.pop();
+        }
+        outputText = lines.join('\n');
+      }
+      if (!outputText && termInstanceRef.current) {
+        termInstanceRef.current.selectAll();
+        outputText = termInstanceRef.current.getSelection();
+        termInstanceRef.current.clearSelection();
+      }
+      if (outputText) {
+        await navigator.clipboard.writeText(outputText);
+        setCopiedOutput(true);
+        setTimeout(() => setCopiedOutput(false), 2000);
+      }
+    } catch (e) {
+      console.error('Failed to copy terminal output:', e);
+    }
+  };
 
   const handleMinimize = () => {
     if (onMinimize) {
@@ -245,8 +284,8 @@ export function TerminalWindow({
       maxWidth={maximized ? false : 'md'}
       fullWidth
       fullScreen={maximized}
-      hideBackdrop={isMinimized}
-      disableEnforceFocus={isMinimized}
+      hideBackdrop={true}
+      disableEnforceFocus={true}
       sx={
         isMinimized
           ? {
@@ -254,13 +293,23 @@ export function TerminalWindow({
               visibility: 'hidden !important',
               zIndex: -1,
             }
-          : {}
+          : {
+              zIndex: zIndex || 1310,
+              pointerEvents: 'none',
+              '& .MuiDialog-container': {
+                pointerEvents: 'none',
+              },
+              '& .MuiPaper-root': {
+                pointerEvents: 'auto',
+              },
+            }
       }
       slotProps={{
         backdrop: {
-          sx: isMinimized ? { display: 'none !important' } : {},
+          sx: { display: 'none !important' },
         },
         paper: {
+          onClick: onFocus,
           sx: {
             bgcolor: isDark ? '#0a0e17' : '#ffffff',
             backgroundImage: 'none',
@@ -308,6 +357,24 @@ export function TerminalWindow({
         </Box>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
+          <Tooltip title={copiedOutput ? 'Copied Output!' : 'Copy All Output'}>
+            <IconButton
+              onClick={handleCopyAllOutput}
+              size="small"
+              sx={{
+                color: copiedOutput ? '#22c55e' : (isDark ? '#cbd5e1' : '#475569'),
+                border: isDark ? '1px solid rgba(255,255,255,0.1)' : '1px solid #cbd5e1',
+                borderRadius: 1.5,
+                p: 0.6,
+                '&:hover': {
+                  bgcolor: isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9',
+                },
+              }}
+            >
+              {copiedOutput ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}
+            </IconButton>
+          </Tooltip>
+
           <Tooltip title="Minimize to Dock">
             <IconButton
               onClick={handleMinimize}

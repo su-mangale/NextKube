@@ -235,13 +235,17 @@ spec:
     }
   }, []);
 
-  // Terminal Exec states
-  const [terminalOpen, setTerminalOpen] = useState<boolean>(false);
-  const [terminalMinimized, setTerminalMinimized] = useState<boolean>(false);
-  const [terminalResourceName, setTerminalResourceName] = useState<string>('');
-  const [terminalResourceType, setTerminalResourceType] = useState<'pod' | 'node'>('pod');
-  const [terminalNamespace, setTerminalNamespace] = useState<string>('default');
-  const [terminalContainer, setTerminalContainer] = useState<string>('');
+  // Multi-session Terminal Exec states
+  interface ExecSession {
+    id: string;
+    resourceName: string;
+    resourceType: 'pod' | 'node';
+    namespace: string;
+    container?: string;
+    minimized: boolean;
+  }
+  const [execSessions, setExecSessions] = useState<ExecSession[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [kubectlShellOpen, setKubectlShellOpen] = useState<boolean>(false);
 
   const [imageDialogOpen, setImageDialogOpen] = useState<boolean>(false);
@@ -943,49 +947,95 @@ users:
     const resource = resourceOverride || selectedResource;
     if (!resource) return;
     setDrawerOpen(false);
+    if (settingsDialogOpen) setSettingsDialogOpen(false);
+
+    let targetName = resource.name;
+    let targetType: 'pod' | 'node' = 'pod';
+    let targetNamespace = resource.namespace || (selectedNamespace !== 'all' ? selectedNamespace : 'default');
+    let targetContainer = selectedContainer || (resource.containers && resource.containers.length > 0 ? resource.containers[0] : '');
 
     if (activeTab === 14 || resource.kind === 'Node' || (!resource.namespace && resource.ip)) {
-      setTerminalResourceName(resource.name);
-      setTerminalResourceType('node');
-      setTerminalNamespace('default');
-      setTerminalContainer('');
-      setTerminalMinimized(false);
-      setTerminalOpen(true);
-      return;
-    }
-
-    if (activeTab === 1 || resource.kind === 'Pod') {
-      setTerminalResourceName(resource.name);
-      setTerminalResourceType('pod');
-      setTerminalNamespace(resource.namespace || (selectedNamespace !== 'all' ? selectedNamespace : 'default'));
-      const podContainer = resource.containers && resource.containers.length > 0 ? resource.containers[0] : '';
-      setTerminalContainer(podContainer);
-      setSelectedContainer(podContainer);
-      setTerminalMinimized(false);
-      setTerminalOpen(true);
-      return;
-    }
-
-    const namespace = resource.namespace || (selectedNamespace !== 'all' ? selectedNamespace : undefined);
-    const matchingPod = pods.find(
-      (p) => (!namespace || p.namespace === namespace) && p.name.startsWith(resource.name) && (p.status === 'Running' || p.status === 'Ready')
-    ) || pods.find(
-      (p) => (!namespace || p.namespace === namespace) && p.name.startsWith(resource.name)
-    );
-
-    if (matchingPod) {
-      setTerminalResourceName(matchingPod.name);
-      setTerminalResourceType('pod');
-      setTerminalNamespace(matchingPod.namespace || resource.namespace || 'default');
-      const podContainer = matchingPod.containers && matchingPod.containers.length > 0 ? matchingPod.containers[0] : '';
-      setTerminalContainer(podContainer);
-      setSelectedContainer(podContainer);
-      setTerminalMinimized(false);
-      setTerminalOpen(true);
+      targetType = 'node';
+      targetNamespace = 'default';
+      targetContainer = '';
+    } else if (activeTab === 1 || resource.kind === 'Pod') {
+      targetType = 'pod';
     } else {
-      setToastSeverity('warning');
-      setToastMessage(`No active pods found for ${resource.name} to execute terminal.`);
+      const namespace = resource.namespace || (selectedNamespace !== 'all' ? selectedNamespace : undefined);
+      const matchingPod = pods.find(
+        (p) => (!namespace || p.namespace === namespace) && p.name.startsWith(resource.name) && (p.status === 'Running' || p.status === 'Ready')
+      ) || pods.find(
+        (p) => (!namespace || p.namespace === namespace) && p.name.startsWith(resource.name)
+      );
+
+      if (matchingPod) {
+        targetName = matchingPod.name;
+        targetType = 'pod';
+        targetNamespace = matchingPod.namespace || resource.namespace || 'default';
+        targetContainer = matchingPod.containers && matchingPod.containers.length > 0 ? matchingPod.containers[0] : '';
+      } else {
+        setToastSeverity('warning');
+        setToastMessage(`No active pods found for ${resource.name} to execute terminal.`);
+        return;
+      }
     }
+
+    const sessionId = `${targetName}:${targetContainer || 'default'}`;
+
+    setExecSessions((prev) => {
+      const existing = prev.find((s) => s.id === sessionId);
+      if (existing) {
+        // If already exists, un-minimize and focus it
+        return prev.map((s) => (s.id === sessionId ? { ...s, minimized: false } : s));
+      }
+      return [
+        ...prev,
+        {
+          id: sessionId,
+          resourceName: targetName,
+          resourceType: targetType,
+          namespace: targetNamespace,
+          container: targetContainer || undefined,
+          minimized: false,
+        },
+      ];
+    });
+    setActiveSessionId(sessionId);
+  };
+
+  const handleMinimizeExecSession = (sessionId: string) => {
+    setExecSessions((prev) =>
+      prev.map((s) => (s.id === sessionId ? { ...s, minimized: true } : s))
+    );
+  };
+
+  const handleRestoreExecSession = (sessionId: string) => {
+    if (settingsDialogOpen) setSettingsDialogOpen(false);
+    setExecSessions((prev) =>
+      prev.map((s) => (s.id === sessionId ? { ...s, minimized: false } : s))
+    );
+    setActiveSessionId(sessionId);
+  };
+
+  const handleToggleExecSession = (sessionId: string) => {
+    if (settingsDialogOpen) setSettingsDialogOpen(false);
+    setExecSessions((prev) =>
+      prev.map((s) => {
+        if (s.id === sessionId) {
+          const nextMinimized = !s.minimized;
+          if (!nextMinimized) {
+            setActiveSessionId(sessionId);
+          }
+          return { ...s, minimized: nextMinimized };
+        }
+        return s;
+      })
+    );
+  };
+
+  const handleCloseExecSession = (sessionId: string) => {
+    setExecSessions((prev) => prev.filter((s) => s.id !== sessionId));
+    setActiveSessionId((current) => (current === sessionId ? null : current));
   };
 
   const handleOpenLogs = async (resourceOverride?: any, typeOverride?: string) => {
@@ -1746,15 +1796,18 @@ users:
   };
 
   const handleDownloadLogs = () => {
-    const textToDownload = displayLogsContent || logsContent;
+    const textToDownload = logsContent || displayLogsContent;
     if (!textToDownload) return;
     const element = document.createElement('a');
-    const file = new Blob([textToDownload], { type: 'text/plain' });
+    const file = new Blob([textToDownload], { type: 'text/plain;charset=utf-8' });
     element.href = URL.createObjectURL(file);
-    element.download = `${selectedResource?.name || 'pod'}-logs.txt`;
+    const resName = selectedResource?.name || 'resource';
+    const contSuffix = selectedContainer ? `-${selectedContainer}` : '';
+    element.download = `${resName}${contSuffix}-logs.log`;
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
+    URL.revokeObjectURL(element.href);
   };
 
   const handleDownloadYaml = () => {
@@ -1771,7 +1824,7 @@ users:
   const [logsCopied, setLogsCopied] = useState(false);
   const handleCopyLogsWithFeedback = async () => {
     try {
-      const textToCopy = displayLogsContent || logsContent;
+      const textToCopy = logsContent || displayLogsContent;
       if (!textToCopy) return;
       await navigator.clipboard.writeText(textToCopy);
       setLogsCopied(true);
@@ -4066,46 +4119,73 @@ users:
                             onClick={() => handleRefreshLogs(logsTimeFrame)}
                             disabled={logsLoading}
                             sx={{
-                              color: '#e2e8f0',
-                              border: '1px solid rgba(255,255,255,0.12)',
+                              color: isDark ? '#cbd5e1' : '#475569',
+                              border: isDark ? '1px solid rgba(255,255,255,0.12)' : '1px solid #cbd5e1',
                               borderRadius: 1.5,
                               p: 0.6,
+                              '&:hover': {
+                                bgcolor: isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9',
+                              },
                             }}
                           >
                             <RefreshIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
 
-                        {/* Copy Button */}
-                        <Tooltip title={logsCopied ? "Copied!" : "Copy Logs"}>
-                          <IconButton
+                        {/* Copy Full Logs Button */}
+                        <Tooltip title={logsCopied ? "Copied Full Logs to Clipboard!" : "Copy Full Logs to Clipboard"}>
+                          <Button
                             size="small"
                             onClick={handleCopyLogsWithFeedback}
+                            startIcon={logsCopied ? <CheckIcon sx={{ fontSize: 15 }} /> : <ContentCopyIcon sx={{ fontSize: 15 }} />}
                             sx={{
-                              color: logsCopied ? '#34d399' : '#e2e8f0',
-                              border: '1px solid rgba(255,255,255,0.12)',
+                              height: 30,
+                              px: 1.2,
+                              fontSize: '0.74rem',
+                              fontWeight: 700,
+                              textTransform: 'none',
+                              color: logsCopied ? '#22c55e' : (isDark ? '#e2e8f0' : '#334155'),
+                              bgcolor: logsCopied ? (isDark ? 'rgba(34, 197, 94, 0.15)' : '#f0fdf4') : (isDark ? 'rgba(255,255,255,0.05)' : '#ffffff'),
+                              border: '1px solid',
+                              borderColor: logsCopied ? 'rgba(34, 197, 94, 0.4)' : (isDark ? 'rgba(255,255,255,0.14)' : '#cbd5e1'),
                               borderRadius: 1.5,
-                              p: 0.6,
+                              whiteSpace: 'nowrap',
+                              '&:hover': {
+                                bgcolor: isDark ? 'rgba(255,255,255,0.1)' : '#f1f5f9',
+                                borderColor: isDark ? '#38bdf8' : '#0284c7',
+                              },
                             }}
                           >
-                            {logsCopied ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}
-                          </IconButton>
+                            {logsCopied ? 'Copied Full Logs' : 'Copy Full Logs'}
+                          </Button>
                         </Tooltip>
 
-                        {/* Download Button */}
-                        <Tooltip title="Download Logs">
-                          <IconButton
+                        {/* Download Logs Button */}
+                        <Tooltip title="Download Full Logs as File">
+                          <Button
                             size="small"
                             onClick={handleDownloadLogs}
+                            startIcon={<FileDownloadIcon sx={{ fontSize: 15 }} />}
                             sx={{
-                              color: '#e2e8f0',
-                              border: '1px solid rgba(255,255,255,0.12)',
+                              height: 30,
+                              px: 1.2,
+                              fontSize: '0.74rem',
+                              fontWeight: 700,
+                              textTransform: 'none',
+                              color: isDark ? '#e2e8f0' : '#334155',
+                              bgcolor: isDark ? 'rgba(255,255,255,0.05)' : '#ffffff',
+                              border: '1px solid',
+                              borderColor: isDark ? 'rgba(255,255,255,0.14)' : '#cbd5e1',
                               borderRadius: 1.5,
-                              p: 0.6,
+                              whiteSpace: 'nowrap',
+                              '&:hover': {
+                                bgcolor: isDark ? 'rgba(255,255,255,0.1)' : '#f1f5f9',
+                                borderColor: isDark ? '#38bdf8' : '#0284c7',
+                              },
                             }}
                           >
-                            <FileDownloadIcon fontSize="small" />
-                          </IconButton>
+                            Download Logs
+                          </Button>
                         </Tooltip>
                       </Box>
 
@@ -4672,34 +4752,40 @@ users:
                     </DialogActions>
                   </Dialog>
 
-                  {/* Exec Terminal */}
-                  <TerminalWindow
-                    open={terminalOpen}
-                    minimized={terminalMinimized}
-                    onMinimize={() => setTerminalMinimized(true)}
-                    onRestore={() => setTerminalMinimized(false)}
-                    onClose={() => {
-                      setTerminalOpen(false);
-                      setTerminalMinimized(false);
-                    }}
-                    resourceName={terminalResourceName}
-                    resourceType={terminalResourceType}
-                    clusterId={id}
-                    namespace={terminalNamespace}
-                    container={terminalContainer || undefined}
-                  />
+                  {/* Multi-Session Exec Terminals */}
+                  {execSessions.map((session, index) => (
+                    <TerminalWindow
+                      key={session.id}
+                      open={true}
+                      minimized={session.minimized}
+                      zIndex={session.id === activeSessionId ? 1320 : 1310 + index}
+                      onMinimize={() => handleMinimizeExecSession(session.id)}
+                      onRestore={() => handleRestoreExecSession(session.id)}
+                      onClose={() => handleCloseExecSession(session.id)}
+                      onFocus={() => setActiveSessionId(session.id)}
+                      resourceName={session.resourceName}
+                      resourceType={session.resourceType}
+                      clusterId={id}
+                      namespace={session.namespace}
+                      container={session.container}
+                    />
+                  ))}
 
                   {/* Quick Action Dock */}
                   <ActionDock
                     isConsoleOpen={kubectlShellOpen}
-                    onToggleConsole={() => setKubectlShellOpen(!kubectlShellOpen)}
-                    onCreateResource={() => setCreateDialogOpen(true)}
-                    onOpenSettings={() => setSettingsDialogOpen(true)}
+                    onToggleConsole={() => {
+                      if (settingsDialogOpen) setSettingsDialogOpen(false);
+                      setKubectlShellOpen(!kubectlShellOpen);
+                    }}
+                    onCreateResource={() => {
+                      if (settingsDialogOpen) setSettingsDialogOpen(false);
+                      setCreateDialogOpen(true);
+                    }}
+                    onOpenSettings={() => setSettingsDialogOpen((prev) => !prev)}
                     onLogout={() => logout()}
-                    hasActiveExec={terminalOpen}
-                    isExecMinimized={terminalMinimized}
-                    onToggleExec={() => setTerminalMinimized((prev) => !prev)}
-                    execResourceName={terminalResourceName}
+                    execSessions={execSessions}
+                    onToggleSession={handleToggleExecSession}
                   />
 
                   {/* KubeConsole Window */}

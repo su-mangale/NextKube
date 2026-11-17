@@ -16,6 +16,15 @@ import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded';
 
+export interface ExecSessionItem {
+  id: string;
+  resourceName: string;
+  resourceType?: 'pod' | 'node';
+  namespace?: string;
+  container?: string;
+  minimized: boolean;
+}
+
 export interface ActionDockProps {
   onToggleConsole: () => void;
   isConsoleOpen: boolean;
@@ -23,7 +32,11 @@ export interface ActionDockProps {
   onCreateResource: () => void;
   onOpenSettings: () => void;
   onLogout: () => void;
-  // Pod Exec Window Integration
+  // Multi-session Exec Support
+  execSessions?: ExecSessionItem[];
+  onToggleSession?: (sessionId: string) => void;
+  onCloseSession?: (sessionId: string) => void;
+  // Single Exec Fallback
   hasActiveExec?: boolean;
   isExecMinimized?: boolean;
   onToggleExec?: () => void;
@@ -37,6 +50,8 @@ export function ActionDock({
   onCreateResource,
   onOpenSettings,
   onLogout,
+  execSessions,
+  onToggleSession,
   hasActiveExec = false,
   isExecMinimized = false,
   onToggleExec,
@@ -124,13 +139,13 @@ export function ActionDock({
           }}
         >
           <ChevronLeftRoundedIcon sx={{ fontSize: 18 }} />
-          {(isConsoleOpen || isConsoleConnected || hasActiveExec) && (
+          {(isConsoleOpen || isConsoleConnected || (execSessions && execSessions.length > 0) || hasActiveExec) && (
             <Box
               sx={{
                 width: 5,
                 height: 5,
                 borderRadius: '50%',
-                bgcolor: (isConsoleOpen || hasActiveExec) ? '#38bdf8' : '#22c55e',
+                bgcolor: (isConsoleOpen || (execSessions && execSessions.some((s) => !s.minimized)) || hasActiveExec) ? '#38bdf8' : '#22c55e',
                 boxShadow: '0 0 6px currentColor',
                 mt: 0.5,
               }}
@@ -149,7 +164,7 @@ export function ActionDock({
         right: { xs: 10, sm: 16 },
         top: '50%',
         transform: 'translateY(-50%)',
-        zIndex: 1350,
+        zIndex: 1400,
         pointerEvents: 'auto',
         animation: 'dockSlideIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
         '@keyframes dockSlideIn': {
@@ -239,8 +254,93 @@ export function ActionDock({
           </Box>
         </Tooltip>
 
-        {/* 2. Pod Exec Live Shell Button (Active or Minimized) */}
-        {hasActiveExec && (
+        {/* 2. Pod Exec Live Shell Button(s) (Multi-Session or Single) */}
+        {execSessions && execSessions.length > 0 ? (
+          execSessions.map((session, index) => {
+            const label = `${session.resourceName}${session.container ? ` [${session.container}]` : ''}`;
+            const isMin = session.minimized;
+            return (
+              <Tooltip
+                key={session.id}
+                title={`Pod Exec • ${label} (${isMin ? 'Minimized · Click to restore' : 'Active · Click to minimize'})`}
+                placement="left"
+                arrow
+              >
+                <Box sx={{ position: 'relative' }}>
+                  <IconButton
+                    onClick={() => {
+                      if (onToggleSession) {
+                        onToggleSession(session.id);
+                      } else if (onToggleExec) {
+                        onToggleExec();
+                      }
+                    }}
+                    sx={{
+                      width: 42,
+                      height: 42,
+                      borderRadius: '50%',
+                      bgcolor: isDark ? 'rgba(129, 140, 248, 0.16)' : 'rgba(99, 102, 241, 0.12)',
+                      color: isDark ? '#818cf8' : '#4f46e5',
+                      border: '1px solid',
+                      borderColor: isDark ? 'rgba(129, 140, 248, 0.3)' : 'rgba(99, 102, 241, 0.24)',
+                      transition: 'all 0.24s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                      '&:hover': {
+                        transform: 'scale(1.15)',
+                        bgcolor: isDark ? 'rgba(129, 140, 248, 0.28)' : 'rgba(99, 102, 241, 0.22)',
+                        borderColor: isDark ? '#818cf8' : '#4f46e5',
+                        boxShadow: '0 4px 14px rgba(99, 102, 241, 0.35)',
+                      },
+                      '&:active': {
+                        transform: 'scale(0.95)',
+                      },
+                    }}
+                  >
+                    <ViewInArRoundedIcon sx={{ fontSize: 21 }} />
+                    {execSessions.length > 1 && (
+                      <Box
+                        sx={{
+                          position: 'absolute',
+                          bottom: 1,
+                          right: 1,
+                          width: 14,
+                          height: 14,
+                          borderRadius: '50%',
+                          bgcolor: isDark ? '#0f172a' : '#ffffff',
+                          border: '1px solid',
+                          borderColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.12)',
+                          fontSize: '9px',
+                          fontWeight: 850,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: isDark ? '#818cf8' : '#4f46e5',
+                        }}
+                      >
+                        {index + 1}
+                      </Box>
+                    )}
+                  </IconButton>
+
+                  {/* Status indicator */}
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      left: -6,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      width: 4,
+                      height: !isMin ? 16 : 4,
+                      borderRadius: 2,
+                      bgcolor: '#22c55e',
+                      boxShadow: '0 0 6px #22c55e',
+                      transition: 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                    }}
+                  />
+                </Box>
+              </Tooltip>
+            );
+          })
+        ) : hasActiveExec ? (
           <Tooltip
             title={`Pod Exec • ${execResourceName || 'Container Shell'} (${isExecMinimized ? 'Click to restore' : 'Click to minimize'})`}
             placement="left"
@@ -289,7 +389,7 @@ export function ActionDock({
               />
             </Box>
           </Tooltip>
-        )}
+        ) : null}
 
         {/* 3. Apply / Create Resource Manifest */}
         <Tooltip title="Apply / Create Resource Manifest" placement="left" arrow>

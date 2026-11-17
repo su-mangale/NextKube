@@ -212,6 +212,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
         onClose={onClose}
         maxWidth="md"
         fullWidth
+        disableEnforceFocus
         slotProps={{
           paper: {
             sx: {
