@@ -46,7 +46,6 @@ export function TerminalWindow({
   container,
   minimized: controlledMinimized,
   onMinimize,
-  onRestore,
 }: TerminalWindowProps) {
   const muiTheme = useTheme();
   const isDark = muiTheme.palette.mode === 'dark';
@@ -194,6 +193,7 @@ export function TerminalWindow({
       termInstanceRef.current = null;
       window.removeEventListener('resize', resizeHandlerRef.current);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, resourceName, resourceType, clusterId, namespace, container]);
 
   // Dynamically update terminal theme on dark/light mode toggle

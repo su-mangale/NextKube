@@ -25,13 +25,12 @@ import ErrorIcon from '@mui/icons-material/Error';
 import HubIcon from '@mui/icons-material/Hub';
 import NetworkCheckIcon from '@mui/icons-material/NetworkCheck';
 import LogoutIcon from '@mui/icons-material/Logout';
-import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import SettingsIcon from '@mui/icons-material/Settings';
 import jsyaml from 'js-yaml';
 import { useQueryClient } from '@tanstack/react-query';
 import { AttachedClusterPayload, ClusterConnectionTestResult } from '../types/fleet.types';
 import { useCluster } from '../context/cluster-context';
-import { useCurrentUser, logout } from '../hooks/use-auth';
+import { logout } from '../hooks/use-auth';
 
 export function NoClusterView() {
   const router = useRouter();
@@ -39,7 +38,6 @@ export function NoClusterView() {
   const isDark = theme.palette.mode === 'dark';
   const queryClient = useQueryClient();
   const { attachCluster, setActiveClusterId } = useCluster();
-  const { data: currentUser } = useCurrentUser();
 
   // Cluster metadata
   const [clusterName, setClusterName] = useState('');
