@@ -34,7 +34,9 @@ import {
   Chip,
   Slider,
   TablePagination,
-  Drawer,
+  Menu,
+  ListItemIcon,
+  ListItemText,
   Checkbox,
   LinearProgress,
   Card,
@@ -72,6 +74,13 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import HistoryIcon from '@mui/icons-material/History';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import LinkOffIcon from '@mui/icons-material/LinkOff';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import TuneIcon from '@mui/icons-material/Tune';
+import DeleteIcon from '@mui/icons-material/Delete';
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
+import SwapVertIcon from '@mui/icons-material/SwapVert';
+import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
 import { useQueryClient } from '@tanstack/react-query';
 
 import {
@@ -160,8 +169,17 @@ export default function ClusterDetailPage({
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Operations state
-  const [drawerOpen, setDrawerOpen] = useState<boolean>(false);
   const [selectedResource, setSelectedResource] = useState<any | null>(null);
+
+  // Row Actions 3-dot Menu state
+  const [rowMenuAnchorEl, setRowMenuAnchorEl] = useState<null | HTMLElement>(null);
+  const [rowMenuResource, setRowMenuResource] = useState<any | null>(null);
+  const [rowMenuTab, setRowMenuTab] = useState<number>(1);
+
+  // Describe Dialog state
+  const [describeDialogOpen, setDescribeDialogOpen] = useState<boolean>(false);
+  const [describeResource, setDescribeResource] = useState<any | null>(null);
+  const [describeTab, setDescribeTab] = useState<number>(1);
 
   // Add / Connect Cluster Modal
   const [addClusterOpen, setAddClusterOpen] = useState<boolean>(false);
@@ -388,7 +406,7 @@ spec:
     id,
     selectedResource?.name || '',
     selectedResource?.namespace || '',
-    drawerOpen && activeTab === 2
+    Boolean(selectedResource) && (rolloutDialogOpen || activeTab === 2)
   );
 
   const isDataLoading =
@@ -452,10 +470,25 @@ spec:
     setToastMessage('Reloading cluster resources from API...');
   };
 
-  const handleRowClick = (resource: any) => {
-    setSelectedResource(resource);
-    setSecretDecoded(false);
-    setDrawerOpen(true);
+  const handleOpenRowMenu = (event: React.MouseEvent<HTMLElement>, resource: any, tab: number) => {
+    event.stopPropagation();
+    setRowMenuAnchorEl(event.currentTarget);
+    setRowMenuResource(resource);
+    setRowMenuTab(tab);
+  };
+
+  const handleCloseRowMenu = () => {
+    setRowMenuAnchorEl(null);
+    setRowMenuResource(null);
+  };
+
+  const handleOpenDescribe = (resourceOverride?: any, tabOverride?: number) => {
+    const resource = resourceOverride || selectedResource;
+    if (!resource) return;
+    setDescribeResource(resource);
+    setDescribeTab(tabOverride !== undefined ? tabOverride : activeTab);
+    setDescribeCopied(false);
+    setDescribeDialogOpen(true);
   };
 
   const handleDownloadKubeconfig = () => {
@@ -845,10 +878,10 @@ users:
     }
   };
 
-  const handleOpenYaml = async () => {
-    if (!selectedResource) return;
-    const resource = selectedResource;
-    setDrawerOpen(false);
+  const handleOpenYaml = async (resourceOverride?: any) => {
+    const resource = resourceOverride || selectedResource;
+    if (!resource) return;
+    setSelectedResource(resource);
     setYamlDialogOpen(true);
     setYamlLoading(true);
     setYamlContent('');
@@ -898,10 +931,11 @@ users:
     }
   };
 
-  const handleOpenScale = () => {
-    if (!selectedResource) return;
-    setScaleReplicas(selectedResource.replicas || 1);
-    setDrawerOpen(false);
+  const handleOpenScale = (resourceOverride?: any) => {
+    const resource = resourceOverride || selectedResource;
+    if (!resource) return;
+    setSelectedResource(resource);
+    setScaleReplicas(resource.replicas || 1);
     setScaleDialogOpen(true);
   };
 
@@ -923,8 +957,10 @@ users:
     }
   };
 
-  const handleOpenRestart = () => {
-    setDrawerOpen(false);
+  const handleOpenRestart = (resourceOverride?: any) => {
+    const resource = resourceOverride || selectedResource;
+    if (!resource) return;
+    setSelectedResource(resource);
     setRestartDialogOpen(true);
   };
 
@@ -948,7 +984,7 @@ users:
   const handleOpenExec = (resourceOverride?: any) => {
     const resource = resourceOverride || selectedResource;
     if (!resource) return;
-    setDrawerOpen(false);
+    setSelectedResource(resource);
     if (settingsDialogOpen) setSettingsDialogOpen(false);
 
     let targetName = resource.name;
@@ -1049,7 +1085,6 @@ users:
     setSelectedResource(resource);
     const initialContainer = (resource.containers && resource.containers.length > 0) ? resource.containers[0] : '';
     setSelectedContainer(initialContainer);
-    setDrawerOpen(false);
     setLogsDialogOpen(true);
     setLogsLoading(true);
     setLogsContent('');
@@ -1202,8 +1237,10 @@ users:
     setToastMessage('Logs copied to clipboard.');
   };
 
-  const handleOpenDelete = () => {
-    setDrawerOpen(false);
+  const handleOpenDelete = (resourceOverride?: any) => {
+    const resource = resourceOverride || selectedResource;
+    if (!resource) return;
+    setSelectedResource(resource);
     setDeleteDialogOpen(true);
   };
 
@@ -1226,8 +1263,10 @@ users:
     }
   };
 
-  const handleOpenRollout = () => {
-    setDrawerOpen(false);
+  const handleOpenRollout = (resourceOverride?: any) => {
+    const resource = resourceOverride || selectedResource;
+    if (!resource) return;
+    setSelectedResource(resource);
     setRolloutMode('restart');
     setSelectedRolloutRevision(rolloutRevisions && rolloutRevisions.length > 0 ? rolloutRevisions[0].revision : null);
     setRolloutDialogOpen(true);
@@ -1258,10 +1297,11 @@ users:
     }
   };
 
-  const handleOpenImageDialog = () => {
-    if (!selectedResource) return;
-    setImageInputVal(selectedResource.image || '');
-    setDrawerOpen(false);
+  const handleOpenImageDialog = (resourceOverride?: any) => {
+    const resource = resourceOverride || selectedResource;
+    if (!resource) return;
+    setSelectedResource(resource);
+    setImageInputVal(resource.image || '');
     setImageDialogOpen(true);
   };
 
@@ -1339,9 +1379,6 @@ users:
       setToastSeverity('success');
       setToastMessage(res.message || `Helm release "${activeHelmRelease.name}" uninstalled successfully.`);
       setHelmUninstallOpen(false);
-      if (drawerOpen && selectedResource?.name === activeHelmRelease.name) {
-        setDrawerOpen(false);
-      }
       refetchHelmReleases();
       refetchAuditLogs();
     } catch (err: any) {
@@ -1850,6 +1887,245 @@ users:
     }
   };
 
+  const renderRowActionCell = (resource: any, tab: number) => {
+    return (
+      <TableCell
+        align="right"
+        sx={{ pr: 1.5, py: 0.75, whiteSpace: 'nowrap', width: '1%' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <Box sx={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5 }}>
+          {/* Tab 1: Pods -> Logs + Terminal */}
+          {tab === 1 && (
+            <>
+              <Tooltip title="View Logs">
+                <IconButton
+                  size="small"
+                  onClick={() => handleOpenLogs(resource, 'pods')}
+                  sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main', bgcolor: 'action.hover' } }}
+                >
+                  <ReceiptLongIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Exec Shell">
+                <IconButton
+                  size="small"
+                  onClick={() => handleOpenExec(resource)}
+                  sx={{ color: 'text.secondary', '&:hover': { color: 'info.main', bgcolor: 'action.hover' } }}
+                >
+                  <TerminalIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </>
+          )}
+
+          {/* Tab 2: Deployments -> Scale + Logs */}
+          {tab === 2 && (
+            <>
+              <Tooltip title="Scale Replicas">
+                <IconButton
+                  size="small"
+                  onClick={() => handleOpenScale(resource)}
+                  sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main', bgcolor: 'action.hover' } }}
+                >
+                  <TuneIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Deployment Logs">
+                <IconButton
+                  size="small"
+                  onClick={() => handleOpenLogs(resource, 'deployments')}
+                  sx={{ color: 'text.secondary', '&:hover': { color: 'info.main', bgcolor: 'action.hover' } }}
+                >
+                  <ReceiptLongIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </>
+          )}
+
+          {/* Tab 3: DaemonSets -> Logs + Terminal */}
+          {tab === 3 && (
+            <>
+              <Tooltip title="DaemonSet Logs">
+                <IconButton
+                  size="small"
+                  onClick={() => handleOpenLogs(resource, 'daemonsets')}
+                  sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main', bgcolor: 'action.hover' } }}
+                >
+                  <ReceiptLongIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Terminal Exec">
+                <IconButton
+                  size="small"
+                  onClick={() => handleOpenExec(resource)}
+                  sx={{ color: 'text.secondary', '&:hover': { color: 'info.main', bgcolor: 'action.hover' } }}
+                >
+                  <TerminalIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </>
+          )}
+
+          {/* Tab 4: StatefulSets -> Scale + Logs */}
+          {tab === 4 && (
+            <>
+              <Tooltip title="Scale Replicas">
+                <IconButton
+                  size="small"
+                  onClick={() => handleOpenScale(resource)}
+                  sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main', bgcolor: 'action.hover' } }}
+                >
+                  <TuneIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="StatefulSet Logs">
+                <IconButton
+                  size="small"
+                  onClick={() => handleOpenLogs(resource, 'statefulsets')}
+                  sx={{ color: 'text.secondary', '&:hover': { color: 'info.main', bgcolor: 'action.hover' } }}
+                >
+                  <ReceiptLongIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </>
+          )}
+
+          {/* Tab 5: ReplicaSets -> Scale */}
+          {tab === 5 && (
+            <Tooltip title="Scale Replicas">
+              <IconButton
+                size="small"
+                onClick={() => handleOpenScale(resource)}
+                sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main', bgcolor: 'action.hover' } }}
+              >
+                <TuneIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
+
+          {/* Tab 6: Jobs -> Logs + Terminal */}
+          {tab === 6 && (
+            <>
+              <Tooltip title="Job Logs">
+                <IconButton
+                  size="small"
+                  onClick={() => handleOpenLogs(resource, 'jobs')}
+                  sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main', bgcolor: 'action.hover' } }}
+                >
+                  <ReceiptLongIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Terminal Exec">
+                <IconButton
+                  size="small"
+                  onClick={() => handleOpenExec(resource)}
+                  sx={{ color: 'text.secondary', '&:hover': { color: 'info.main', bgcolor: 'action.hover' } }}
+                >
+                  <TerminalIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </>
+          )}
+
+          {/* Tab 7: CronJobs -> Logs */}
+          {tab === 7 && (
+            <Tooltip title="CronJob Logs">
+              <IconButton
+                size="small"
+                onClick={() => handleOpenLogs(resource, 'cronjobs')}
+                sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main', bgcolor: 'action.hover' } }}
+              >
+                <ReceiptLongIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
+
+          {/* Tab 15: Nodes -> SSH Terminal */}
+          {tab === 15 && (
+            <Tooltip title="Node SSH Terminal">
+              <IconButton
+                size="small"
+                onClick={() => handleOpenExec(resource)}
+                sx={{ color: 'text.secondary', '&:hover': { color: 'info.main', bgcolor: 'action.hover' } }}
+              >
+                <TerminalIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
+
+          {/* Tab 20: Events -> Describe */}
+          {tab === 20 && (
+            <Tooltip title="Describe Event">
+              <IconButton
+                size="small"
+                onClick={() => handleOpenDescribe(resource, 20)}
+                sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main', bgcolor: 'action.hover' } }}
+              >
+                <DescriptionOutlinedIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
+
+          {/* Tab 24: Audit Logs -> View Details */}
+          {tab === 24 && (
+            <Tooltip title="View Details">
+              <IconButton
+                size="small"
+                onClick={() => handleOpenDescribe(resource, 24)}
+                sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main', bgcolor: 'action.hover' } }}
+              >
+                <DescriptionOutlinedIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
+
+          {/* Tab 25: Helm Releases -> Inspect Values */}
+          {tab === 25 && (
+            <Tooltip title="Inspect Values (values.yaml)">
+              <IconButton
+                size="small"
+                onClick={() => handleOpenHelmValues(resource)}
+                sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main', bgcolor: 'action.hover' } }}
+              >
+                <CodeIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
+
+          {/* Standard Resources: Tabs 5, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 18, 19, 21, 22, 23 -> 1-click View/Edit YAML */}
+          {[5, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 18, 19, 21, 22, 23].includes(tab) && (
+            <Tooltip title="View / Edit YAML">
+              <IconButton
+                size="small"
+                onClick={() => handleOpenYaml(resource)}
+                sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main', bgcolor: 'action.hover' } }}
+              >
+                <CodeIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
+
+          {/* 3-dot Overflow Menu Button (Excluded for Events and Audit Logs where Describe is the single action) */}
+          {tab !== 20 && tab !== 24 && (
+            <Tooltip title="More Actions">
+              <IconButton
+                size="small"
+                onClick={(e) => handleOpenRowMenu(e, resource, tab)}
+                sx={{
+                  color: Boolean(rowMenuAnchorEl && rowMenuResource === resource) ? 'primary.main' : 'text.secondary',
+                  '&:hover': { color: 'primary.main', bgcolor: 'action.hover' },
+                }}
+              >
+                <MoreVertIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
+        </Box>
+      </TableCell>
+    );
+  };
+
   if (clustersLoading) {
     return (
       <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'background.default' }}>
@@ -2345,11 +2621,12 @@ users:
                       <TableCell>IP</TableCell>
                       <TableCell>Image</TableCell>
                       <TableCell>Age</TableCell>
+                      <TableCell align="right" sx={{ pr: 2 }}>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {paginate(filteredPods).map((pod) => (
-                      <TableRow key={pod.name} hover onClick={() => handleRowClick(pod)} sx={{ cursor: 'pointer' }}>
+                      <TableRow key={pod.name} hover>
                         <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
                           <Checkbox checked={isRowSelected(pod)} onChange={() => handleToggleRowSelect(pod)} />
                         </TableCell>
@@ -2401,6 +2678,7 @@ users:
                           )}
                         </TableCell>
                         <TableCell>{pod.age}</TableCell>
+                        {renderRowActionCell(pod, 1)}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -2427,11 +2705,12 @@ users:
                       <TableCell>Available</TableCell>
                       <TableCell>Image</TableCell>
                       <TableCell>Age</TableCell>
+                      <TableCell align="right" sx={{ pr: 2 }}>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {paginate(filteredDeployments).map((dep) => (
-                      <TableRow key={dep.name} hover onClick={() => handleRowClick(dep)} sx={{ cursor: 'pointer' }}>
+                      <TableRow key={dep.name} hover>
                         <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
                           <Checkbox checked={isRowSelected(dep)} onChange={() => handleToggleRowSelect(dep)} />
                         </TableCell>
@@ -2453,6 +2732,7 @@ users:
                           )}
                         </TableCell>
                         <TableCell>{dep.age}</TableCell>
+                        {renderRowActionCell(dep, 2)}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -2473,11 +2753,12 @@ users:
                       <TableCell>Available</TableCell>
                       <TableCell>Image</TableCell>
                       <TableCell>Age</TableCell>
+                      <TableCell align="right" sx={{ pr: 2 }}>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {paginate(filteredDaemonSets).map((ds) => (
-                      <TableRow key={ds.name} hover onClick={() => handleRowClick(ds)} sx={{ cursor: 'pointer' }}>
+                      <TableRow key={ds.name} hover>
                         <TableCell sx={{ fontWeight: 700 }}>{ds.name}</TableCell>
                         <TableCell><Chip label={ds.namespace} size="small" sx={{ fontSize: '0.65rem', borderRadius: 1 }} /></TableCell>
                         <TableCell>{ds.desiredNumberScheduled}</TableCell>
@@ -2495,6 +2776,7 @@ users:
                           )}
                         </TableCell>
                         <TableCell>{ds.age}</TableCell>
+                        {renderRowActionCell(ds, 3)}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -2512,11 +2794,12 @@ users:
                       <TableCell>Total Replicas</TableCell>
                       <TableCell>Image</TableCell>
                       <TableCell>Age</TableCell>
+                      <TableCell align="right" sx={{ pr: 2 }}>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {paginate(filteredStatefulSets).map((sts) => (
-                      <TableRow key={sts.name} hover onClick={() => handleRowClick(sts)} sx={{ cursor: 'pointer' }}>
+                      <TableRow key={sts.name} hover>
                         <TableCell sx={{ fontWeight: 700 }}>{sts.name}</TableCell>
                         <TableCell><Chip label={sts.namespace} size="small" sx={{ fontSize: '0.65rem', borderRadius: 1 }} /></TableCell>
                         <TableCell sx={{ fontWeight: 700, color: sts.readyReplicas === sts.replicas ? 'success.main' : 'warning.main' }}>{sts.readyReplicas} / {sts.replicas}</TableCell>
@@ -2531,6 +2814,7 @@ users:
                           )}
                         </TableCell>
                         <TableCell>{sts.age}</TableCell>
+                        {renderRowActionCell(sts, 4)}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -2549,11 +2833,12 @@ users:
                       <TableCell>Ready</TableCell>
                       <TableCell>Image</TableCell>
                       <TableCell>Age</TableCell>
+                      <TableCell align="right" sx={{ pr: 2 }}>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {paginate(filteredReplicaSets).map((rs) => (
-                      <TableRow key={rs.name} hover onClick={() => handleRowClick(rs)} sx={{ cursor: 'pointer' }}>
+                      <TableRow key={rs.name} hover>
                         <TableCell sx={{ fontWeight: 700 }}>{rs.name}</TableCell>
                         <TableCell><Chip label={rs.namespace} size="small" sx={{ fontSize: '0.65rem', borderRadius: 1 }} /></TableCell>
                         <TableCell>{rs.desiredReplicas}</TableCell>
@@ -2569,6 +2854,7 @@ users:
                           )}
                         </TableCell>
                         <TableCell>{rs.age}</TableCell>
+                        {renderRowActionCell(rs, 5)}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -2587,11 +2873,12 @@ users:
                       <TableCell>Failed</TableCell>
                       <TableCell>Image</TableCell>
                       <TableCell>Age</TableCell>
+                      <TableCell align="right" sx={{ pr: 2 }}>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {paginate(filteredJobs).map((j) => (
-                      <TableRow key={j.name} hover onClick={() => handleRowClick(j)} sx={{ cursor: 'pointer' }}>
+                      <TableRow key={j.name} hover>
                         <TableCell sx={{ fontWeight: 700 }}>{j.name}</TableCell>
                         <TableCell><Chip label={j.namespace} size="small" sx={{ fontSize: '0.65rem', borderRadius: 1 }} /></TableCell>
                         <TableCell>{j.completions}</TableCell>
@@ -2607,6 +2894,7 @@ users:
                           )}
                         </TableCell>
                         <TableCell>{j.age}</TableCell>
+                        {renderRowActionCell(j, 6)}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -2626,11 +2914,12 @@ users:
                       <TableCell>Last Schedule</TableCell>
                       <TableCell>Image</TableCell>
                       <TableCell>Age</TableCell>
+                      <TableCell align="right" sx={{ pr: 2 }}>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {paginate(filteredCronJobs).map((cj) => (
-                      <TableRow key={cj.name} hover onClick={() => handleRowClick(cj)} sx={{ cursor: 'pointer' }}>
+                      <TableRow key={cj.name} hover>
                         <TableCell sx={{ fontWeight: 700 }}>{cj.name}</TableCell>
                         <TableCell><Chip label={cj.namespace} size="small" sx={{ fontSize: '0.65rem', borderRadius: 1 }} /></TableCell>
                         <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{cj.schedule}</TableCell>
@@ -2647,6 +2936,7 @@ users:
                           )}
                         </TableCell>
                         <TableCell>{cj.age}</TableCell>
+                        {renderRowActionCell(cj, 7)}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -2665,11 +2955,12 @@ users:
                       <TableCell>External IP</TableCell>
                       <TableCell>Ports</TableCell>
                       <TableCell>Age</TableCell>
+                      <TableCell align="right" sx={{ pr: 2 }}>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {paginate(filteredServices).map((svc) => (
-                      <TableRow key={svc.name} hover onClick={() => handleRowClick(svc)} sx={{ cursor: 'pointer' }}>
+                      <TableRow key={svc.name} hover>
                         <TableCell sx={{ fontWeight: 700 }}>{svc.name}</TableCell>
                         <TableCell><Chip label={svc.namespace} size="small" sx={{ fontSize: '0.65rem', borderRadius: 1 }} /></TableCell>
                         <TableCell><Chip label={svc.type} size="small" variant="outlined" sx={{ fontSize: '0.65rem' }} /></TableCell>
@@ -2677,6 +2968,7 @@ users:
                         <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{svc.externalIp ?? svc.externalIP}</TableCell>
                         <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{svc.ports}</TableCell>
                         <TableCell>{svc.age}</TableCell>
+                        {renderRowActionCell(svc, 8)}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -2694,17 +2986,19 @@ users:
                       <TableCell>Hosts</TableCell>
                       <TableCell>Address</TableCell>
                       <TableCell>Age</TableCell>
+                      <TableCell align="right" sx={{ pr: 2 }}>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {paginate(filteredIngresses).map((ing) => (
-                      <TableRow key={ing.name} hover onClick={() => handleRowClick(ing)} sx={{ cursor: 'pointer' }}>
+                      <TableRow key={ing.name} hover>
                         <TableCell sx={{ fontWeight: 700 }}>{ing.name}</TableCell>
                         <TableCell><Chip label={ing.namespace} size="small" sx={{ fontSize: '0.65rem', borderRadius: 1 }} /></TableCell>
                         <TableCell>{ing.ingressClass}</TableCell>
                         <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{ing.hosts}</TableCell>
                         <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{ing.address}</TableCell>
                         <TableCell>{ing.age}</TableCell>
+                        {renderRowActionCell(ing, 9)}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -2720,15 +3014,17 @@ users:
                       <TableCell>Namespace</TableCell>
                       <TableCell>Policy Types</TableCell>
                       <TableCell>Age</TableCell>
+                      <TableCell align="right" sx={{ pr: 2 }}>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {paginate(filteredNetworkPolicies).map((np) => (
-                      <TableRow key={np.name} hover onClick={() => handleRowClick(np)} sx={{ cursor: 'pointer' }}>
+                      <TableRow key={np.name} hover>
                         <TableCell sx={{ fontWeight: 700 }}>{np.name}</TableCell>
                         <TableCell><Chip label={np.namespace} size="small" sx={{ fontSize: '0.65rem', borderRadius: 1 }} /></TableCell>
                         <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{np.policyTypes}</TableCell>
                         <TableCell>{np.age}</TableCell>
+                        {renderRowActionCell(np, 10)}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -2744,15 +3040,17 @@ users:
                       <TableCell>Namespace</TableCell>
                       <TableCell>Data Items</TableCell>
                       <TableCell>Age</TableCell>
+                      <TableCell align="right" sx={{ pr: 2 }}>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {paginate(filteredConfigMaps).map((cm) => (
-                      <TableRow key={cm.name} hover onClick={() => handleRowClick(cm)} sx={{ cursor: 'pointer' }}>
+                      <TableRow key={cm.name} hover>
                         <TableCell sx={{ fontWeight: 700 }}>{cm.name}</TableCell>
                         <TableCell><Chip label={cm.namespace} size="small" sx={{ fontSize: '0.65rem', borderRadius: 1 }} /></TableCell>
                         <TableCell>{cm.keysCount ?? cm.dataCount} keys</TableCell>
                         <TableCell>{cm.age}</TableCell>
+                        {renderRowActionCell(cm, 11)}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -2769,16 +3067,18 @@ users:
                       <TableCell>Type</TableCell>
                       <TableCell>Data Keys</TableCell>
                       <TableCell>Age</TableCell>
+                      <TableCell align="right" sx={{ pr: 2 }}>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {paginate(filteredSecrets).map((sec) => (
-                      <TableRow key={sec.name} hover onClick={() => handleRowClick(sec)} sx={{ cursor: 'pointer' }}>
+                      <TableRow key={sec.name} hover>
                         <TableCell sx={{ fontWeight: 700 }}>{sec.name}</TableCell>
                         <TableCell><Chip label={sec.namespace} size="small" sx={{ fontSize: '0.65rem', borderRadius: 1 }} /></TableCell>
                         <TableCell sx={{ fontSize: '0.75rem' }}>{sec.type}</TableCell>
                         <TableCell>{sec.keysCount ?? sec.dataCount} keys</TableCell>
                         <TableCell>{sec.age}</TableCell>
+                        {renderRowActionCell(sec, 12)}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -2797,11 +3097,12 @@ users:
                       <TableCell>Capacity</TableCell>
                       <TableCell>StorageClass</TableCell>
                       <TableCell>Age</TableCell>
+                      <TableCell align="right" sx={{ pr: 2 }}>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {paginate(filteredPVCs).map((pvc) => (
-                      <TableRow key={pvc.name} hover onClick={() => handleRowClick(pvc)} sx={{ cursor: 'pointer' }}>
+                      <TableRow key={pvc.name} hover>
                         <TableCell sx={{ fontWeight: 700 }}>{pvc.name}</TableCell>
                         <TableCell><Chip label={pvc.namespace} size="small" sx={{ fontSize: '0.65rem', borderRadius: 1 }} /></TableCell>
                         <TableCell><Chip label={pvc.status} size="small" color={pvc.status === 'Bound' ? 'success' : 'warning'} sx={{ fontSize: '0.65rem' }} /></TableCell>
@@ -2809,6 +3110,7 @@ users:
                         <TableCell>{pvc.capacity}</TableCell>
                         <TableCell>{pvc.storageClass}</TableCell>
                         <TableCell>{pvc.age}</TableCell>
+                        {renderRowActionCell(pvc, 13)}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -2826,17 +3128,19 @@ users:
                       <TableCell>Binding Mode</TableCell>
                       <TableCell>Default</TableCell>
                       <TableCell>Age</TableCell>
+                      <TableCell align="right" sx={{ pr: 2 }}>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {paginate(filteredStorageClasses).map((sc) => (
-                      <TableRow key={sc.name} hover onClick={() => handleRowClick(sc)} sx={{ cursor: 'pointer' }}>
+                      <TableRow key={sc.name} hover>
                         <TableCell sx={{ fontWeight: 700 }}>{sc.name}</TableCell>
                         <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{sc.provisioner}</TableCell>
                         <TableCell>{sc.reclaimPolicy}</TableCell>
                         <TableCell>{sc.volumeBindingMode}</TableCell>
                         <TableCell>{sc.isDefault ? <Chip label="Yes (Default)" color="primary" size="small" sx={{ fontSize: '0.65rem' }} /> : 'No'}</TableCell>
                         <TableCell>{sc.age}</TableCell>
+                        {renderRowActionCell(sc, 14)}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -2856,11 +3160,12 @@ users:
                       <TableCell>Version</TableCell>
                       <TableCell>Age</TableCell>
                       <TableCell>Conditions</TableCell>
+                      <TableCell align="right" sx={{ pr: 2 }}>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {paginate(filteredNodes).map((node) => (
-                      <TableRow key={node.name} hover onClick={() => handleRowClick(node)} sx={{ cursor: 'pointer' }}>
+                      <TableRow key={node.name} hover>
                         <TableCell sx={{ fontWeight: 700 }}>{node.name}</TableCell>
                         <TableCell>
                           <Chip label={node.status} size="small" color={node.status === 'Ready' ? 'success' : 'error'} sx={{ fontSize: '0.65rem', fontWeight: 700, borderRadius: 1 }} />
@@ -2890,6 +3195,7 @@ users:
                             </Box>
                           )}
                         </TableCell>
+                        {renderRowActionCell(node, 15)}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -2905,15 +3211,17 @@ users:
                       <TableCell>Namespace</TableCell>
                       <TableCell>Secrets</TableCell>
                       <TableCell>Age</TableCell>
+                      <TableCell align="right" sx={{ pr: 2 }}>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {paginate(filteredServiceAccounts).map((sa) => (
-                      <TableRow key={sa.name} hover onClick={() => handleRowClick(sa)} sx={{ cursor: 'pointer' }}>
+                      <TableRow key={sa.name} hover>
                         <TableCell sx={{ fontWeight: 700 }}>{sa.name}</TableCell>
                         <TableCell><Chip label={sa.namespace} size="small" sx={{ fontSize: '0.65rem', borderRadius: 1 }} /></TableCell>
                         <TableCell>{sa.secretsCount}</TableCell>
                         <TableCell>{sa.age}</TableCell>
+                        {renderRowActionCell(sa, 16)}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -2929,15 +3237,17 @@ users:
                       <TableCell>Scope / Namespace</TableCell>
                       <TableCell>Rules Count</TableCell>
                       <TableCell>Age</TableCell>
+                      <TableCell align="right" sx={{ pr: 2 }}>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {paginate(filteredRoles).map((r) => (
-                      <TableRow key={r.name} hover onClick={() => handleRowClick(r)} sx={{ cursor: 'pointer' }}>
+                      <TableRow key={r.name} hover>
                         <TableCell sx={{ fontWeight: 700 }}>{r.name}</TableCell>
                         <TableCell>{r.isClusterRole ? <Chip label="ClusterRole" color="secondary" size="small" sx={{ fontSize: '0.65rem' }} /> : <Chip label={r.namespace} size="small" sx={{ fontSize: '0.65rem' }} />}</TableCell>
                         <TableCell>{r.rulesCount} rules</TableCell>
                         <TableCell>{r.age}</TableCell>
+                        {renderRowActionCell(r, 17)}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -2953,15 +3263,17 @@ users:
                       <TableCell>Namespace</TableCell>
                       <TableCell>Role Ref</TableCell>
                       <TableCell>Age</TableCell>
+                      <TableCell align="right" sx={{ pr: 2 }}>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {paginate(filteredRoleBindings).map((rb) => (
-                      <TableRow key={rb.name} hover onClick={() => handleRowClick(rb)} sx={{ cursor: 'pointer' }}>
+                      <TableRow key={rb.name} hover>
                         <TableCell sx={{ fontWeight: 700 }}>{rb.name}</TableCell>
                         <TableCell>{rb.isClusterBinding ? <Chip label="ClusterRoleBinding" color="secondary" size="small" sx={{ fontSize: '0.65rem' }} /> : <Chip label={rb.namespace} size="small" sx={{ fontSize: '0.65rem' }} />}</TableCell>
                         <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{rb.roleRef || '-'}</TableCell>
                         <TableCell>{rb.age}</TableCell>
+                        {renderRowActionCell(rb, 18)}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -2980,11 +3292,12 @@ users:
                       <TableCell>Kind</TableCell>
                       <TableCell>Instances</TableCell>
                       <TableCell>Age</TableCell>
+                      <TableCell align="right" sx={{ pr: 2 }}>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {paginate(filteredCRDs).map((crd) => (
-                      <TableRow key={crd.name} hover onClick={() => handleRowClick(crd)} sx={{ cursor: 'pointer' }}>
+                      <TableRow key={crd.name} hover>
                         <TableCell sx={{ fontWeight: 700, color: 'primary.main' }}>{crd.name}</TableCell>
                         <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{crd.group}</TableCell>
                         <TableCell>{crd.version}</TableCell>
@@ -2992,6 +3305,7 @@ users:
                         <TableCell sx={{ fontWeight: 700 }}>{crd.kind}</TableCell>
                         <TableCell>{crd.instancesCount}</TableCell>
                         <TableCell>{crd.age}</TableCell>
+                        {renderRowActionCell(crd, 19)}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -3009,11 +3323,12 @@ users:
                       <TableCell>Object</TableCell>
                       <TableCell>Namespace</TableCell>
                       <TableCell>Message</TableCell>
+                      <TableCell align="right" sx={{ pr: 2 }}>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {paginate(filteredEvents).map((evt) => (
-                      <TableRow key={evt.id} hover onClick={() => handleRowClick(evt)} sx={{ cursor: 'pointer' }}>
+                      <TableRow key={evt.id} hover>
                         <TableCell sx={{ fontSize: '0.75rem' }}>{evt.lastSeen}</TableCell>
                         <TableCell>
                           <Chip label={evt.type} size="small" color={evt.type === 'Warning' ? 'warning' : 'info'} sx={{ fontSize: '0.65rem', fontWeight: 700, borderRadius: 1 }} />
@@ -3022,6 +3337,7 @@ users:
                         <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{evt.object}</TableCell>
                         <TableCell><Chip label={evt.namespace} size="small" sx={{ fontSize: '0.65rem', borderRadius: 1 }} /></TableCell>
                         <TableCell sx={{ fontSize: '0.8rem' }}>{evt.message}</TableCell>
+                        {renderRowActionCell(evt, 20)}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -3040,11 +3356,12 @@ users:
                       <TableCell>Current / Desired</TableCell>
                       <TableCell>Target Metrics</TableCell>
                       <TableCell>Age</TableCell>
+                      <TableCell align="right" sx={{ pr: 2 }}>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {paginate(filteredHPAs).map((hpa) => (
-                      <TableRow key={hpa.name} hover onClick={() => handleRowClick(hpa)} sx={{ cursor: 'pointer' }}>
+                      <TableRow key={hpa.name} hover>
                         <TableCell sx={{ fontWeight: 700, color: 'primary.main' }}>{hpa.name}</TableCell>
                         <TableCell><Chip label={hpa.namespace} size="small" sx={{ fontSize: '0.65rem', borderRadius: 1 }} /></TableCell>
                         <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>{hpa.reference}</TableCell>
@@ -3056,6 +3373,7 @@ users:
                           <Chip label={hpa.metrics} size="small" sx={{ fontSize: '0.68rem', bgcolor: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8' }} />
                         </TableCell>
                         <TableCell>{hpa.age}</TableCell>
+                        {renderRowActionCell(hpa, 21)}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -3075,11 +3393,12 @@ users:
                       <TableCell>Claim</TableCell>
                       <TableCell>StorageClass</TableCell>
                       <TableCell>Age</TableCell>
+                      <TableCell align="right" sx={{ pr: 2 }}>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {paginate(filteredPVs).map((pv) => (
-                      <TableRow key={pv.name} hover onClick={() => handleRowClick(pv)} sx={{ cursor: 'pointer' }}>
+                      <TableRow key={pv.name} hover>
                         <TableCell sx={{ fontWeight: 700, color: 'primary.main', fontFamily: 'monospace' }}>{pv.name}</TableCell>
                         <TableCell sx={{ fontWeight: 700 }}>{pv.capacity}</TableCell>
                         <TableCell sx={{ fontSize: '0.78rem' }}>{pv.accessModes}</TableCell>
@@ -3090,6 +3409,7 @@ users:
                         <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>{pv.claim}</TableCell>
                         <TableCell sx={{ fontSize: '0.78rem' }}>{pv.storageClass}</TableCell>
                         <TableCell>{pv.age}</TableCell>
+                        {renderRowActionCell(pv, 22)}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -3108,11 +3428,12 @@ users:
                       <TableCell>Address</TableCell>
                       <TableCell>Status</TableCell>
                       <TableCell>Age</TableCell>
+                      <TableCell align="right" sx={{ pr: 2 }}>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {paginate([...filteredGateways, ...filteredHTTPRoutes]).map((gw: any) => (
-                      <TableRow key={gw.name} hover onClick={() => handleRowClick(gw)} sx={{ cursor: 'pointer' }}>
+                      <TableRow key={gw.name} hover>
                         <TableCell sx={{ fontWeight: 700, color: 'primary.main' }}>{gw.name}</TableCell>
                         <TableCell><Chip label={gw.namespace} size="small" sx={{ fontSize: '0.65rem', borderRadius: 1 }} /></TableCell>
                         <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>{gw.className || gw.hostnames || '-'}</TableCell>
@@ -3122,6 +3443,7 @@ users:
                           <Chip label={gw.status || 'Active'} size="small" color={gw.status === 'Programmed' ? 'success' : 'info'} sx={{ fontSize: '0.65rem', fontWeight: 700, borderRadius: 1 }} />
                         </TableCell>
                         <TableCell>{gw.age}</TableCell>
+                        {renderRowActionCell(gw, 23)}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -3165,18 +3487,19 @@ users:
                         <TableCell>Namespace</TableCell>
                         <TableCell>Operation Details</TableCell>
                         <TableCell>Status</TableCell>
+                        <TableCell align="right" sx={{ pr: 2 }}>Actions</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
                       {filteredAuditLogs.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={7} sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>
+                          <TableCell colSpan={8} sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>
                             No audit records found matching query.
                           </TableCell>
                         </TableRow>
                       ) : (
                         paginate(filteredAuditLogs).map((entry) => (
-                          <TableRow key={entry.id} hover onClick={() => handleRowClick(entry)} sx={{ cursor: 'pointer' }}>
+                          <TableRow key={entry.id} hover>
                             <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem', color: 'text.secondary', whiteSpace: 'nowrap' }}>
                               {new Date(entry.timestamp).toLocaleString()}
                             </TableCell>
@@ -3222,6 +3545,7 @@ users:
                                 sx={{ fontSize: '0.65rem', fontWeight: 800, height: 20, borderRadius: 1 }}
                               />
                             </TableCell>
+                            {renderRowActionCell(entry, 24)}
                           </TableRow>
                         ))
                       )}
@@ -3265,7 +3589,7 @@ users:
                         </TableRow>
                       ) : (
                         paginate(filteredHelmReleases).map((release) => (
-                          <TableRow key={`${release.namespace}-${release.name}`} hover onClick={() => handleRowClick(release)} sx={{ cursor: 'pointer' }}>
+                          <TableRow key={`${release.namespace}-${release.name}`} hover>
                             <TableCell sx={{ fontWeight: 700, color: 'primary.main', fontSize: '0.82rem' }}>
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                 <StorageIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
@@ -3312,37 +3636,7 @@ users:
                             <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
                               {release.updated || release.age || '-'}
                             </TableCell>
-                            <TableCell align="right" onClick={(e) => e.stopPropagation()}>
-                              <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
-                                <Tooltip title="Inspect Values (values.yaml)">
-                                  <IconButton
-                                    size="small"
-                                    onClick={() => handleOpenHelmValues(release)}
-                                    sx={{ color: 'primary.main', p: 0.5 }}
-                                  >
-                                    <CodeIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                                <Tooltip title="Rollback Revision">
-                                  <IconButton
-                                    size="small"
-                                    onClick={() => handleOpenHelmRollback(release)}
-                                    sx={{ color: 'warning.main', p: 0.5 }}
-                                  >
-                                    <HistoryIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                                <Tooltip title="Uninstall Release">
-                                  <IconButton
-                                    size="small"
-                                    onClick={() => handleOpenHelmUninstall(release)}
-                                    sx={{ color: 'error.main', p: 0.5 }}
-                                  >
-                                    <ClearIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                              </Box>
-                            </TableCell>
+                            {renderRowActionCell(release, 25)}
                           </TableRow>
                         ))
                       )}
@@ -3382,356 +3676,361 @@ users:
         </Box>
       </Box>
 
-      {/* Resource Details Side Drawer */}
-      <Drawer
-        anchor="right"
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
+      {/* Shared Row Actions Overflow Menu */}
+      <Menu
+        anchorEl={rowMenuAnchorEl}
+        open={Boolean(rowMenuAnchorEl && rowMenuResource)}
+        onClose={handleCloseRowMenu}
+        transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+        anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
         slotProps={{
           paper: {
+            elevation: 4,
             sx: {
-              width: { xs: '100%', sm: 540, md: 620 },
-              p: 0,
-              bgcolor: (theme) =>
-                theme.palette.mode === 'dark'
-                  ? 'rgba(11, 15, 25, 0.85)'
-                  : 'rgba(255, 255, 255, 0.92)',
-              backdropFilter: 'blur(16px)',
-              borderLeft: '1px solid',
+              minWidth: 190,
+              borderRadius: 2,
+              py: 0.5,
+              border: '1px solid',
               borderColor: 'divider',
-              boxShadow: (theme) =>
-                theme.palette.mode === 'dark'
-                  ? '0 16px 48px rgba(0, 0, 0, 0.5)'
-                  : '0 16px 40px rgba(148, 163, 184, 0.25)',
-            },
-          },
-          backdrop: {
-            sx: {
-              backdropFilter: 'blur(4px)',
-              bgcolor: 'rgba(0, 0, 0, 0.4)',
+              backdropFilter: 'blur(16px)',
             },
           },
         }}
       >
-        <Box sx={{ width: '100%', p: 3, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-          {/* Drawer Minimalist Header */}
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, flexGrow: 1, mr: 1 }}>
-              <Chip
-                label={selectedResource?.kind || getResourceType(selectedResource, activeTab).slice(0, -1)}
-                size="small"
-                color="primary"
-                sx={{ fontWeight: 800, fontSize: '0.68rem', height: 22, borderRadius: 1, flexShrink: 0 }}
-              />
-              <Tooltip title={selectedResource?.object || selectedResource?.name || ''}>
-                <Typography
-                  variant="h6"
-                  sx={{
-                    fontWeight: 800,
-                    color: 'text.primary',
-                    fontSize: '1rem',
-                    lineHeight: 1.2,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    maxWidth: { xs: 160, sm: 260 },
-                  }}
-                >
-                  {selectedResource?.object || selectedResource?.name}
-                </Typography>
-              </Tooltip>
-              {(() => {
-                if (!selectedResource) return null;
-                const statusVal = typeof selectedResource?.status === 'string'
-                  ? selectedResource.status
-                  : typeof selectedResource?.status === 'object' && selectedResource?.status?.phase
-                    ? selectedResource.status.phase
-                    : typeof selectedResource?.type === 'string'
-                      ? selectedResource.type
-                      : null;
-                if (!statusVal) return null;
-                return (
-                  <Chip
-                    label={statusVal}
-                    size="small"
-                    color={
-                      ['Running', 'Active', 'Bound', 'Ready', 'Normal'].includes(statusVal)
-                        ? 'success'
-                        : ['Pending', 'Warning'].includes(statusVal)
-                          ? 'warning'
-                          : 'default'
-                    }
-                    sx={{ fontWeight: 700, fontSize: '0.68rem', height: 22, borderRadius: 1, flexShrink: 0 }}
-                  />
-                );
-              })()}
-            </Box>
-            <IconButton onClick={() => setDrawerOpen(false)} sx={{ color: 'text.secondary', '&:hover': { color: 'text.primary' }, flexShrink: 0 }}>
+        {/* Describe Action */}
+        {rowMenuTab !== 20 && rowMenuTab !== 24 && (
+          <MenuItem
+            dense
+            onClick={() => {
+              const res = rowMenuResource;
+              const tab = rowMenuTab;
+              handleCloseRowMenu();
+              handleOpenDescribe(res, tab);
+            }}
+          >
+            <ListItemIcon>
+              <DescriptionOutlinedIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText primary="Describe" secondary="kubectl describe" />
+          </MenuItem>
+        )}
+
+        {/* View / Edit YAML */}
+        {[1, 2, 3, 4, 6, 15].includes(rowMenuTab) && (
+          <MenuItem
+            dense
+            onClick={() => {
+              const res = rowMenuResource;
+              handleCloseRowMenu();
+              handleOpenYaml(res);
+            }}
+          >
+            <ListItemIcon>
+              <CodeIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText primary="View / Edit YAML" />
+          </MenuItem>
+        )}
+
+        {/* Pod Specific: Restart Pod */}
+        {rowMenuTab === 1 && (
+          <MenuItem
+            dense
+            onClick={() => {
+              const res = rowMenuResource;
+              handleCloseRowMenu();
+              handleOpenRestart(res);
+            }}
+          >
+            <ListItemIcon>
+              <RestartAltIcon fontSize="small" color="warning" />
+            </ListItemIcon>
+            <ListItemText primary="Restart Pod" />
+          </MenuItem>
+        )}
+
+        {/* Deployment Specific: Terminal Exec, Set Image, Rollout */}
+        {rowMenuTab === 2 && (
+          <>
+            <MenuItem
+              dense
+              onClick={() => {
+                const res = rowMenuResource;
+                handleCloseRowMenu();
+                handleOpenExec(res);
+              }}
+            >
+              <ListItemIcon>
+                <TerminalIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText primary="Terminal Exec" />
+            </MenuItem>
+            <MenuItem
+              dense
+              onClick={() => {
+                const res = rowMenuResource;
+                handleCloseRowMenu();
+                handleOpenImageDialog(res);
+              }}
+            >
+              <ListItemIcon>
+                <ImageOutlinedIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText primary="Set Container Image" />
+            </MenuItem>
+            <MenuItem
+              dense
+              onClick={() => {
+                const res = rowMenuResource;
+                handleCloseRowMenu();
+                handleOpenRollout(res);
+              }}
+            >
+              <ListItemIcon>
+                <SwapVertIcon fontSize="small" color="warning" />
+              </ListItemIcon>
+              <ListItemText primary="Rollout & Rollback" />
+            </MenuItem>
+          </>
+        )}
+
+        {/* DaemonSet Specific: Set Image, Rollout Restart */}
+        {rowMenuTab === 3 && (
+          <>
+            <MenuItem
+              dense
+              onClick={() => {
+                const res = rowMenuResource;
+                handleCloseRowMenu();
+                handleOpenImageDialog(res);
+              }}
+            >
+              <ListItemIcon>
+                <ImageOutlinedIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText primary="Set Container Image" />
+            </MenuItem>
+            <MenuItem
+              dense
+              onClick={() => {
+                const res = rowMenuResource;
+                handleCloseRowMenu();
+                handleOpenRollout(res);
+              }}
+            >
+              <ListItemIcon>
+                <SwapVertIcon fontSize="small" color="warning" />
+              </ListItemIcon>
+              <ListItemText primary="Rollout Restart" />
+            </MenuItem>
+          </>
+        )}
+
+        {/* StatefulSet Specific: Terminal Exec, Rollout Restart */}
+        {rowMenuTab === 4 && (
+          <>
+            <MenuItem
+              dense
+              onClick={() => {
+                const res = rowMenuResource;
+                handleCloseRowMenu();
+                handleOpenExec(res);
+              }}
+            >
+              <ListItemIcon>
+                <TerminalIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText primary="Terminal Exec" />
+            </MenuItem>
+            <MenuItem
+              dense
+              onClick={() => {
+                const res = rowMenuResource;
+                handleCloseRowMenu();
+                handleOpenRollout(res);
+              }}
+            >
+              <ListItemIcon>
+                <SwapVertIcon fontSize="small" color="warning" />
+              </ListItemIcon>
+              <ListItemText primary="Rollout Restart" />
+            </MenuItem>
+          </>
+        )}
+
+        {/* CronJob Specific: Terminal Exec */}
+        {rowMenuTab === 7 && (
+          <MenuItem
+            dense
+            onClick={() => {
+              const res = rowMenuResource;
+              handleCloseRowMenu();
+              handleOpenExec(res);
+            }}
+          >
+            <ListItemIcon>
+              <TerminalIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText primary="Terminal Exec" />
+          </MenuItem>
+        )}
+
+        {/* Helm Release Specific: Rollback Revision, Uninstall */}
+        {rowMenuTab === 25 && (
+          <>
+            <MenuItem
+              dense
+              onClick={() => {
+                const res = rowMenuResource;
+                handleCloseRowMenu();
+                handleOpenHelmRollback(res);
+              }}
+            >
+              <ListItemIcon>
+                <HistoryIcon fontSize="small" color="warning" />
+              </ListItemIcon>
+              <ListItemText primary="Rollback Revision" />
+            </MenuItem>
+            <Divider sx={{ my: 0.5 }} />
+            <MenuItem
+              dense
+              onClick={() => {
+                const res = rowMenuResource;
+                handleCloseRowMenu();
+                handleOpenHelmUninstall(res);
+              }}
+              sx={{ color: 'error.main' }}
+            >
+              <ListItemIcon>
+                <ClearIcon fontSize="small" color="error" />
+              </ListItemIcon>
+              <ListItemText primary="Uninstall Release" />
+            </MenuItem>
+          </>
+        )}
+
+        {/* Standard Delete Resource (Tabs 1-14, 16-18, 21-23) */}
+        {rowMenuTab !== 15 && rowMenuTab !== 19 && rowMenuTab !== 20 && rowMenuTab !== 24 && rowMenuTab !== 25 && (
+          <>
+            <Divider sx={{ my: 0.5 }} />
+            <MenuItem
+              dense
+              onClick={() => {
+                const res = rowMenuResource;
+                handleCloseRowMenu();
+                handleOpenDelete(res);
+              }}
+              sx={{ color: 'error.main' }}
+            >
+              <ListItemIcon>
+                <DeleteIcon fontSize="small" color="error" />
+              </ListItemIcon>
+              <ListItemText primary="Delete" />
+            </MenuItem>
+          </>
+        )}
+      </Menu>
+
+      {/* kubectl describe Modal Dialog */}
+      <Dialog
+        open={describeDialogOpen}
+        onClose={() => setDescribeDialogOpen(false)}
+        PaperComponent={DraggablePaper}
+        maxWidth="md"
+        fullWidth
+        hideBackdrop={true}
+        slotProps={{
+          backdrop: {
+            sx: {
+              bgcolor: 'rgba(0,0,0,0.4)',
+              backdropFilter: 'blur(3px)',
+            },
+          },
+        }}
+      >
+        <DialogTitle
+          id="draggable-dialog-title"
+          sx={{
+            cursor: 'move',
+            userSelect: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            pb: 1.5,
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <DescriptionOutlinedIcon color="primary" fontSize="small" />
+            <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
+              Describe: {describeResource?.object || describeResource?.name}
+            </Typography>
+            <Chip
+              label={describeResource?.kind || getResourceType(describeResource, describeTab).slice(0, -1)}
+              size="small"
+              color="primary"
+              variant="outlined"
+              sx={{ fontWeight: 700, fontSize: '0.68rem', height: 20 }}
+            />
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={describeCopied ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}
+              onClick={() => {
+                const desc = formatKubectlDescribe(describeResource, describeTab);
+                navigator.clipboard.writeText(desc);
+                setDescribeCopied(true);
+                setTimeout(() => setDescribeCopied(false), 2000);
+                setToastSeverity('success');
+                setToastMessage('Describe output copied to clipboard.');
+              }}
+              sx={{ textTransform: 'none', fontWeight: 700, fontSize: '0.75rem', py: 0.25 }}
+            >
+              {describeCopied ? 'Copied' : 'Copy Output'}
+            </Button>
+            <IconButton size="small" onClick={() => setDescribeDialogOpen(false)}>
               <CloseIcon fontSize="small" />
             </IconButton>
           </Box>
-
-          {selectedResource && (
-            <>
-              {/* SECTION 1: KUBECTL DESCRIBE VIEWER BOX (Dual-Axis Scrollable) */}
-              <Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.75 }}>
-                  <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase' }}>
-                    Describe Output
-                  </Typography>
-                  <Button
-                    size="small"
-                    startIcon={describeCopied ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}
-                    onClick={() => {
-                      const desc = formatKubectlDescribe(selectedResource, activeTab);
-                      navigator.clipboard.writeText(desc);
-                      setDescribeCopied(true);
-                      setTimeout(() => setDescribeCopied(false), 2000);
-                      setToastSeverity('success');
-                      setToastMessage('Describe output copied to clipboard.');
-                    }}
-                    sx={{
-                      color: describeCopied ? 'success.main' : 'primary.main',
-                      fontSize: '0.72rem',
-                      fontWeight: 700,
-                      textTransform: 'none',
-                      p: 0,
-                      minWidth: 'auto',
-                    }}
-                  >
-                    {describeCopied ? 'Copied' : 'Copy Output'}
-                  </Button>
-                </Box>
-
-                <Paper
-                  variant="outlined"
-                  sx={{
-                    bgcolor: 'action.hover',
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    borderRadius: 2,
-                    overflow: 'hidden',
-                  }}
-                >
-                  {/* Terminal Output Stream with Horizontal & Vertical Scrollbars */}
-                  <Box
-                    component="pre"
-                    sx={{
-                      m: 0,
-                      p: 1.5,
-                      fontFamily: 'Consolas, Monaco, "Liberation Mono", monospace',
-                      fontSize: '0.76rem',
-                      lineHeight: 1.55,
-                      color: 'text.primary',
-                      bgcolor: 'action.hover',
-                      maxHeight: 280,
-                      overflowX: 'auto',
-                      overflowY: 'auto',
-                      whiteSpace: 'pre',
-                      wordBreak: 'normal',
-                      '&::-webkit-scrollbar': { width: 6, height: 6 },
-                      '&::-webkit-scrollbar-track': { bgcolor: 'rgba(0,0,0,0.05)' },
-                      '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(0,0,0,0.2)', borderRadius: 3 },
-                      '&::-webkit-scrollbar-thumb:hover': { bgcolor: 'rgba(0,0,0,0.35)' },
-                    }}
-                  >
-                    {formatKubectlDescribe(selectedResource, activeTab)}
-                  </Box>
-                </Paper>
-              </Box>
-
-              {/* SECTION 2: OPERATIONAL ACTIONS (Dynamically Adaptive Grid - Excluded for CRDs and Events) */}
-              {activeTab !== 19 && activeTab !== 20 && (
-                <Box>
-                  <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', mb: 1, display: 'block' }}>
-                    Operational Actions
-                  </Typography>
-
-                  <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1 }}>
-                    {/* 1. Full-width Primary Action: View / Edit YAML */}
-                    {activeTab !== 24 && activeTab !== 25 && (
-                      <Button
-                        variant="outlined"
-                        startIcon={<CodeIcon />}
-                        onClick={handleOpenYaml}
-                        sx={{
-                          gridColumn: '1 / -1',
-                          fontWeight: 700,
-                          borderRadius: 1.5,
-                          py: 0.9,
-                          textTransform: 'none',
-                        }}
-                      >
-                        View / Edit YAML Manifest
-                      </Button>
-                    )}
-
-                    {/* 2. Logs & Exec (2-column pair for workloads) */}
-                    {(activeTab === 1 || activeTab === 2 || activeTab === 3 || activeTab === 4 || activeTab === 6 || activeTab === 7) && (
-                      <Button
-                        variant="outlined"
-                        color="secondary"
-                        startIcon={<ReceiptLongIcon />}
-                        onClick={() => handleOpenLogs(selectedResource)}
-                        sx={{ fontWeight: 700, borderRadius: 1.5, py: 0.8, textTransform: 'none', fontSize: '0.8rem' }}
-                      >
-                        {activeTab === 1 ? 'Pod Logs' : activeTab === 2 ? 'Deployment Logs' : activeTab === 3 ? 'DaemonSet Logs' : activeTab === 4 ? 'StatefulSet Logs' : activeTab === 6 ? 'Job Logs' : 'CronJob Logs'}
-                      </Button>
-                    )}
-
-                    {(activeTab === 1 || activeTab === 2 || activeTab === 3 || activeTab === 4 || activeTab === 6 || activeTab === 7) && (
-                      <Button
-                        variant="outlined"
-                        color="info"
-                        startIcon={<TerminalIcon />}
-                        onClick={() => handleOpenExec()}
-                        sx={{ fontWeight: 700, borderRadius: 1.5, py: 0.8, textTransform: 'none', fontSize: '0.8rem' }}
-                      >
-                        Terminal Exec
-                      </Button>
-                    )}
-
-                    {/* Node SSH Terminal (Nodes only - Tab 15) */}
-                    {activeTab === 15 && (
-                      <Button
-                        variant="outlined"
-                        color="info"
-                        startIcon={<TerminalIcon />}
-                        onClick={() => handleOpenExec()}
-                        sx={{ gridColumn: '1 / -1', fontWeight: 700, borderRadius: 1.5, py: 0.8, textTransform: 'none', fontSize: '0.8rem' }}
-                      >
-                        Node SSH Terminal
-                      </Button>
-                    )}
-
-                    {/* 3. Scale & Set Image (2-column pair for Deployments, full-width Set Image for DaemonSets) */}
-                    {activeTab === 2 && (
-                      <Button
-                        variant="outlined"
-                        color="primary"
-                        onClick={handleOpenScale}
-                        sx={{ fontWeight: 700, borderRadius: 1.5, py: 0.8, textTransform: 'none', fontSize: '0.8rem' }}
-                      >
-                        Scale Replicas
-                      </Button>
-                    )}
-
-                    {activeTab === 2 && (
-                      <Button
-                        variant="outlined"
-                        color="info"
-                        onClick={handleOpenImageDialog}
-                        sx={{ fontWeight: 700, borderRadius: 1.5, py: 0.8, textTransform: 'none', fontSize: '0.8rem' }}
-                      >
-                        Set Container Image
-                      </Button>
-                    )}
-
-                    {activeTab === 3 && (
-                      <Button
-                        variant="outlined"
-                        color="info"
-                        onClick={handleOpenImageDialog}
-                        sx={{ gridColumn: '1 / -1', fontWeight: 700, borderRadius: 1.5, py: 0.8, textTransform: 'none', fontSize: '0.8rem' }}
-                      >
-                        Set Container Image
-                      </Button>
-                    )}
-
-                    {/* 4. Rollout & Rollback (Deployments - Tab 2) */}
-                    {activeTab === 2 && (
-                      <Button
-                        variant="outlined"
-                        color="warning"
-                        onClick={handleOpenRollout}
-                        sx={{ gridColumn: '1 / -1', fontWeight: 700, borderRadius: 1.5, py: 0.8, textTransform: 'none', fontSize: '0.8rem' }}
-                      >
-                        Rollout & Rollback
-                      </Button>
-                    )}
-
-                    {/* Rollout Restart (DaemonSets & StatefulSets - Tabs 3 & 4) */}
-                    {(activeTab === 3 || activeTab === 4) && (
-                      <Button
-                        variant="outlined"
-                        color="warning"
-                        onClick={handleOpenRollout}
-                        sx={{ gridColumn: '1 / -1', fontWeight: 700, borderRadius: 1.5, py: 0.8, textTransform: 'none', fontSize: '0.8rem' }}
-                      >
-                        Rollout Restart
-                      </Button>
-                    )}
-
-                    {/* 5. Restart Pod (Pods only - Tab 1) */}
-                    {activeTab === 1 && (
-                      <Button
-                        variant="outlined"
-                        color="warning"
-                        onClick={handleOpenRestart}
-                        sx={{ gridColumn: '1 / -1', fontWeight: 700, borderRadius: 1.5, py: 0.8, textTransform: 'none', fontSize: '0.8rem' }}
-                      >
-                        Restart Pod
-                      </Button>
-                    )}
-
-                    {/* Helm Release Actions (Tab 25) */}
-                    {activeTab === 25 && (
-                      <>
-                        <Button
-                          variant="outlined"
-                          color="primary"
-                          startIcon={<CodeIcon />}
-                          onClick={() => selectedResource && handleOpenHelmValues(selectedResource)}
-                          sx={{ gridColumn: '1 / -1', fontWeight: 700, borderRadius: 1.5, py: 0.8, textTransform: 'none', fontSize: '0.8rem' }}
-                        >
-                          Inspect Values (values.yaml)
-                        </Button>
-                        <Button
-                          variant="outlined"
-                          color="warning"
-                          startIcon={<HistoryIcon />}
-                          onClick={() => selectedResource && handleOpenHelmRollback(selectedResource)}
-                          sx={{ fontWeight: 700, borderRadius: 1.5, py: 0.8, textTransform: 'none', fontSize: '0.8rem' }}
-                        >
-                          Rollback Revision
-                        </Button>
-                        <Button
-                          variant="outlined"
-                          color="error"
-                          startIcon={<ClearIcon />}
-                          onClick={() => selectedResource && handleOpenHelmUninstall(selectedResource)}
-                          sx={{ fontWeight: 700, borderRadius: 1.5, py: 0.8, textTransform: 'none', fontSize: '0.8rem' }}
-                        >
-                          Uninstall Release
-                        </Button>
-                      </>
-                    )}
-
-                    {/* 6. Delete Resource: Always full width at the bottom (Tab 1-23) */}
-                    {activeTab !== 24 && activeTab !== 25 && (
-                      <Button
-                        variant="outlined"
-                        color="error"
-                        onClick={handleOpenDelete}
-                        sx={{
-                          gridColumn: '1 / -1',
-                          fontWeight: 700,
-                          borderRadius: 1.5,
-                          py: 0.8,
-                          textTransform: 'none',
-                          fontSize: '0.8rem',
-                        }}
-                      >
-                        Delete Resource
-                      </Button>
-                    )}
-                  </Box>
-                </Box>
-              )}
-            </>
-          )}
-        </Box>
-      </Drawer>
+        </DialogTitle>
+        <DialogContent sx={{ p: 2, display: 'flex', flexDirection: 'column' }}>
+          <Box
+            component="pre"
+            sx={{
+              m: 0,
+              p: 2,
+              fontFamily: 'Consolas, Monaco, "Liberation Mono", monospace',
+              fontSize: '0.78rem',
+              lineHeight: 1.55,
+              color: 'text.primary',
+              bgcolor: (theme) => theme.palette.mode === 'dark' ? '#0d1117' : '#f6f8fa',
+              borderRadius: 2,
+              border: '1px solid',
+              borderColor: 'divider',
+              minHeight: 350,
+              maxHeight: 520,
+              overflowX: 'auto',
+              overflowY: 'auto',
+              whiteSpace: 'pre',
+              wordBreak: 'normal',
+              '&::-webkit-scrollbar': { width: 6, height: 6 },
+              '&::-webkit-scrollbar-track': { bgcolor: 'rgba(0,0,0,0.05)' },
+              '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(0,0,0,0.2)', borderRadius: 3 },
+              '&::-webkit-scrollbar-thumb:hover': { bgcolor: 'rgba(0,0,0,0.35)' },
+            }}
+          >
+            {formatKubectlDescribe(describeResource, describeTab)}
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 2, py: 1.5, borderTop: '1px solid', borderColor: 'divider' }}>
+          <Button onClick={() => setDescribeDialogOpen(false)} variant="outlined">
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Apply / Create Resource Manifest Modal */}
       <Dialog
