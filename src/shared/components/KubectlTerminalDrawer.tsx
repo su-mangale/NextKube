@@ -264,6 +264,7 @@ export function KubectlTerminalDrawer({
       termInstanceRef.current = null;
       window.removeEventListener('resize', resizeHandlerRef.current);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, clusterId]);
 
   // Dynamically update terminal theme if mode switches while open
