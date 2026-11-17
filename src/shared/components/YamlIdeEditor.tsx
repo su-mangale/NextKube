@@ -313,8 +313,8 @@ export default function YamlIdeEditor({
       sx={{
         display: 'flex',
         flexDirection: 'column',
-        height: height,
-        minHeight: embedded ? 0 : 380,
+        height: height || '100%',
+        minHeight: 380,
         bgcolor: isDark ? '#0d1117' : '#ffffff',
         borderRadius: embedded ? 0 : 2.5,
         border: embedded ? 'none' : isDark ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e2e8f0',
@@ -505,7 +505,10 @@ export default function YamlIdeEditor({
       <Box
         sx={{
           display: 'flex',
+          flexDirection: 'row',
           flexGrow: 1,
+          height: '100%',
+          minHeight: 360,
           position: 'relative',
           overflow: 'hidden',
           bgcolor: isDark ? '#0d1117' : '#ffffff',
@@ -545,12 +548,16 @@ export default function YamlIdeEditor({
 
         {/* Code View & Interactive Textarea Container */}
         <Box
+          onClick={() => textareaRef.current?.focus()}
           sx={{
             position: 'relative',
             flexGrow: 1,
+            alignSelf: 'stretch',
             height: '100%',
+            minHeight: 360,
             overflow: 'hidden',
             bgcolor: isDark ? '#0d1117' : '#ffffff',
+            cursor: 'text',
           }}
         >
           {/* Syntax Highlighted Underlay */}
@@ -573,6 +580,8 @@ export default function YamlIdeEditor({
               whiteSpace: 'pre',
               color: isDark ? '#c9d1d9' : '#0f172a',
               tabSize: 2,
+              boxSizing: 'border-box',
+              zIndex: 1,
             }}
             dangerouslySetInnerHTML={{ __html: highlightedCode }}
           />
@@ -596,6 +605,8 @@ export default function YamlIdeEditor({
               position: 'absolute',
               top: 0,
               left: 0,
+              right: 0,
+              bottom: 0,
               width: '100%',
               height: '100%',
               m: 0,
@@ -603,7 +614,9 @@ export default function YamlIdeEditor({
               border: 'none',
               outline: 'none',
               resize: 'none',
-              bgcolor: 'transparent',
+              bgcolor: 'transparent !important',
+              backgroundColor: 'transparent !important',
+              background: 'transparent !important',
               color: 'transparent',
               caretColor: isDark ? '#58a6ff' : '#0284c7',
               fontFamily: 'Consolas, Monaco, "Courier New", monospace',
@@ -613,6 +626,9 @@ export default function YamlIdeEditor({
               tabSize: 2,
               overflow: 'auto',
               WebkitTextFillColor: 'transparent',
+              boxSizing: 'border-box',
+              zIndex: 2,
+              cursor: 'text',
               '&::selection': {
                 bgcolor: isDark ? 'rgba(56, 189, 248, 0.25)' : 'rgba(2, 132, 199, 0.2)',
                 WebkitTextFillColor: 'transparent',

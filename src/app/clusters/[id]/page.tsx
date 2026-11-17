@@ -3808,13 +3808,13 @@ users:
             <CloseIcon fontSize="small" />
           </IconButton>
         </DialogTitle>
-        <DialogContent sx={{ p: 0, bgcolor: isDark ? '#0a0e17' : '#ffffff', display: 'flex', flexDirection: 'column', flexGrow: 1, minHeight: 460 }}>
+        <DialogContent sx={{ p: 0, bgcolor: isDark ? '#0a0e17' : '#ffffff', display: 'flex', flexDirection: 'column', flexGrow: 1, minHeight: 450 }}>
           <Box sx={{ p: 2, bgcolor: isDark ? '#0f1422' : '#f8fafc', borderBottom: isDark ? '1px solid rgba(255,255,255,0.06)' : '1px solid #e2e8f0' }}>
             <Typography variant="body2" sx={{ color: isDark ? '#8b949e' : '#64748b' }}>
               Paste or edit a Kubernetes YAML/JSON manifest to apply directly to cluster namespace <b style={{ color: isDark ? '#e6edf3' : '#0f172a' }}>{selectedNamespace === 'all' ? 'default' : selectedNamespace}</b>.
             </Typography>
           </Box>
-          <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: 400 }}>
+          <Box sx={{ flexGrow: 1, height: 420, minHeight: 420, display: 'flex', flexDirection: 'column' }}>
             <YamlIdeEditor
               value={createYamlVal}
               onChange={(val) => setCreateYamlVal(val)}

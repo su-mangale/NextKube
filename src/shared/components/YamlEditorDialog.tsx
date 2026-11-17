@@ -310,6 +310,7 @@ export default function YamlEditorDialog({
             display: 'flex',
             flexDirection: 'column',
             flexGrow: 1,
+            height: maximized ? 'calc(100vh - 140px)' : height,
             minHeight: height,
           }}
         >
