@@ -17,6 +17,7 @@ import {
   Chip,
   Paper,
   Tooltip,
+  useTheme,
 } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -34,6 +35,8 @@ import { useCurrentUser, logout } from '../hooks/use-auth';
 
 export function NoClusterView() {
   const router = useRouter();
+  const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
   const queryClient = useQueryClient();
   const { attachCluster, setActiveClusterId } = useCluster();
   const { data: currentUser } = useCurrentUser();
@@ -185,16 +188,16 @@ export function NoClusterView() {
   }, [clusterName, kubeconfigRaw]);
 
   return (
-    <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
+    <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', bgcolor: isDark ? '#0b0f19' : '#f8fafc' }}>
       {/* Top Header */}
       <Box
         component="header"
         sx={{
           py: 1.5,
           px: 3,
-          bgcolor: 'background.paper',
+          bgcolor: isDark ? '#0f172a' : '#ffffff',
           borderBottom: '1px solid',
-          borderColor: 'divider',
+          borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#e2e8f0',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
@@ -221,15 +224,15 @@ export function NoClusterView() {
               fontWeight: 650,
               fontSize: '0.78rem',
               borderRadius: 2,
-              borderColor: 'divider',
-              color: 'text.primary',
+              borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : '#e2e8f0',
+              color: isDark ? '#f8fafc' : '#0f172a',
               textTransform: 'none',
               height: 28,
               px: 1.5,
-              bgcolor: 'action.hover',
+              bgcolor: isDark ? 'rgba(255, 255, 255, 0.05)' : '#f1f5f9',
               '&:hover': {
                 borderColor: 'primary.main',
-                bgcolor: 'action.selected',
+                bgcolor: isDark ? 'rgba(255, 255, 255, 0.1)' : '#e2e8f0',
                 color: 'primary.main',
               },
             }}
@@ -243,10 +246,10 @@ export function NoClusterView() {
               size="small"
               sx={{
                 border: '1px solid',
-                borderColor: 'divider',
+                borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : '#e2e8f0',
                 borderRadius: 2,
                 p: 0.8,
-                color: 'text.secondary',
+                color: isDark ? '#94a3b8' : '#64748b',
                 '&:hover': { color: 'error.main', borderColor: 'error.main' },
               }}
             >
@@ -265,10 +268,12 @@ export function NoClusterView() {
             maxWidth: 780,
             p: { xs: 3, sm: 4 },
             borderRadius: 3,
-            bgcolor: '#0f172a',
-            backgroundImage: 'linear-gradient(to bottom, #111827, #0b0f19)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)',
+            bgcolor: isDark ? '#0f172a' : '#ffffff',
+            backgroundImage: isDark ? 'linear-gradient(to bottom, #111827, #0b0f19)' : 'none',
+            border: isDark ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e2e8f0',
+            boxShadow: isDark
+              ? '0 25px 50px -12px rgba(0, 0, 0, 0.7)'
+              : '0 20px 45px -10px rgba(15, 23, 42, 0.08)',
           }}
         >
           {/* Header */}
@@ -278,21 +283,21 @@ export function NoClusterView() {
                 width: 56,
                 height: 56,
                 borderRadius: 3,
-                bgcolor: 'rgba(56, 189, 248, 0.12)',
-                border: '1px solid rgba(56, 189, 248, 0.3)',
+                bgcolor: isDark ? 'rgba(56, 189, 248, 0.12)' : 'rgba(2, 132, 199, 0.1)',
+                border: isDark ? '1px solid rgba(56, 189, 248, 0.3)' : '1px solid rgba(2, 132, 199, 0.25)',
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 mb: 1.5,
               }}
             >
-              <HubIcon sx={{ color: '#38bdf8', fontSize: 32 }} />
+              <HubIcon sx={{ color: isDark ? '#38bdf8' : '#0284c7', fontSize: 32 }} />
             </Box>
-            <Typography variant="h5" sx={{ fontWeight: 800, color: '#f8fafc', letterSpacing: '-0.02em', mb: 0.8 }}>
+            <Typography variant="h5" sx={{ fontWeight: 800, color: isDark ? '#f8fafc' : '#0f172a', letterSpacing: '-0.02em', mb: 0.8 }}>
               No Kubernetes Cluster Connected
             </Typography>
-            <Typography variant="body2" sx={{ color: '#94a3b8', maxWidth: 540, mx: 'auto', lineHeight: 1.6 }}>
-              Connect your Kubernetes cluster using your <code style={{ color: '#38bdf8' }}>kubeconfig</code> file to begin monitoring pods, deployments, nodes, and managing cluster workloads.
+            <Typography variant="body2" sx={{ color: isDark ? '#94a3b8' : '#64748b', maxWidth: 540, mx: 'auto', lineHeight: 1.6 }}>
+              Connect your Kubernetes cluster using your <code style={{ color: isDark ? '#38bdf8' : '#0284c7', fontWeight: 600 }}>kubeconfig</code> file to begin monitoring pods, deployments, nodes, and managing cluster workloads.
             </Typography>
           </Box>
 
@@ -307,14 +312,21 @@ export function NoClusterView() {
                 value={clusterName}
                 onChange={(e) => setClusterName(e.target.value)}
                 slotProps={{
+                  inputLabel: {
+                    sx: { color: isDark ? '#94a3b8' : '#64748b' },
+                  },
                   input: {
-                    sx: { color: '#f8fafc', bgcolor: 'rgba(15, 23, 42, 0.6)', borderRadius: 2 },
+                    sx: {
+                      color: isDark ? '#f8fafc' : '#0f172a',
+                      bgcolor: isDark ? 'rgba(15, 23, 42, 0.6)' : '#f8fafc',
+                      borderRadius: 2,
+                    },
                   },
                 }}
               />
 
               <FormControl size="small">
-                <InputLabel id="provider-select-label" sx={{ color: '#94a3b8' }}>
+                <InputLabel id="provider-select-label" sx={{ color: isDark ? '#94a3b8' : '#64748b' }}>
                   Provider
                 </InputLabel>
                 <Select
@@ -322,7 +334,11 @@ export function NoClusterView() {
                   value={provider}
                   label="Provider"
                   onChange={(e) => setProvider(e.target.value as any)}
-                  sx={{ color: '#f8fafc', bgcolor: 'rgba(15, 23, 42, 0.6)', borderRadius: 2 }}
+                  sx={{
+                    color: isDark ? '#f8fafc' : '#0f172a',
+                    bgcolor: isDark ? 'rgba(15, 23, 42, 0.6)' : '#f8fafc',
+                    borderRadius: 2,
+                  }}
                 >
                   <MenuItem value="GCP">GCP (GKE)</MenuItem>
                   <MenuItem value="AWS">AWS (EKS)</MenuItem>
@@ -342,8 +358,8 @@ export function NoClusterView() {
               sx={{
                 p: 3,
                 borderRadius: 2.5,
-                border: '1.5px dashed rgba(56, 189, 248, 0.35)',
-                bgcolor: 'rgba(56, 189, 248, 0.03)',
+                border: isDark ? '1.5px dashed rgba(56, 189, 248, 0.35)' : '1.5px dashed rgba(2, 132, 199, 0.4)',
+                bgcolor: isDark ? 'rgba(56, 189, 248, 0.03)' : 'rgba(2, 132, 199, 0.03)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -351,17 +367,17 @@ export function NoClusterView() {
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
                 '&:hover': {
-                  borderColor: '#38bdf8',
-                  bgcolor: 'rgba(56, 189, 248, 0.08)',
+                  borderColor: isDark ? '#38bdf8' : '#0284c7',
+                  bgcolor: isDark ? 'rgba(56, 189, 248, 0.08)' : 'rgba(2, 132, 199, 0.08)',
                 },
               }}
             >
               <input type="file" accept=".yaml,.yml,.conf" hidden onChange={handleFileUpload} />
-              <CloudUploadIcon sx={{ color: '#38bdf8', fontSize: 36, mb: 1 }} />
-              <Typography variant="body2" sx={{ fontWeight: 700, color: '#f8fafc', mb: 0.3 }}>
+              <CloudUploadIcon sx={{ color: isDark ? '#38bdf8' : '#0284c7', fontSize: 36, mb: 1 }} />
+              <Typography variant="body2" sx={{ fontWeight: 700, color: isDark ? '#f8fafc' : '#0f172a', mb: 0.3 }}>
                 {kubeconfigFileName ? `Selected: ${kubeconfigFileName}` : 'Drop .kube/config file here, or click to browse'}
               </Typography>
-              <Typography variant="caption" sx={{ color: '#94a3b8' }}>
+              <Typography variant="caption" sx={{ color: isDark ? '#94a3b8' : '#64748b' }}>
                 Supports standard Kubernetes config files (.yaml, .yml, .conf)
               </Typography>
             </Box>
@@ -369,7 +385,7 @@ export function NoClusterView() {
             {/* Context Selector if multiple contexts found */}
             {parsedContexts.length > 0 && (
               <FormControl size="small" fullWidth>
-                <InputLabel id="context-select-label" sx={{ color: '#94a3b8' }}>
+                <InputLabel id="context-select-label" sx={{ color: isDark ? '#94a3b8' : '#64748b' }}>
                   Select Context ({parsedContexts.length} detected)
                 </InputLabel>
                 <Select
@@ -377,7 +393,11 @@ export function NoClusterView() {
                   value={selectedContext}
                   label={`Select Context (${parsedContexts.length} detected)`}
                   onChange={(e) => setSelectedContext(e.target.value)}
-                  sx={{ color: '#f8fafc', bgcolor: 'rgba(15, 23, 42, 0.6)', borderRadius: 2 }}
+                  sx={{
+                    color: isDark ? '#f8fafc' : '#0f172a',
+                    bgcolor: isDark ? 'rgba(15, 23, 42, 0.6)' : '#f8fafc',
+                    borderRadius: 2,
+                  }}
                 >
                   {parsedContexts.map((ctx) => (
                     <MenuItem key={ctx} value={ctx}>
@@ -390,7 +410,7 @@ export function NoClusterView() {
 
             {/* Raw YAML Paste Area */}
             <Box>
-              <Typography variant="caption" sx={{ color: '#94a3b8', fontWeight: 600, mb: 0.5, display: 'block' }}>
+              <Typography variant="caption" sx={{ color: isDark ? '#94a3b8' : '#64748b', fontWeight: 600, mb: 0.5, display: 'block' }}>
                 Or paste Kubeconfig YAML text:
               </Typography>
               <TextField
@@ -421,8 +441,8 @@ users:
                     sx: {
                       fontFamily: 'monospace',
                       fontSize: '0.8rem',
-                      color: '#f8fafc',
-                      bgcolor: 'rgba(15, 23, 42, 0.7)',
+                      color: isDark ? '#f8fafc' : '#0f172a',
+                      bgcolor: isDark ? 'rgba(15, 23, 42, 0.7)' : '#f8fafc',
                       borderRadius: 2,
                     },
                   },
@@ -438,9 +458,9 @@ users:
                     severity="success"
                     icon={<CheckCircleIcon fontSize="inherit" />}
                     sx={{
-                      bgcolor: 'rgba(16, 185, 129, 0.1)',
-                      color: '#34d399',
-                      border: '1px solid rgba(16, 185, 129, 0.25)',
+                      bgcolor: isDark ? 'rgba(16, 185, 129, 0.1)' : '#ecfdf5',
+                      color: isDark ? '#34d399' : '#059669',
+                      border: isDark ? '1px solid rgba(16, 185, 129, 0.25)' : '1px solid #a7f3d0',
                       borderRadius: 2,
                     }}
                   >
@@ -453,7 +473,7 @@ users:
                         <Chip label={`${testResult.nodeCount} Node${testResult.nodeCount === 1 ? '' : 's'}`} size="small" color="success" />
                       )}
                       {testResult.latencyMs !== undefined && (
-                        <Chip label={`${testResult.latencyMs}ms latency`} size="small" variant="outlined" sx={{ color: '#34d399' }} />
+                        <Chip label={`${testResult.latencyMs}ms latency`} size="small" variant="outlined" sx={{ color: isDark ? '#34d399' : '#059669' }} />
                       )}
                     </Box>
                   </Alert>
@@ -462,9 +482,9 @@ users:
                     severity="error"
                     icon={<ErrorIcon fontSize="inherit" />}
                     sx={{
-                      bgcolor: 'rgba(239, 68, 68, 0.1)',
-                      color: '#f87171',
-                      border: '1px solid rgba(239, 68, 68, 0.25)',
+                      bgcolor: isDark ? 'rgba(239, 68, 68, 0.1)' : '#fef2f2',
+                      color: isDark ? '#f87171' : '#dc2626',
+                      border: isDark ? '1px solid rgba(239, 68, 68, 0.25)' : '1px solid #fecaca',
                       borderRadius: 2,
                     }}
                   >
@@ -481,9 +501,9 @@ users:
               <Alert
                 severity="error"
                 sx={{
-                  bgcolor: 'rgba(239, 68, 68, 0.1)',
-                  color: '#f87171',
-                  border: '1px solid rgba(239, 68, 68, 0.25)',
+                  bgcolor: isDark ? 'rgba(239, 68, 68, 0.1)' : '#fef2f2',
+                  color: isDark ? '#f87171' : '#dc2626',
+                  border: isDark ? '1px solid rgba(239, 68, 68, 0.25)' : '1px solid #fecaca',
                   borderRadius: 2,
                 }}
               >
@@ -500,13 +520,16 @@ users:
                 disabled={testing || !isFormValid}
                 startIcon={testing ? <CircularProgress size={16} color="inherit" /> : <NetworkCheckIcon />}
                 sx={{
-                  borderColor: 'rgba(56, 189, 248, 0.4)',
-                  color: '#38bdf8',
+                  borderColor: isDark ? 'rgba(56, 189, 248, 0.4)' : '#0284c7',
+                  color: isDark ? '#38bdf8' : '#0284c7',
                   textTransform: 'none',
                   fontWeight: 700,
                   borderRadius: 2,
                   px: 2.5,
-                  '&:hover': { borderColor: '#38bdf8', bgcolor: 'rgba(56, 189, 248, 0.08)' },
+                  '&:hover': {
+                    borderColor: isDark ? '#38bdf8' : '#0369a1',
+                    bgcolor: isDark ? 'rgba(56, 189, 248, 0.08)' : 'rgba(2, 132, 199, 0.08)',
+                  },
                 }}
               >
                 {testing ? 'Testing Connectivity...' : 'Test Connection'}

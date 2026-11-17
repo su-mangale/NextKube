@@ -18,6 +18,7 @@ import {
   CircularProgress,
   IconButton,
   Chip,
+  useTheme,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
@@ -37,6 +38,8 @@ export interface AddClusterDialogProps {
 }
 
 export function AddClusterDialog({ open, onClose, onClusterAdded }: AddClusterDialogProps) {
+  const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
   const queryClient = useQueryClient();
   const { attachCluster, setActiveClusterId } = useCluster();
 
@@ -215,11 +218,13 @@ export function AddClusterDialog({ open, onClose, onClusterAdded }: AddClusterDi
         paper: {
           sx: {
             borderRadius: 3,
-            bgcolor: '#0f172a',
-            backgroundImage: 'linear-gradient(to bottom, #111827, #0b0f19)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)',
-            color: '#f8fafc',
+            bgcolor: isDark ? '#0f172a' : '#ffffff',
+            backgroundImage: isDark ? 'linear-gradient(to bottom, #111827, #0b0f19)' : 'none',
+            border: isDark ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e2e8f0',
+            boxShadow: isDark
+              ? '0 25px 50px -12px rgba(0, 0, 0, 0.7)'
+              : '0 25px 50px -12px rgba(15, 23, 42, 0.15)',
+            color: isDark ? '#f8fafc' : '#0f172a',
           },
         },
       }}
@@ -230,30 +235,30 @@ export function AddClusterDialog({ open, onClose, onClusterAdded }: AddClusterDi
             sx={{
               p: 1,
               borderRadius: 2,
-              bgcolor: 'rgba(56, 189, 248, 0.12)',
-              border: '1px solid rgba(56, 189, 248, 0.25)',
+              bgcolor: isDark ? 'rgba(56, 189, 248, 0.12)' : 'rgba(2, 132, 199, 0.1)',
+              border: isDark ? '1px solid rgba(56, 189, 248, 0.25)' : '1px solid rgba(2, 132, 199, 0.25)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <HubIcon sx={{ color: '#38bdf8', fontSize: 24 }} />
+            <HubIcon sx={{ color: isDark ? '#38bdf8' : '#0284c7', fontSize: 24 }} />
           </Box>
           <Box>
-            <Typography variant="h6" sx={{ fontWeight: 800, fontSize: '1.15rem', color: '#f8fafc' }}>
+            <Typography variant="h6" sx={{ fontWeight: 800, fontSize: '1.15rem', color: isDark ? '#f8fafc' : '#0f172a' }}>
               Connect Kubernetes Cluster
             </Typography>
-            <Typography variant="body2" sx={{ color: '#94a3b8', fontSize: '0.8rem' }}>
+            <Typography variant="body2" sx={{ color: isDark ? '#94a3b8' : '#64748b', fontSize: '0.8rem' }}>
               Connect via Kubeconfig file or raw YAML configuration
             </Typography>
           </Box>
         </Box>
-        <IconButton onClick={handleResetAndClose} size="small" sx={{ color: '#94a3b8' }}>
+        <IconButton onClick={handleResetAndClose} size="small" sx={{ color: isDark ? '#94a3b8' : '#64748b' }}>
           <CloseIcon fontSize="small" />
         </IconButton>
       </DialogTitle>
 
-      <DialogContent dividers sx={{ borderColor: 'rgba(255, 255, 255, 0.08)', py: 2 }}>
+      <DialogContent dividers sx={{ borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#e2e8f0', py: 2 }}>
         {/* Cluster Details */}
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr' }, gap: 2, mb: 2.5 }}>
           <TextField
@@ -264,14 +269,21 @@ export function AddClusterDialog({ open, onClose, onClusterAdded }: AddClusterDi
             value={clusterName}
             onChange={(e) => setClusterName(e.target.value)}
             slotProps={{
+              inputLabel: {
+                sx: { color: isDark ? '#94a3b8' : '#64748b' },
+              },
               input: {
-                sx: { color: '#f8fafc', bgcolor: 'rgba(15, 23, 42, 0.6)', borderRadius: 2 },
+                sx: {
+                  color: isDark ? '#f8fafc' : '#0f172a',
+                  bgcolor: isDark ? 'rgba(15, 23, 42, 0.6)' : '#f8fafc',
+                  borderRadius: 2,
+                },
               },
             }}
           />
 
           <FormControl size="small">
-            <InputLabel id="provider-select-label" sx={{ color: '#94a3b8' }}>
+            <InputLabel id="provider-select-label" sx={{ color: isDark ? '#94a3b8' : '#64748b' }}>
               Cloud / Distro Provider
             </InputLabel>
             <Select
@@ -279,7 +291,11 @@ export function AddClusterDialog({ open, onClose, onClusterAdded }: AddClusterDi
               value={provider}
               label="Cloud / Distro Provider"
               onChange={(e) => setProvider(e.target.value as any)}
-              sx={{ color: '#f8fafc', bgcolor: 'rgba(15, 23, 42, 0.6)', borderRadius: 2 }}
+              sx={{
+                color: isDark ? '#f8fafc' : '#0f172a',
+                bgcolor: isDark ? 'rgba(15, 23, 42, 0.6)' : '#f8fafc',
+                borderRadius: 2,
+              }}
             >
               <MenuItem value="GCP">Google Kubernetes Engine (GKE)</MenuItem>
               <MenuItem value="AWS">Amazon EKS</MenuItem>
@@ -300,8 +316,8 @@ export function AddClusterDialog({ open, onClose, onClusterAdded }: AddClusterDi
             sx={{
               p: 2.5,
               borderRadius: 2,
-              border: '1px dashed rgba(56, 189, 248, 0.35)',
-              bgcolor: 'rgba(56, 189, 248, 0.04)',
+              border: isDark ? '1px dashed rgba(56, 189, 248, 0.35)' : '1px dashed rgba(2, 132, 199, 0.4)',
+              bgcolor: isDark ? 'rgba(56, 189, 248, 0.04)' : 'rgba(2, 132, 199, 0.03)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -309,17 +325,17 @@ export function AddClusterDialog({ open, onClose, onClusterAdded }: AddClusterDi
               cursor: 'pointer',
               transition: 'all 0.2s',
               '&:hover': {
-                borderColor: '#38bdf8',
-                bgcolor: 'rgba(56, 189, 248, 0.08)',
+                borderColor: isDark ? '#38bdf8' : '#0284c7',
+                bgcolor: isDark ? 'rgba(56, 189, 248, 0.08)' : 'rgba(2, 132, 199, 0.08)',
               },
             }}
           >
             <input type="file" accept=".yaml,.yml,.conf" hidden onChange={handleFileUpload} />
-            <CloudUploadIcon sx={{ color: '#38bdf8', fontSize: 32, mb: 0.5 }} />
-            <Typography variant="body2" sx={{ fontWeight: 600, color: '#f8fafc' }}>
+            <CloudUploadIcon sx={{ color: isDark ? '#38bdf8' : '#0284c7', fontSize: 32, mb: 0.5 }} />
+            <Typography variant="body2" sx={{ fontWeight: 600, color: isDark ? '#f8fafc' : '#0f172a' }}>
               {kubeconfigFileName ? `Selected: ${kubeconfigFileName}` : 'Drop .kube/config file here, or click to browse'}
             </Typography>
-            <Typography variant="caption" sx={{ color: '#94a3b8' }}>
+            <Typography variant="caption" sx={{ color: isDark ? '#94a3b8' : '#64748b' }}>
               Supports standard Kubernetes kubeconfig files (.yaml, .yml, .conf)
             </Typography>
           </Box>
@@ -327,7 +343,7 @@ export function AddClusterDialog({ open, onClose, onClusterAdded }: AddClusterDi
           {/* Context Selector if multiple contexts found */}
           {parsedContexts.length > 0 && (
             <FormControl size="small" fullWidth>
-              <InputLabel id="context-select-label" sx={{ color: '#94a3b8' }}>
+              <InputLabel id="context-select-label" sx={{ color: isDark ? '#94a3b8' : '#64748b' }}>
                 Target Context ({parsedContexts.length} detected)
               </InputLabel>
               <Select
@@ -335,7 +351,11 @@ export function AddClusterDialog({ open, onClose, onClusterAdded }: AddClusterDi
                 value={selectedContext}
                 label={`Target Context (${parsedContexts.length} detected)`}
                 onChange={(e) => setSelectedContext(e.target.value)}
-                sx={{ color: '#f8fafc', bgcolor: 'rgba(15, 23, 42, 0.6)', borderRadius: 2 }}
+                sx={{
+                  color: isDark ? '#f8fafc' : '#0f172a',
+                  bgcolor: isDark ? 'rgba(15, 23, 42, 0.6)' : '#f8fafc',
+                  borderRadius: 2,
+                }}
               >
                 {parsedContexts.map((ctx) => (
                   <MenuItem key={ctx} value={ctx}>
@@ -348,7 +368,7 @@ export function AddClusterDialog({ open, onClose, onClusterAdded }: AddClusterDi
 
           {/* Raw YAML Paste Area */}
           <Box>
-            <Typography variant="caption" sx={{ color: '#94a3b8', fontWeight: 600, mb: 0.5, display: 'block' }}>
+            <Typography variant="caption" sx={{ color: isDark ? '#94a3b8' : '#64748b', fontWeight: 600, mb: 0.5, display: 'block' }}>
               Or paste Kubeconfig YAML text:
             </Typography>
             <TextField
@@ -379,8 +399,8 @@ users:
                   sx: {
                     fontFamily: 'monospace',
                     fontSize: '0.8rem',
-                    color: '#f8fafc',
-                    bgcolor: 'rgba(15, 23, 42, 0.7)',
+                    color: isDark ? '#f8fafc' : '#0f172a',
+                    bgcolor: isDark ? 'rgba(15, 23, 42, 0.7)' : '#f8fafc',
                     borderRadius: 2,
                   },
                 },
@@ -397,9 +417,9 @@ users:
                 severity="success"
                 icon={<CheckCircleIcon fontSize="inherit" />}
                 sx={{
-                  bgcolor: 'rgba(16, 185, 129, 0.1)',
-                  color: '#34d399',
-                  border: '1px solid rgba(16, 185, 129, 0.25)',
+                  bgcolor: isDark ? 'rgba(16, 185, 129, 0.1)' : '#ecfdf5',
+                  color: isDark ? '#34d399' : '#059669',
+                  border: isDark ? '1px solid rgba(16, 185, 129, 0.25)' : '1px solid #a7f3d0',
                   borderRadius: 2,
                 }}
               >
@@ -412,7 +432,7 @@ users:
                     <Chip label={`${testResult.nodeCount} Node${testResult.nodeCount === 1 ? '' : 's'}`} size="small" color="success" />
                   )}
                   {testResult.latencyMs !== undefined && (
-                    <Chip label={`${testResult.latencyMs}ms latency`} size="small" variant="outlined" sx={{ color: '#34d399' }} />
+                    <Chip label={`${testResult.latencyMs}ms latency`} size="small" variant="outlined" sx={{ color: isDark ? '#34d399' : '#059669' }} />
                   )}
                 </Box>
               </Alert>
@@ -421,9 +441,9 @@ users:
                 severity="error"
                 icon={<ErrorIcon fontSize="inherit" />}
                 sx={{
-                  bgcolor: 'rgba(239, 68, 68, 0.1)',
-                  color: '#f87171',
-                  border: '1px solid rgba(239, 68, 68, 0.25)',
+                  bgcolor: isDark ? 'rgba(239, 68, 68, 0.1)' : '#fef2f2',
+                  color: isDark ? '#f87171' : '#dc2626',
+                  border: isDark ? '1px solid rgba(239, 68, 68, 0.25)' : '1px solid #fecaca',
                   borderRadius: 2,
                 }}
               >
@@ -441,9 +461,9 @@ users:
             <Alert
               severity="error"
               sx={{
-                bgcolor: 'rgba(239, 68, 68, 0.1)',
-                color: '#f87171',
-                border: '1px solid rgba(239, 68, 68, 0.25)',
+                bgcolor: isDark ? 'rgba(239, 68, 68, 0.1)' : '#fef2f2',
+                color: isDark ? '#f87171' : '#dc2626',
+                border: isDark ? '1px solid rgba(239, 68, 68, 0.25)' : '1px solid #fecaca',
                 borderRadius: 2,
               }}
             >
@@ -453,8 +473,8 @@ users:
         )}
       </DialogContent>
 
-      <DialogActions sx={{ px: 3, py: 2, borderColor: 'rgba(255, 255, 255, 0.08)', gap: 1.5 }}>
-        <Button onClick={handleResetAndClose} sx={{ color: '#94a3b8', textTransform: 'none', fontWeight: 600 }}>
+      <DialogActions sx={{ px: 3, py: 2, borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#e2e8f0', gap: 1.5 }}>
+        <Button onClick={handleResetAndClose} sx={{ color: isDark ? '#94a3b8' : '#64748b', textTransform: 'none', fontWeight: 600 }}>
           Cancel
         </Button>
 
@@ -465,12 +485,15 @@ users:
           disabled={testing || !isFormValid}
           startIcon={testing ? <CircularProgress size={16} color="inherit" /> : <NetworkCheckIcon />}
           sx={{
-            borderColor: 'rgba(56, 189, 248, 0.4)',
-            color: '#38bdf8',
+            borderColor: isDark ? 'rgba(56, 189, 248, 0.4)' : '#0284c7',
+            color: isDark ? '#38bdf8' : '#0284c7',
             textTransform: 'none',
             fontWeight: 700,
             borderRadius: 2,
-            '&:hover': { borderColor: '#38bdf8', bgcolor: 'rgba(56, 189, 248, 0.08)' },
+            '&:hover': {
+              borderColor: isDark ? '#38bdf8' : '#0369a1',
+              bgcolor: isDark ? 'rgba(56, 189, 248, 0.08)' : 'rgba(2, 132, 199, 0.08)',
+            },
           }}
         >
           {testing ? 'Testing Connectivity...' : 'Test Connection'}
