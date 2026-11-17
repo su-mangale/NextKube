@@ -83,10 +83,13 @@ export function TerminalWindow({
 
       termInstance.writeln('\x1b[90mConnecting to live shell container...\x1b[0m');
 
-      // Resolve WebSocket host: use NEXT_PUBLIC_BACKEND_URL if configured, otherwise fall back to browser origin host (ideal for Ingress deployments)
+      // Resolve WebSocket host: use NEXT_PUBLIC_BACKEND_URL if configured, otherwise fall back to browser origin host
       let backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || '';
       if (
+        !backendUrl ||
         backendUrl === 'PLACEHOLDER_NEXT_PUBLIC_BACKEND_URL' ||
+        backendUrl === 'http://localhost:8080' ||
+        backendUrl.includes('localhost:8080') ||
         backendUrl.includes('ykp-api') ||
         backendUrl.includes('svc.cluster.local')
       ) {
@@ -156,7 +159,7 @@ export function TerminalWindow({
       if (termInstance) termInstance.dispose();
       window.removeEventListener('resize', resizeHandlerRef.current);
     };
-  }, [open, minimized, resourceName, resourceType, clusterId, namespace]);
+  }, [open, minimized, resourceName, resourceType, clusterId, namespace, container]);
 
   // Re-fit the canvas layout when maximize mode shifts
   useEffect(() => {

@@ -103,6 +103,7 @@ interface ClusterContextType {
   activeCluster: ClusterInfo | null; // null represents 'All Clusters' (Fleet Overview)
   availableClusters: ClusterInfo[];
   allClusters: ClusterInfo[]; // Unfiltered by fleet
+  clustersLoading: boolean;
   setActiveClusterId: (id: string) => void;
   attachCluster: (payload: AttachedClusterPayload) => ClusterInfo;
   disconnectCluster: (id: string) => Promise<boolean>;
@@ -166,7 +167,7 @@ export function ClusterProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const { data: serverClusters } = useQuery<ClusterInfo[]>({
+  const { data: serverClusters, isLoading: clustersLoading } = useQuery<ClusterInfo[]>({
     queryKey: ['clustersList'],
     queryFn: fetchClusters,
   });
@@ -263,6 +264,7 @@ export function ClusterProvider({ children }: { children: ReactNode }) {
         activeCluster,
         availableClusters: filteredClusters,
         allClusters: allMergedClusters,
+        clustersLoading,
         setActiveClusterId,
         attachCluster,
         disconnectCluster,

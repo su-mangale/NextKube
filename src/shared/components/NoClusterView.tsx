@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Box,
   Typography,
@@ -24,6 +25,7 @@ import HubIcon from '@mui/icons-material/Hub';
 import NetworkCheckIcon from '@mui/icons-material/NetworkCheck';
 import LogoutIcon from '@mui/icons-material/Logout';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
+import SettingsIcon from '@mui/icons-material/Settings';
 import jsyaml from 'js-yaml';
 import { useQueryClient } from '@tanstack/react-query';
 import { AttachedClusterPayload, ClusterConnectionTestResult } from '../types/fleet.types';
@@ -31,6 +33,7 @@ import { useCluster } from '../context/cluster-context';
 import { useCurrentUser, logout } from '../hooks/use-auth';
 
 export function NoClusterView() {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const { attachCluster, setActiveClusterId } = useCluster();
   const { data: currentUser } = useCurrentUser();
@@ -199,15 +202,6 @@ export function NoClusterView() {
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          <Box
-            component="img"
-            src="/icon.svg"
-            alt="NextKube"
-            sx={{ width: 28, height: 28, filter: 'drop-shadow(0 0 8px rgba(56, 189, 248, 0.4))' }}
-          />
-          <Typography variant="subtitle1" sx={{ fontWeight: 800, color: 'text.primary', fontSize: '1.05rem', letterSpacing: '-0.02em' }}>
-            NextKube
-          </Typography>
           <Chip
             label="No Cluster Connected"
             size="small"
@@ -218,23 +212,30 @@ export function NoClusterView() {
         </Box>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          {currentUser && (
-            <Chip
-              icon={<AccountCircleIcon sx={{ fontSize: '1rem !important', color: '#38bdf8' }} />}
-              label={`${currentUser.username} (${currentUser.role})`}
-              size="small"
-              variant="outlined"
-              sx={{
-                fontWeight: 600,
-                fontSize: '0.72rem',
-                borderRadius: 2,
-                borderColor: 'rgba(56, 189, 248, 0.3)',
-                color: '#38bdf8',
-                bgcolor: 'rgba(56, 189, 248, 0.08)',
-                height: 28,
-              }}
-            />
-          )}
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<SettingsIcon sx={{ fontSize: '1rem !important' }} />}
+            onClick={() => router.push('/settings')}
+            sx={{
+              fontWeight: 650,
+              fontSize: '0.78rem',
+              borderRadius: 2,
+              borderColor: 'divider',
+              color: 'text.primary',
+              textTransform: 'none',
+              height: 28,
+              px: 1.5,
+              bgcolor: 'action.hover',
+              '&:hover': {
+                borderColor: 'primary.main',
+                bgcolor: 'action.selected',
+                color: 'primary.main',
+              },
+            }}
+          >
+            Settings
+          </Button>
 
           <Tooltip title="Sign Out of NextKube">
             <IconButton

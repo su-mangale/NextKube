@@ -67,6 +67,7 @@ import SecurityIcon from '@mui/icons-material/Security';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import LogoutIcon from '@mui/icons-material/Logout';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
+import SettingsIcon from '@mui/icons-material/Settings';
 import HistoryIcon from '@mui/icons-material/History';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import LinkOffIcon from '@mui/icons-material/LinkOff';
@@ -78,6 +79,7 @@ import {
   logout,
   useDashboardData,
   TerminalWindow,
+  KubectlTerminalDrawer,
   useNamespaces,
   useDeployments,
   useServices,
@@ -229,6 +231,9 @@ spec:
   const [terminalOpen, setTerminalOpen] = useState<boolean>(false);
   const [terminalResourceName, setTerminalResourceName] = useState<string>('');
   const [terminalResourceType, setTerminalResourceType] = useState<'pod' | 'node'>('pod');
+  const [terminalNamespace, setTerminalNamespace] = useState<string>('default');
+  const [terminalContainer, setTerminalContainer] = useState<string>('');
+  const [kubectlShellOpen, setKubectlShellOpen] = useState<boolean>(false);
 
   const [imageDialogOpen, setImageDialogOpen] = useState<boolean>(false);
   const [imageInputVal, setImageInputVal] = useState<string>('');
@@ -254,49 +259,57 @@ spec:
   const [toastSeverity, setToastSeverity] = useState<'success' | 'error' | 'warning' | 'info'>('success');
 
   // Fetch cluster profile & metadata
-  const { availableClusters, disconnectCluster } = useCluster();
+  const { availableClusters, clustersLoading, disconnectCluster } = useCluster();
   const { data: currentUser } = useCurrentUser();
   const clusterMeta = useMemo(() => {
     return availableClusters.find((c) => c.id === id) || availableClusters[0] || null;
   }, [availableClusters, id]);
+
+  const effectiveClusterId = clusterMeta?.id || id;
+
+  useEffect(() => {
+    if (clusterMeta?.id && id === 'default' && clusterMeta.id !== 'default') {
+      router.replace(`/clusters/${clusterMeta.id}`);
+    }
+  }, [clusterMeta, id, router]);
 
   const {
     data: dashboardInfo,
     isLoading: metricsLoading,
     error: metricsError,
     refetch: refetchMetrics,
-  } = useDashboardData({ clusterId: id }) as any;
+  } = useDashboardData({ clusterId: effectiveClusterId }) as any;
 
   // Fetch Native K8s API resources via hooks
-  const { data: namespaces = [], isLoading: nsLoading, refetch: refetchNamespaces } = useNamespaces(id);
-  const { data: deployments = [], isLoading: depsLoading, refetch: refetchDeployments } = useDeployments(id, selectedNamespace);
-  const { data: services = [], isLoading: svcsLoading, refetch: refetchServices } = useServices(id, selectedNamespace);
-  const { data: pods = [], isLoading: podsLoading, refetch: refetchPods } = usePods(id, selectedNamespace);
-  const { data: ingresses = [], isLoading: ingsLoading, refetch: refetchIngresses } = useIngresses(id, selectedNamespace);
-  const { data: configMaps = [], isLoading: cmsLoading, refetch: refetchConfigMaps } = useConfigMaps(id, selectedNamespace);
-  const { data: secrets = [], isLoading: secretsLoading, refetch: refetchSecrets } = useSecrets(id, selectedNamespace);
-  const { data: nodes = [], isLoading: nodesLoading, refetch: refetchNodes } = useNodes(id);
-  const { data: events = [], isLoading: eventsLoading, refetch: refetchEvents } = useEvents(id, selectedNamespace);
+  const { data: namespaces = [], isLoading: nsLoading, refetch: refetchNamespaces } = useNamespaces(effectiveClusterId);
+  const { data: deployments = [], isLoading: depsLoading, refetch: refetchDeployments } = useDeployments(effectiveClusterId, selectedNamespace);
+  const { data: services = [], isLoading: svcsLoading, refetch: refetchServices } = useServices(effectiveClusterId, selectedNamespace);
+  const { data: pods = [], isLoading: podsLoading, refetch: refetchPods } = usePods(effectiveClusterId, selectedNamespace);
+  const { data: ingresses = [], isLoading: ingsLoading, refetch: refetchIngresses } = useIngresses(effectiveClusterId, selectedNamespace);
+  const { data: configMaps = [], isLoading: cmsLoading, refetch: refetchConfigMaps } = useConfigMaps(effectiveClusterId, selectedNamespace);
+  const { data: secrets = [], isLoading: secretsLoading, refetch: refetchSecrets } = useSecrets(effectiveClusterId, selectedNamespace);
+  const { data: nodes = [], isLoading: nodesLoading, refetch: refetchNodes } = useNodes(effectiveClusterId);
+  const { data: events = [], isLoading: eventsLoading, refetch: refetchEvents } = useEvents(effectiveClusterId, selectedNamespace);
 
-  const { data: daemonSets = [], isLoading: dsLoading, refetch: refetchDaemonSets } = useDaemonSets(id, selectedNamespace);
-  const { data: statefulSets = [], isLoading: stsLoading, refetch: refetchStatefulSets } = useStatefulSets(id, selectedNamespace);
-  const { data: replicaSets = [], isLoading: rsLoading, refetch: refetchReplicaSets } = useReplicaSets(id, selectedNamespace);
-  const { data: cronJobs = [], isLoading: cjLoading, refetch: refetchCronJobs } = useCronJobs(id, selectedNamespace);
-  const { data: jobs = [], isLoading: jobsLoading, refetch: refetchJobs } = useJobs(id, selectedNamespace);
-  const { data: networkPolicies = [], isLoading: netpolLoading, refetch: refetchNetworkPolicies } = useNetworkPolicies(id, selectedNamespace);
-  const { data: pvcs = [], isLoading: pvcLoading, refetch: refetchPVCs } = usePVCs(id, selectedNamespace);
-  const { data: pvs = [], isLoading: pvLoading, refetch: refetchPVs } = usePVs(id);
-  const { data: storageClasses = [], isLoading: scLoading, refetch: refetchStorageClasses } = useStorageClasses(id);
-  const { data: serviceAccounts = [], isLoading: saLoading, refetch: refetchServiceAccounts } = useServiceAccounts(id, selectedNamespace);
-  const { data: roles = [], isLoading: rolesLoading, refetch: refetchRoles } = useRoles(id, selectedNamespace);
-  const { data: roleBindings = [], isLoading: rbLoading, refetch: refetchRoleBindings } = useRoleBindings(id, selectedNamespace);
-  const { data: crds = [], isLoading: crdLoading, refetch: refetchCRDs } = useCRDs(id);
-  const { data: hpas = [], isLoading: hpasLoading, refetch: refetchHPAs } = useHPAs(id, selectedNamespace);
-  const { data: gateways = [], isLoading: gatewaysLoading, refetch: refetchGateways } = useGateways(id, selectedNamespace);
-  const { data: httpRoutes = [], isLoading: routesLoading, refetch: refetchHTTPRoutes } = useHTTPRoutes(id, selectedNamespace);
-  const { data: healthData, refetch: refetchHealth } = useClusterHealth(id);
-  const { data: auditLogs = [], isLoading: auditLoading, refetch: refetchAuditLogs } = useAuditLogs(id);
-  const { data: helmReleases = [], isLoading: helmLoading, refetch: refetchHelmReleases } = useHelmReleases(id, selectedNamespace);
+  const { data: daemonSets = [], isLoading: dsLoading, refetch: refetchDaemonSets } = useDaemonSets(effectiveClusterId, selectedNamespace);
+  const { data: statefulSets = [], isLoading: stsLoading, refetch: refetchStatefulSets } = useStatefulSets(effectiveClusterId, selectedNamespace);
+  const { data: replicaSets = [], isLoading: rsLoading, refetch: refetchReplicaSets } = useReplicaSets(effectiveClusterId, selectedNamespace);
+  const { data: cronJobs = [], isLoading: cjLoading, refetch: refetchCronJobs } = useCronJobs(effectiveClusterId, selectedNamespace);
+  const { data: jobs = [], isLoading: jobsLoading, refetch: refetchJobs } = useJobs(effectiveClusterId, selectedNamespace);
+  const { data: networkPolicies = [], isLoading: netpolLoading, refetch: refetchNetworkPolicies } = useNetworkPolicies(effectiveClusterId, selectedNamespace);
+  const { data: pvcs = [], isLoading: pvcLoading, refetch: refetchPVCs } = usePVCs(effectiveClusterId, selectedNamespace);
+  const { data: pvs = [], isLoading: pvLoading, refetch: refetchPVs } = usePVs(effectiveClusterId);
+  const { data: storageClasses = [], isLoading: scLoading, refetch: refetchStorageClasses } = useStorageClasses(effectiveClusterId);
+  const { data: serviceAccounts = [], isLoading: saLoading, refetch: refetchServiceAccounts } = useServiceAccounts(effectiveClusterId, selectedNamespace);
+  const { data: roles = [], isLoading: rolesLoading, refetch: refetchRoles } = useRoles(effectiveClusterId, selectedNamespace);
+  const { data: roleBindings = [], isLoading: rbLoading, refetch: refetchRoleBindings } = useRoleBindings(effectiveClusterId, selectedNamespace);
+  const { data: crds = [], isLoading: crdLoading, refetch: refetchCRDs } = useCRDs(effectiveClusterId);
+  const { data: hpas = [], isLoading: hpasLoading, refetch: refetchHPAs } = useHPAs(effectiveClusterId, selectedNamespace);
+  const { data: gateways = [], isLoading: gatewaysLoading, refetch: refetchGateways } = useGateways(effectiveClusterId, selectedNamespace);
+  const { data: httpRoutes = [], isLoading: routesLoading, refetch: refetchHTTPRoutes } = useHTTPRoutes(effectiveClusterId, selectedNamespace);
+  const { data: healthData, refetch: refetchHealth } = useClusterHealth(effectiveClusterId);
+  const { data: auditLogs = [], isLoading: auditLoading, refetch: refetchAuditLogs } = useAuditLogs(effectiveClusterId);
+  const { data: helmReleases = [], isLoading: helmLoading, refetch: refetchHelmReleases } = useHelmReleases(effectiveClusterId, selectedNamespace);
 
   const queryClient = useQueryClient();
   const [liveWatchConnected, setLiveWatchConnected] = useState<boolean>(false);
@@ -316,10 +329,10 @@ spec:
 
   // Phase 5: Live Watch SSE Stream Connection
   useEffect(() => {
-    if (!id || availableClusters.length === 0) return;
+    if (!effectiveClusterId || availableClusters.length === 0) return;
     let es: EventSource | null = null;
     try {
-      es = new EventSource(`/api/clusters/${id}/watch`);
+      es = new EventSource(`/api/clusters/${effectiveClusterId}/watch`);
       es.addEventListener('connected', () => {
         setLiveWatchConnected(true);
       });
@@ -925,6 +938,8 @@ users:
     if (activeTab === 14 || resource.kind === 'Node' || (!resource.namespace && resource.ip)) {
       setTerminalResourceName(resource.name);
       setTerminalResourceType('node');
+      setTerminalNamespace('default');
+      setTerminalContainer('');
       setTerminalOpen(true);
       return;
     }
@@ -932,26 +947,28 @@ users:
     if (activeTab === 1 || resource.kind === 'Pod') {
       setTerminalResourceName(resource.name);
       setTerminalResourceType('pod');
-      if (resource.containers && resource.containers.length > 0 && !selectedContainer) {
-        setSelectedContainer(resource.containers[0]);
-      }
+      setTerminalNamespace(resource.namespace || (selectedNamespace !== 'all' ? selectedNamespace : 'default'));
+      const podContainer = resource.containers && resource.containers.length > 0 ? resource.containers[0] : '';
+      setTerminalContainer(podContainer);
+      setSelectedContainer(podContainer);
       setTerminalOpen(true);
       return;
     }
 
-    const namespace = resource.namespace || selectedNamespace || 'default';
+    const namespace = resource.namespace || (selectedNamespace !== 'all' ? selectedNamespace : undefined);
     const matchingPod = pods.find(
-      (p) => (namespace === 'all' || p.namespace === namespace) && p.name.startsWith(resource.name) && (p.status === 'Running' || p.status === 'Ready')
+      (p) => (!namespace || p.namespace === namespace) && p.name.startsWith(resource.name) && (p.status === 'Running' || p.status === 'Ready')
     ) || pods.find(
-      (p) => (namespace === 'all' || p.namespace === namespace) && p.name.startsWith(resource.name)
+      (p) => (!namespace || p.namespace === namespace) && p.name.startsWith(resource.name)
     );
 
     if (matchingPod) {
       setTerminalResourceName(matchingPod.name);
       setTerminalResourceType('pod');
-      if (matchingPod.containers && matchingPod.containers.length > 0 && !selectedContainer) {
-        setSelectedContainer(matchingPod.containers[0]);
-      }
+      setTerminalNamespace(matchingPod.namespace || resource.namespace || 'default');
+      const podContainer = matchingPod.containers && matchingPod.containers.length > 0 ? matchingPod.containers[0] : '';
+      setTerminalContainer(podContainer);
+      setSelectedContainer(podContainer);
       setTerminalOpen(true);
     } else {
       setToastSeverity('warning');
@@ -1766,6 +1783,14 @@ users:
     }
   };
 
+  if (clustersLoading) {
+    return (
+      <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'background.default' }}>
+        <CircularProgress size={36} sx={{ color: '#38bdf8' }} />
+      </Box>
+    );
+  }
+
   if (availableClusters.length === 0) {
     return <NoClusterView />;
   }
@@ -1889,16 +1914,6 @@ users:
           </Tooltip>
 
           <Button
-            variant="outlined"
-            size="small"
-            startIcon={<FileDownloadIcon fontSize="small" />}
-            onClick={handleDownloadKubeconfig}
-            sx={{ fontWeight: 700, borderRadius: 2, textTransform: 'none' }}
-          >
-            Kubeconfig
-          </Button>
-
-          <Button
             variant="contained"
             color="primary"
             size="small"
@@ -1911,50 +1926,57 @@ users:
 
           <Divider orientation="vertical" flexItem sx={{ height: 24, my: 'auto', mx: 0.5 }} />
 
-          {/* Phase 5: Real-Time Live Watch SSE Indicator */}
-          <Tooltip title={liveWatchConnected ? 'Live Watch active: Receiving real-time cluster notifications via Server-Sent Events.' : 'Connecting to cluster live watch stream...'}>
-            <Chip
-              icon={
-                <FiberManualRecordIcon
-                  sx={{
-                    fontSize: '9px !important',
-                    color: liveWatchConnected ? '#22c55e' : '#eab308',
-                  }}
-                />
-              }
-              label={liveWatchConnected ? 'LIVE SYNC' : 'CONNECTING'}
-              size="small"
-              variant="outlined"
-              sx={{
-                fontWeight: 800,
-                fontSize: '0.68rem',
-                height: 28,
-                borderRadius: 2,
-                borderColor: liveWatchConnected ? 'rgba(34, 197, 94, 0.4)' : 'rgba(234, 179, 8, 0.4)',
-                color: liveWatchConnected ? '#22c55e' : '#eab308',
-                bgcolor: liveWatchConnected ? 'rgba(34, 197, 94, 0.08)' : 'rgba(234, 179, 8, 0.08)',
-              }}
-            />
-          </Tooltip>
+          {/* Kubectl Shell Button */}
+          <Button
+            variant={kubectlShellOpen ? 'contained' : 'outlined'}
+            size="small"
+            startIcon={<TerminalIcon sx={{ fontSize: '1rem !important', color: kubectlShellOpen ? '#fff' : '#38bdf8' }} />}
+            onClick={() => setKubectlShellOpen(!kubectlShellOpen)}
+            sx={{
+              fontWeight: 700,
+              fontSize: '0.78rem',
+              borderRadius: 2,
+              borderColor: kubectlShellOpen ? 'primary.main' : 'divider',
+              color: kubectlShellOpen ? '#fff' : 'text.primary',
+              textTransform: 'none',
+              height: 28,
+              px: 1.5,
+              bgcolor: kubectlShellOpen ? 'primary.main' : 'action.hover',
+              '&:hover': {
+                borderColor: 'primary.main',
+                bgcolor: kubectlShellOpen ? 'primary.dark' : 'action.selected',
+                color: kubectlShellOpen ? '#fff' : 'primary.main',
+              },
+            }}
+          >
+            Kubectl Shell
+          </Button>
 
-          {/* User Status Badge */}
-          {currentUser && (
-            <Chip
-              icon={<AccountCircleIcon sx={{ fontSize: '1rem !important', color: '#38bdf8' }} />}
-              label={`${currentUser.username} (${currentUser.role})`}
-              size="small"
-              variant="outlined"
-              sx={{
-                fontWeight: 600,
-                fontSize: '0.72rem',
-                borderRadius: 2,
-                borderColor: 'rgba(56, 189, 248, 0.3)',
-                color: '#38bdf8',
-                bgcolor: 'rgba(56, 189, 248, 0.08)',
-                height: 28,
-              }}
-            />
-          )}
+          {/* Settings Navigation Button */}
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<SettingsIcon sx={{ fontSize: '1rem !important' }} />}
+            onClick={() => router.push('/settings')}
+            sx={{
+              fontWeight: 650,
+              fontSize: '0.78rem',
+              borderRadius: 2,
+              borderColor: 'divider',
+              color: 'text.primary',
+              textTransform: 'none',
+              height: 28,
+              px: 1.5,
+              bgcolor: 'action.hover',
+              '&:hover': {
+                borderColor: 'primary.main',
+                bgcolor: 'action.selected',
+                color: 'primary.main',
+              },
+            }}
+          >
+            Settings
+          </Button>
 
           <Tooltip title="Sign Out of NextKube">
             <IconButton
@@ -4693,8 +4715,15 @@ users:
         resourceName={terminalResourceName}
         resourceType={terminalResourceType}
         clusterId={id}
-        namespace={selectedResource?.namespace || selectedNamespace || 'default'}
-        container={selectedContainer || undefined}
+        namespace={terminalNamespace}
+        container={terminalContainer || undefined}
+      />
+
+      {/* Interactive Kubectl Shell Drawer */}
+      <KubectlTerminalDrawer
+        open={kubectlShellOpen}
+        onClose={() => setKubectlShellOpen(false)}
+        clusterId={id}
       />
 
       {/* Toast Feedback */}

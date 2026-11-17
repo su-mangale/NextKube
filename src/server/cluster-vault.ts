@@ -7,13 +7,6 @@ import { AttachedClusterPayload, ClusterConnectionTestResult, FleetEnvironment }
 const STORE_DIR = path.join(process.cwd(), '.nextkube');
 const STORE_FILE = path.join(STORE_DIR, 'clusters.json');
 
-// Derive 32-byte encryption key for AES-256-GCM
-const RAW_KEY =
-  process.env.NEXTKUBE_ENCRYPTION_KEY ||
-  process.env.NEXTKUBE_AUTH_SECRET ||
-  'nextkube-default-cluster-vault-secret-key-32chars!';
-const ENCRYPTION_KEY = crypto.createHash('sha256').update(RAW_KEY).digest();
-
 export interface EncryptedVaultPayload {
   method: 'kubeconfig' | 'serviceToken' | 'agent';
   kubeconfigRaw?: string;
@@ -61,9 +54,38 @@ export interface SanitizedClusterInfo {
   createdAt: string;
 }
 
+function getEncryptionKey(): Buffer {
+  if (!process.env.NEXTKUBE_ENCRYPTION_KEY && !process.env.NEXTKUBE_AUTH_SECRET) {
+    try {
+      const envPath = path.join(process.cwd(), '.env.local');
+      if (fs.existsSync(envPath)) {
+        const content = fs.readFileSync(envPath, 'utf8');
+        content.split('\n').forEach((line) => {
+          const trimmed = line.trim();
+          if (trimmed && !trimmed.startsWith('#')) {
+            const idx = trimmed.indexOf('=');
+            if (idx > 0) {
+              const k = trimmed.substring(0, idx).trim();
+              const v = trimmed.substring(idx + 1).trim();
+              if (!process.env[k]) {
+                process.env[k] = v;
+              }
+            }
+          }
+        });
+      }
+    } catch {}
+  }
+  const rawKey =
+    process.env.NEXTKUBE_ENCRYPTION_KEY ||
+    process.env.NEXTKUBE_AUTH_SECRET ||
+    'nextkube-default-cluster-vault-secret-key-32chars!';
+  return crypto.createHash('sha256').update(rawKey).digest();
+}
+
 function encryptPayload(payload: EncryptedVaultPayload): { ciphertext: string; iv: string; tag: string } {
   const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv('aes-256-gcm', ENCRYPTION_KEY, iv);
+  const cipher = crypto.createCipheriv('aes-256-gcm', getEncryptionKey(), iv);
   const str = JSON.stringify(payload);
   let enc = cipher.update(str, 'utf8', 'hex');
   enc += cipher.final('hex');
@@ -76,16 +98,26 @@ function encryptPayload(payload: EncryptedVaultPayload): { ciphertext: string; i
 }
 
 function decryptPayload(ciphertext: string, ivHex: string, tagHex: string): EncryptedVaultPayload | null {
-  try {
-    const decipher = crypto.createDecipheriv('aes-256-gcm', ENCRYPTION_KEY, Buffer.from(ivHex, 'hex'));
-    decipher.setAuthTag(Buffer.from(tagHex, 'hex'));
-    let dec = decipher.update(ciphertext, 'hex', 'utf8');
-    dec += decipher.final('utf8');
-    return JSON.parse(dec);
-  } catch (err) {
-    console.error('[ClusterVault] Failed to decrypt cluster payload:', err);
-    return null;
+  const keysToTry = [
+    getEncryptionKey(),
+    crypto.createHash('sha256').update('nextkube-default-cluster-vault-secret-key-32chars!').digest(),
+    crypto.createHash('sha256').update('nextkube-super-secure-jwt-auth-secret-32chars!').digest(),
+  ];
+
+  for (const key of keysToTry) {
+    try {
+      const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(ivHex, 'hex'));
+      decipher.setAuthTag(Buffer.from(tagHex, 'hex'));
+      let dec = decipher.update(ciphertext, 'hex', 'utf8');
+      dec += decipher.final('utf8');
+      return JSON.parse(dec);
+    } catch {
+      // try next candidate key
+    }
   }
+
+  console.error('[ClusterVault] Failed to decrypt cluster payload with available vault keys.');
+  return null;
 }
 
 function ensureStoreDir(): void {
@@ -356,4 +388,19 @@ export function getDecryptedKubeConfig(clusterId: string): k8s.KubeConfig | null
   } catch {
     return null;
   }
+}
+
+/**
+ * Retrieves the raw decrypted KubeConfig YAML string for an attached cluster by ID.
+ */
+export function getDecryptedKubeConfigRaw(clusterId: string): string | null {
+  const existing = readStoredClusters();
+  const target = existing.find((c) => c.id === clusterId);
+  if (!target || !target.encryptedData || !target.iv || !target.tag) {
+    return null;
+  }
+
+  const payload = decryptPayload(target.encryptedData, target.iv, target.tag);
+  if (!payload || !payload.kubeconfigRaw) return null;
+  return payload.kubeconfigRaw;
 }

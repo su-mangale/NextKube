@@ -8,6 +8,64 @@ export interface StoredUser {
   hash: string;
   role: 'admin' | 'operator' | 'viewer';
   displayName?: string;
+  createdAt?: string;
+}
+
+export type SanitizedUser = Omit<StoredUser, 'hash'>;
+
+// Persistent User Store Configuration
+const STORE_DIR = path.join(process.cwd(), '.nextkube');
+const USERS_FILE = path.join(STORE_DIR, 'users.json');
+
+function ensureStoreDir(): void {
+  if (!fs.existsSync(STORE_DIR)) {
+    fs.mkdirSync(STORE_DIR, { recursive: true });
+  }
+}
+
+/**
+ * Reads persistent users from .nextkube/users.json.
+ * If file does not exist, seeds it with initial default admin.
+ */
+export function readStoredUsers(): StoredUser[] {
+  ensureStoreDir();
+  if (!fs.existsSync(USERS_FILE)) {
+    const defaultUsername = process.env.NEXTKUBE_ADMIN_USER || 'admin';
+    const defaultPassword = process.env.NEXTKUBE_ADMIN_PASSWORD || 'admin123';
+    const salt = bcrypt.genSaltSync(10);
+    const hash = bcrypt.hashSync(defaultPassword, salt);
+    const initialUsers: StoredUser[] = [
+      {
+        username: defaultUsername,
+        hash,
+        role: 'admin',
+        displayName: 'Cluster Administrator',
+        createdAt: new Date().toISOString(),
+      },
+    ];
+    try {
+      fs.writeFileSync(USERS_FILE, JSON.stringify(initialUsers, null, 2), 'utf-8');
+    } catch (err) {
+      console.warn('[NextKube Auth] Failed to write initial users.json:', err);
+    }
+    return initialUsers;
+  }
+
+  try {
+    const raw = fs.readFileSync(USERS_FILE, 'utf-8');
+    return JSON.parse(raw);
+  } catch (err) {
+    console.error('[NextKube Auth] Error reading users.json:', err);
+    return [];
+  }
+}
+
+/**
+ * Writes users list back to .nextkube/users.json.
+ */
+export function writeStoredUsers(users: StoredUser[]): void {
+  ensureStoreDir();
+  fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), 'utf-8');
 }
 
 // In-Memory Rate Limiting Tracker
@@ -61,109 +119,224 @@ export function resetRateLimit(key: string) {
 }
 
 /**
- * Parses an htpasswd-formatted string into StoredUser entries.
- * Supports lines in formats:
- * - username:bcrypt_hash
- * - username:bcrypt_hash:role
- * - username:bcrypt_hash:role:displayName
+ * Retrieves all registered users as a Map keyed by lowercase username.
  */
-export function parseHtpasswdContent(content: string): Map<string, StoredUser> {
+export function getUserStore(): Map<string, StoredUser> {
   const users = new Map<string, StoredUser>();
-  const lines = content.split('\n');
-
-  for (const rawLine of lines) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith('#')) continue;
-
-    const parts = line.split(':');
-    if (parts.length >= 2) {
-      const username = parts[0].trim();
-      const hash = parts[1].trim();
-      const rawRole = parts[2]?.trim().toLowerCase();
-      const role: 'admin' | 'operator' | 'viewer' =
-        rawRole === 'admin' || rawRole === 'operator' || rawRole === 'viewer'
-          ? rawRole
-          : 'operator';
-      const displayName = parts[3]?.trim();
-
-      if (username && hash) {
-        users.set(username, { username, hash, role, displayName });
-      }
-    }
+  const stored = readStoredUsers();
+  for (const u of stored) {
+    users.set(u.username.toLowerCase(), u);
   }
-
   return users;
 }
 
 /**
- * Retrieves all registered users from htpasswd file, environment variables, or default bootstrap.
+ * Returns all users without exposing their password hashes.
  */
-export function getUserStore(): Map<string, StoredUser> {
-  const users = new Map<string, StoredUser>();
+export function getAllUsersSanitized(): SanitizedUser[] {
+  const stored = readStoredUsers();
+  return stored.map((u) => ({
+    username: u.username,
+    role: u.role,
+    displayName: u.displayName || u.username,
+    createdAt: u.createdAt || 'Initial setup',
+  }));
+}
 
-  // 1. Try htpasswd file if specified or present at standard locations
-  const customPath = process.env.NEXTKUBE_HTPASSWD_PATH;
-  const standardPaths = [
-    customPath,
-    path.join(process.cwd(), '.htpasswd'),
-    path.join(process.cwd(), 'htpasswd'),
-    '/etc/nextkube/htpasswd',
-  ].filter(Boolean) as string[];
-
-  for (const filePath of standardPaths) {
-    try {
-      if (fs.existsSync(filePath)) {
-        const fileContent = fs.readFileSync(filePath, 'utf-8');
-        const parsed = parseHtpasswdContent(fileContent);
-        parsed.forEach((user, key) => users.set(key, user));
-        break; // Found and parsed valid htpasswd
-      }
-    } catch (err) {
-      console.warn(`[NextKube Auth] Failed to read htpasswd file at ${filePath}:`, err);
-    }
+/**
+ * Changes a user's password after verifying their current password.
+ */
+export async function changeUserPassword(
+  username: string,
+  currentPasswordInput: string,
+  newPasswordInput: string
+): Promise<{ success: boolean; error?: string }> {
+  if (!newPasswordInput || newPasswordInput.length < 6) {
+    return { success: false, error: 'New password must be at least 6 characters long.' };
   }
 
-  // 2. Try NEXTKUBE_USERS environment variable (comma-separated entries)
-  // Example: "admin:$2a$10$abc...:admin,dev:$2a$10$def...:operator"
-  const envUsers = process.env.NEXTKUBE_USERS;
-  if (envUsers) {
-    const envEntries = envUsers.split(',');
-    for (const entry of envEntries) {
-      const parts = entry.trim().split(':');
-      if (parts.length >= 2) {
-        const username = parts[0].trim();
-        const hash = parts[1].trim();
-        const rawRole = parts[2]?.trim().toLowerCase();
-        const role: 'admin' | 'operator' | 'viewer' =
-          rawRole === 'admin' || rawRole === 'operator' || rawRole === 'viewer'
-            ? rawRole
-            : 'operator';
+  const stored = readStoredUsers();
+  const index = stored.findIndex((u) => u.username.toLowerCase() === username.toLowerCase());
 
-        if (username && hash) {
-          users.set(username, { username, hash, role });
-        }
-      }
-    }
+  if (index === -1) {
+    return { success: false, error: 'User account not found.' };
   }
 
-  // 3. Fallback: Default Bootstrap Admin
-  // If no user was configured, provide the default admin/admin123 for initial setup
-  if (users.size === 0) {
-    const defaultUsername = process.env.NEXTKUBE_ADMIN_USER || 'admin';
-    const defaultPassword = process.env.NEXTKUBE_ADMIN_PASSWORD || 'admin123';
-    // Generate bcrypt hash for default admin password (cost 10)
+  const user = stored[index];
+  let matches = false;
+
+  if (user.hash.startsWith('$2a$') || user.hash.startsWith('$2b$') || user.hash.startsWith('$2y$')) {
+    matches = bcrypt.compareSync(currentPasswordInput, user.hash);
+  } else {
+    matches = currentPasswordInput === user.hash;
+  }
+
+  if (!matches) {
+    return { success: false, error: 'Current password does not match.' };
+  }
+
+  // Hash new password with bcrypt (cost 10)
+  const salt = bcrypt.genSaltSync(10);
+  const newHash = bcrypt.hashSync(newPasswordInput, salt);
+
+  stored[index] = {
+    ...user,
+    hash: newHash,
+  };
+
+  writeStoredUsers(stored);
+  return { success: true };
+}
+
+/**
+ * Creates a new user in the persistent store.
+ */
+export async function createNewUser(payload: {
+  username: string;
+  password: string;
+  role: 'admin' | 'operator' | 'viewer';
+  displayName?: string;
+}): Promise<{ success: boolean; user?: SanitizedUser; error?: string }> {
+  const username = payload.username.trim();
+  const password = payload.password;
+  const role = payload.role || 'operator';
+  const displayName = payload.displayName?.trim() || username;
+
+  if (!username || username.length < 3) {
+    return { success: false, error: 'Username must be at least 3 characters.' };
+  }
+
+  if (!/^[a-zA-Z0-9._-]+$/.test(username)) {
+    return { success: false, error: 'Username may only contain letters, numbers, hyphens, periods, or underscores.' };
+  }
+
+  if (!password || password.length < 6) {
+    return { success: false, error: 'Password must be at least 6 characters.' };
+  }
+
+  const stored = readStoredUsers();
+  const exists = stored.some((u) => u.username.toLowerCase() === username.toLowerCase());
+
+  if (exists) {
+    return { success: false, error: `User "${username}" already exists.` };
+  }
+
+  const salt = bcrypt.genSaltSync(10);
+  const hash = bcrypt.hashSync(password, salt);
+
+  const newUser: StoredUser = {
+    username,
+    hash,
+    role,
+    displayName,
+    createdAt: new Date().toISOString(),
+  };
+
+  stored.push(newUser);
+  writeStoredUsers(stored);
+
+  return {
+    success: true,
+    user: {
+      username: newUser.username,
+      role: newUser.role,
+      displayName: newUser.displayName,
+      createdAt: newUser.createdAt,
+    },
+  };
+}
+
+/**
+ * Updates a user's credentials (displayName, role, password).
+ */
+export async function updateUserCredentials(
+  targetUsername: string,
+  payload: {
+    displayName?: string;
+    role?: 'admin' | 'operator' | 'viewer';
+    password?: string;
+  },
+  requestingUser?: { username: string; role: string }
+): Promise<{ success: boolean; user?: SanitizedUser; error?: string }> {
+  const stored = readStoredUsers();
+  const index = stored.findIndex((u) => u.username.toLowerCase() === targetUsername.toLowerCase());
+
+  if (index === -1) {
+    return { success: false, error: 'User not found.' };
+  }
+
+  const user = stored[index];
+
+  // Role modification rules
+  if (payload.role && payload.role !== user.role) {
+    if (requestingUser && requestingUser.role !== 'admin') {
+      return { success: false, error: 'Only administrators can change user roles.' };
+    }
+    if (user.role === 'admin' && payload.role !== 'admin') {
+      const adminCount = stored.filter((u) => u.role === 'admin').length;
+      if (adminCount <= 1) {
+        return { success: false, error: 'Cannot demote the only remaining administrator.' };
+      }
+    }
+    user.role = payload.role;
+  }
+
+  if (payload.displayName !== undefined) {
+    user.displayName = payload.displayName.trim() || user.username;
+  }
+
+  if (payload.password && payload.password.trim().length > 0) {
+    if (payload.password.length < 6) {
+      return { success: false, error: 'New password must be at least 6 characters.' };
+    }
     const salt = bcrypt.genSaltSync(10);
-    const hash = bcrypt.hashSync(defaultPassword, salt);
-
-    users.set(defaultUsername, {
-      username: defaultUsername,
-      hash,
-      role: 'admin',
-      displayName: 'Cluster Administrator',
-    });
+    user.hash = bcrypt.hashSync(payload.password, salt);
   }
 
-  return users;
+  stored[index] = user;
+  writeStoredUsers(stored);
+
+  return {
+    success: true,
+    user: {
+      username: user.username,
+      role: user.role,
+      displayName: user.displayName,
+      createdAt: user.createdAt,
+    },
+  };
+}
+
+/**
+ * Deletes a user by username.
+ */
+export async function deleteUser(
+  targetUsername: string,
+  requestingUsername: string
+): Promise<{ success: boolean; error?: string }> {
+  if (targetUsername.toLowerCase() === requestingUsername.toLowerCase()) {
+    return { success: false, error: 'You cannot delete your own active account.' };
+  }
+
+  const stored = readStoredUsers();
+  const target = stored.find((u) => u.username.toLowerCase() === targetUsername.toLowerCase());
+
+  if (!target) {
+    return { success: false, error: 'User not found.' };
+  }
+
+  // Prevent deleting the last admin
+  if (target.role === 'admin') {
+    const adminCount = stored.filter((u) => u.role === 'admin').length;
+    if (adminCount <= 1) {
+      return { success: false, error: 'Cannot delete the only remaining administrator account.' };
+    }
+  }
+
+  const filtered = stored.filter((u) => u.username.toLowerCase() !== targetUsername.toLowerCase());
+  writeStoredUsers(filtered);
+
+  return { success: true };
 }
 
 /**
@@ -174,7 +347,7 @@ export async function authenticateCredentials(
   passwordInput: string
 ): Promise<{ success: boolean; user?: UserSession; error?: string }> {
   const users = getUserStore();
-  const user = users.get(usernameInput.trim());
+  const user = users.get(usernameInput.trim().toLowerCase());
 
   if (!user) {
     return { success: false, error: 'Invalid username or password.' };
@@ -186,7 +359,7 @@ export async function authenticateCredentials(
   if (user.hash.startsWith('$2a$') || user.hash.startsWith('$2b$') || user.hash.startsWith('$2y$')) {
     matches = bcrypt.compareSync(passwordInput, user.hash);
   } else {
-    // If plaintext was configured directly in env
+    // If plaintext was configured directly
     matches = passwordInput === user.hash;
   }
 
