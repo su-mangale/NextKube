@@ -19,6 +19,7 @@ import RemoveIcon from '@mui/icons-material/Remove';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CheckIcon from '@mui/icons-material/Check';
+import { DraggablePaper } from './DraggablePaper';
 
 // Import Xterm.js styles globally in the client bundle
 import '@xterm/xterm/css/xterm.css';
@@ -107,7 +108,7 @@ export function TerminalWindow({
   const termInstanceRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
-  const resizeHandlerRef = useRef<() => void>(() => {});
+  const resizeHandlerRef = useRef<() => void>(() => { });
 
   useEffect(() => {
     if (!open) return;
@@ -127,15 +128,15 @@ export function TerminalWindow({
         lineHeight: 1.25,
         theme: isDark
           ? {
-              background: '#0a0e17',
-              foreground: '#e2e8f0',
-              cursor: '#38bdf8',
-            }
+            background: '#0a0e17',
+            foreground: '#e2e8f0',
+            cursor: '#38bdf8',
+          }
           : {
-              background: '#ffffff',
-              foreground: '#0f172a',
-              cursor: '#0284c7',
-            },
+            background: '#ffffff',
+            foreground: '#0f172a',
+            cursor: '#0284c7',
+          },
       });
 
       termInstanceRef.current = termInstance;
@@ -182,7 +183,7 @@ export function TerminalWindow({
       ws.onopen = () => {
         setConnected(true);
         termInstance?.writeln('\x1b[32m[OK] WebSocket link connected.\x1b[0m');
-        
+
         const dims = fitAddonInstance?.proposeDimensions();
         if (dims) {
           ws.send(JSON.stringify({ resize: { cols: dims.cols, rows: dims.rows } }));
@@ -281,6 +282,7 @@ export function TerminalWindow({
     <Dialog
       open={open}
       onClose={onClose}
+      PaperComponent={DraggablePaper}
       maxWidth={maximized ? false : 'md'}
       fullWidth
       fullScreen={maximized}
@@ -289,20 +291,20 @@ export function TerminalWindow({
       sx={
         isMinimized
           ? {
-              pointerEvents: 'none !important',
-              visibility: 'hidden !important',
-              zIndex: -1,
-            }
+            pointerEvents: 'none !important',
+            visibility: 'hidden !important',
+            zIndex: -1,
+          }
           : {
-              zIndex: zIndex || 1310,
+            zIndex: zIndex || 1310,
+            pointerEvents: 'none',
+            '& .MuiDialog-container': {
               pointerEvents: 'none',
-              '& .MuiDialog-container': {
-                pointerEvents: 'none',
-              },
-              '& .MuiPaper-root': {
-                pointerEvents: 'auto',
-              },
-            }
+            },
+            '& .MuiPaper-root': {
+              pointerEvents: 'auto',
+            },
+          }
       }
       slotProps={{
         backdrop: {

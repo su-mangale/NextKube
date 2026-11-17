@@ -241,13 +241,13 @@ export function ActionDock({
                 bgcolor: isConsoleOpen
                   ? '#38bdf8'
                   : isConsoleConnected
-                  ? '#22c55e'
-                  : 'transparent',
+                    ? '#22c55e'
+                    : 'transparent',
                 boxShadow: isConsoleOpen
                   ? '0 0 6px #38bdf8'
                   : isConsoleConnected
-                  ? '0 0 5px #22c55e'
-                  : 'none',
+                    ? '0 0 5px #22c55e'
+                    : 'none',
                 transition: 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
               }}
             />

@@ -27,6 +27,7 @@ import CodeIcon from '@mui/icons-material/Code';
 import CloseIcon from '@mui/icons-material/Close';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CheckIcon from '@mui/icons-material/Check';
+import { DraggablePaper } from './DraggablePaper';
 
 import '@xterm/xterm/css/xterm.css';
 import type { Terminal } from '@xterm/xterm';
@@ -336,6 +337,7 @@ export function KubectlTerminalDrawer({
     <Dialog
       open={open}
       onClose={onClose}
+      PaperComponent={DraggablePaper}
       maxWidth={maximized ? false : 'lg'}
       fullWidth
       fullScreen={maximized}

@@ -47,6 +47,7 @@ import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useColorMode } from '@/shared/theme/theme-registry';
 import { useCurrentUser } from '@/shared/hooks/use-auth';
+import { DraggablePaper } from './DraggablePaper';
 
 export interface SettingsDialogProps {
   open: boolean;
@@ -210,6 +211,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
       <Dialog
         open={open}
         onClose={onClose}
+        PaperComponent={DraggablePaper}
         maxWidth="md"
         fullWidth
         disableEnforceFocus

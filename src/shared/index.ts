@@ -18,6 +18,7 @@ export { KubectlTerminalDrawer, KubeConsoleDrawer, type KubectlTerminalDrawerPro
 export { ActionDock, type ActionDockProps } from './components/ActionDock';
 export { SettingsDialog, type SettingsDialogProps } from './components/SettingsDialog';
 export { AddClusterDialog, type AddClusterDialogProps } from './components/AddClusterDialog';
+export { DraggablePaper, type DraggablePaperProps } from './components/DraggablePaper';
 export { NoClusterView } from './components/NoClusterView';
 export * from './components/QueryProvider';
 export * from './hooks/use-auth';

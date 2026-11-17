@@ -24,6 +24,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import YamlIdeEditor from './YamlIdeEditor';
+import { DraggablePaper } from './DraggablePaper';
 
 export interface YamlEditorDialogProps {
   open: boolean;
@@ -112,6 +113,7 @@ export default function YamlEditorDialog({
     <Dialog
       open={open}
       onClose={onClose}
+      PaperComponent={DraggablePaper}
       maxWidth={maximized ? false : 'md'}
       fullWidth
       fullScreen={maximized}

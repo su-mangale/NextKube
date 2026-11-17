@@ -131,6 +131,7 @@ import {
   YamlIdeEditor,
   YamlEditorDialog,
   AddClusterDialog,
+  DraggablePaper,
   NoClusterView,
   getZoneUrl,
 } from '@/shared';
@@ -3735,6 +3736,7 @@ users:
       <Dialog
         open={createDialogOpen}
         onClose={() => !createLoading && setCreateDialogOpen(false)}
+        PaperComponent={DraggablePaper}
         maxWidth="md"
         fullWidth
         slotProps={{
@@ -3843,6 +3845,7 @@ users:
       <Dialog
         open={logsDialogOpen}
         onClose={() => setLogsDialogOpen(false)}
+        PaperComponent={DraggablePaper}
         maxWidth={logsDialogMaximized ? false : "md"}
         fullWidth
         fullScreen={logsDialogMaximized}
