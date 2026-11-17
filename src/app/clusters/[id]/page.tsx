@@ -39,6 +39,7 @@ import {
   LinearProgress,
   Card,
   CardContent,
+  useTheme,
 } from '@mui/material';
 import Link from 'next/link';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -80,6 +81,8 @@ import {
   useDashboardData,
   TerminalWindow,
   KubectlTerminalDrawer,
+  ActionDock,
+  SettingsDialog,
   useNamespaces,
   useDeployments,
   useServices,
@@ -140,6 +143,11 @@ export default function ClusterDetailPage({
   const routeParams = useParams();
   const id = (routeParams?.id as string) || '';
   const router = useRouter();
+  const muiTheme = useTheme();
+  const isDark = muiTheme.palette.mode === 'dark';
+
+  // System & Workspace Settings Dialog
+  const [settingsDialogOpen, setSettingsDialogOpen] = useState<boolean>(false);
 
   // Namespace selector state
   const [selectedNamespace, setSelectedNamespace] = useState<string>('all');
@@ -229,6 +237,7 @@ spec:
 
   // Terminal Exec states
   const [terminalOpen, setTerminalOpen] = useState<boolean>(false);
+  const [terminalMinimized, setTerminalMinimized] = useState<boolean>(false);
   const [terminalResourceName, setTerminalResourceName] = useState<string>('');
   const [terminalResourceType, setTerminalResourceType] = useState<'pod' | 'node'>('pod');
   const [terminalNamespace, setTerminalNamespace] = useState<string>('default');
@@ -340,7 +349,7 @@ spec:
         try {
           const report = JSON.parse(event.data);
           queryClient.setQueryData(['clusterHealth', id], report);
-        } catch {}
+        } catch { }
       });
       es.addEventListener('new-events', (event) => {
         try {
@@ -353,7 +362,7 @@ spec:
             }
           }
           refetchEvents();
-        } catch {}
+        } catch { }
       });
       es.onerror = () => {
         setLiveWatchConnected(false);
@@ -499,7 +508,7 @@ users:
       const namespace = typeof resource.namespace === 'string' ? resource.namespace : 'default';
       const age = typeof resource.age === 'string' ? resource.age : 'N/A';
       const creationTimestamp = typeof resource.creationTimestamp === 'string' ? resource.creationTimestamp : 'N/A';
-      
+
       let labels = `app.kubernetes.io/name=${name}`;
       if (resource.labels) {
         if (typeof resource.labels === 'object' && !Array.isArray(resource.labels)) {
@@ -940,6 +949,7 @@ users:
       setTerminalResourceType('node');
       setTerminalNamespace('default');
       setTerminalContainer('');
+      setTerminalMinimized(false);
       setTerminalOpen(true);
       return;
     }
@@ -951,6 +961,7 @@ users:
       const podContainer = resource.containers && resource.containers.length > 0 ? resource.containers[0] : '';
       setTerminalContainer(podContainer);
       setSelectedContainer(podContainer);
+      setTerminalMinimized(false);
       setTerminalOpen(true);
       return;
     }
@@ -969,6 +980,7 @@ users:
       const podContainer = matchingPod.containers && matchingPod.containers.length > 0 ? matchingPod.containers[0] : '';
       setTerminalContainer(podContainer);
       setSelectedContainer(podContainer);
+      setTerminalMinimized(false);
       setTerminalOpen(true);
     } else {
       setToastSeverity('warning');
@@ -1910,88 +1922,6 @@ users:
           <Tooltip title="Refresh resources">
             <IconButton onClick={handleRefreshAll} color="primary" size="small" sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 0.8 }}>
               <RefreshIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-
-          <Button
-            variant="contained"
-            color="primary"
-            size="small"
-            startIcon={<AddIcon fontSize="small" />}
-            onClick={() => setCreateDialogOpen(true)}
-            sx={{ fontWeight: 700, borderRadius: 2, textTransform: 'none' }}
-          >
-            Create Resource
-          </Button>
-
-          <Divider orientation="vertical" flexItem sx={{ height: 24, my: 'auto', mx: 0.5 }} />
-
-          {/* Kubectl Shell Button */}
-          <Button
-            variant={kubectlShellOpen ? 'contained' : 'outlined'}
-            size="small"
-            startIcon={<TerminalIcon sx={{ fontSize: '1rem !important', color: kubectlShellOpen ? '#fff' : '#38bdf8' }} />}
-            onClick={() => setKubectlShellOpen(!kubectlShellOpen)}
-            sx={{
-              fontWeight: 700,
-              fontSize: '0.78rem',
-              borderRadius: 2,
-              borderColor: kubectlShellOpen ? 'primary.main' : 'divider',
-              color: kubectlShellOpen ? '#fff' : 'text.primary',
-              textTransform: 'none',
-              height: 28,
-              px: 1.5,
-              bgcolor: kubectlShellOpen ? 'primary.main' : 'action.hover',
-              '&:hover': {
-                borderColor: 'primary.main',
-                bgcolor: kubectlShellOpen ? 'primary.dark' : 'action.selected',
-                color: kubectlShellOpen ? '#fff' : 'primary.main',
-              },
-            }}
-          >
-            Kubectl Shell
-          </Button>
-
-          {/* Settings Navigation Button */}
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<SettingsIcon sx={{ fontSize: '1rem !important' }} />}
-            onClick={() => router.push('/settings')}
-            sx={{
-              fontWeight: 650,
-              fontSize: '0.78rem',
-              borderRadius: 2,
-              borderColor: 'divider',
-              color: 'text.primary',
-              textTransform: 'none',
-              height: 28,
-              px: 1.5,
-              bgcolor: 'action.hover',
-              '&:hover': {
-                borderColor: 'primary.main',
-                bgcolor: 'action.selected',
-                color: 'primary.main',
-              },
-            }}
-          >
-            Settings
-          </Button>
-
-          <Tooltip title="Sign Out of NextKube">
-            <IconButton
-              onClick={() => logout()}
-              size="small"
-              sx={{
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 2,
-                p: 0.8,
-                color: 'text.secondary',
-                '&:hover': { color: 'error.main', borderColor: 'error.main' },
-              }}
-            >
-              <LogoutIcon fontSize="small" />
             </IconButton>
           </Tooltip>
         </Box>
@@ -3212,10 +3142,10 @@ users:
                                   entry.action === 'DELETE_RESOURCE'
                                     ? 'error'
                                     : entry.action === 'SCALE_REPLICAS'
-                                    ? 'primary'
-                                    : entry.action === 'ROLLOUT_RESTART'
-                                    ? 'warning'
-                                    : 'info'
+                                      ? 'primary'
+                                      : entry.action === 'ROLLOUT_RESTART'
+                                        ? 'warning'
+                                        : 'info'
                                 }
                                 sx={{ fontSize: '0.65rem', fontWeight: 800, borderRadius: 1 }}
                               />
@@ -3318,8 +3248,8 @@ users:
                                   release.status === 'deployed'
                                     ? 'success'
                                     : release.status === 'failed'
-                                    ? 'error'
-                                    : 'warning'
+                                      ? 'error'
+                                      : 'warning'
                                 }
                                 sx={{ fontSize: '0.65rem', fontWeight: 800, height: 20, borderRadius: 1 }}
                               />
@@ -3757,26 +3687,58 @@ users:
         slotProps={{
           paper: {
             sx: {
-              bgcolor: '#0a0e17',
+              bgcolor: isDark ? '#0a0e17' : '#ffffff',
               backgroundImage: 'none',
               borderRadius: 3,
-              border: '1px solid rgba(255,255,255,0.08)',
+              border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #e2e8f0',
               overflow: 'hidden',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)',
+              boxShadow: isDark
+                ? '0 25px 50px -12px rgba(0, 0, 0, 0.7)'
+                : '0 25px 50px -12px rgba(15, 23, 42, 0.16)',
             },
           },
         }}
       >
-        <DialogTitle sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1.5, bgcolor: '#0f1422', color: '#f0f6fc', py: 2, px: 3, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-          <AddIcon sx={{ color: '#38bdf8', fontSize: 22 }} />
-          <Typography variant="h6" sx={{ color: '#f8fafc', fontWeight: 800, fontSize: '1rem', lineHeight: 1.2 }}>
-            Apply / Create Resource Manifest
-          </Typography>
-        </DialogTitle>
-        <DialogContent sx={{ p: 0, bgcolor: '#0a0e17' }}>
-          <Box sx={{ p: 2, bgcolor: '#0f1422', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-            <Typography variant="body2" sx={{ color: '#8b949e' }}>
-              Paste or edit a Kubernetes YAML/JSON manifest to apply directly to cluster namespace <b style={{ color: '#e6edf3' }}>{selectedNamespace === 'all' ? 'default' : selectedNamespace}</b>.
+        <DialogTitle
+          sx={{
+            fontWeight: 700,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            bgcolor: isDark ? '#0f1422' : '#f8fafc',
+            color: isDark ? '#f0f6fc' : '#0f172a',
+            py: 2,
+            px: 3,
+            borderBottom: isDark ? '1px solid rgba(255,255,255,0.06)' : '1px solid #e2e8f0',
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <AddIcon sx={{ color: isDark ? '#38bdf8' : '#0284c7', fontSize: 22 }} />
+            <Typography variant="h6" sx={{ color: isDark ? '#f8fafc' : '#0f172a', fontWeight: 800, fontSize: '1rem', lineHeight: 1.2 }}>
+              Apply / Create Resource Manifest
+            </Typography>
+          </Box>
+            <IconButton
+              size="small"
+              onClick={() => setCreateDialogOpen(false)}
+              sx={{
+                color: isDark ? '#94a3b8' : '#64748b',
+                border: isDark ? '1px solid rgba(255,255,255,0.1)' : '1px solid #cbd5e1',
+                borderRadius: 1.5,
+                '&:hover': {
+                  bgcolor: 'rgba(239, 68, 68, 0.15)',
+                  borderColor: 'rgba(239, 68, 68, 0.4)',
+                  color: '#f87171',
+                },
+              }}
+            >
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </DialogTitle>
+        <DialogContent sx={{ p: 0, bgcolor: isDark ? '#0a0e17' : '#ffffff' }}>
+          <Box sx={{ p: 2, bgcolor: isDark ? '#0f1422' : '#f8fafc', borderBottom: isDark ? '1px solid rgba(255,255,255,0.06)' : '1px solid #e2e8f0' }}>
+            <Typography variant="body2" sx={{ color: isDark ? '#8b949e' : '#64748b' }}>
+              Paste or edit a Kubernetes YAML/JSON manifest to apply directly to cluster namespace <b style={{ color: isDark ? '#e6edf3' : '#0f172a' }}>{selectedNamespace === 'all' ? 'default' : selectedNamespace}</b>.
             </Typography>
           </Box>
           <YamlIdeEditor
@@ -3787,8 +3749,8 @@ users:
             hideHeader
           />
         </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2, bgcolor: '#0f1422', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-          <Button onClick={() => setCreateDialogOpen(false)} disabled={createLoading} sx={{ fontWeight: 700, color: '#94a3b8' }}>
+        <DialogActions sx={{ px: 3, py: 2, bgcolor: isDark ? '#0f1422' : '#f8fafc', borderTop: isDark ? '1px solid rgba(255,255,255,0.06)' : '1px solid #e2e8f0' }}>
+          <Button onClick={() => setCreateDialogOpen(false)} disabled={createLoading} sx={{ fontWeight: 700, color: isDark ? '#94a3b8' : '#64748b' }}>
             Cancel
           </Button>
           <Button onClick={handleApplyCreateResource} color="primary" variant="contained" disabled={createLoading} sx={{ fontWeight: 700 }}>
@@ -3797,946 +3759,974 @@ users:
         </DialogActions>
       </Dialog>
 
-      {/* Connect / Add Cluster Dialog */}
-      <AddClusterDialog
-        open={addClusterOpen}
-        onClose={() => setAddClusterOpen(false)}
-        onClusterAdded={(newClusterId) => {
-          setToastSeverity('success');
-          setToastMessage(`Cluster successfully attached and ready.`);
-          router.push(`/clusters/${newClusterId}`);
-        }}
-      />
+                  {/* Connect / Add Cluster Dialog */}
+                  <AddClusterDialog
+                    open={addClusterOpen}
+                    onClose={() => setAddClusterOpen(false)}
+                    onClusterAdded={(newClusterId) => {
+                      setToastSeverity('success');
+                      setToastMessage(`Cluster successfully attached and ready.`);
+                      router.push(`/clusters/${newClusterId}`);
+                    }}
+                  />
 
-      {/* YAML IDE Editor Dialog */}
-      <YamlEditorDialog
-        open={yamlDialogOpen}
-        onClose={() => setYamlDialogOpen(false)}
-        title={`Edit Manifest: ${selectedResource?.name || ''}`}
-        value={yamlContent}
-        onChange={(v) => setYamlContent(v)}
-        onSave={handleSaveYaml}
-        loading={yamlLoading}
-        filename={selectedResource?.name || 'manifest'}
-        saveButtonText="Save Manifest"
-        showSecretToggle={activeTab === 12 || selectedResource?.kind === 'Secret' || (selectedResource && 'dataCount' in selectedResource)}
-        secretDecoded={secretDecoded}
-        onToggleSecretDecode={handleToggleSecretDecode}
-      />
+                  {/* YAML IDE Editor Dialog */}
+                  <YamlEditorDialog
+                    open={yamlDialogOpen}
+                    onClose={() => setYamlDialogOpen(false)}
+                    title={`Edit Manifest: ${selectedResource?.name || ''}`}
+                    value={yamlContent}
+                    onChange={(v) => setYamlContent(v)}
+                    onSave={handleSaveYaml}
+                    loading={yamlLoading}
+                    filename={selectedResource?.name || 'manifest'}
+                    saveButtonText="Save Manifest"
+                    showSecretToggle={activeTab === 12 || selectedResource?.kind === 'Secret' || (selectedResource && 'dataCount' in selectedResource)}
+                    secretDecoded={secretDecoded}
+                    onToggleSecretDecode={handleToggleSecretDecode}
+                  />
 
-      {/* Logs Dialog */}
-      <Dialog
-        open={logsDialogOpen}
-        onClose={() => setLogsDialogOpen(false)}
-        maxWidth={logsDialogMaximized ? false : "md"}
-        fullWidth
-        fullScreen={logsDialogMaximized}
-        slotProps={{
-          paper: {
-            sx: {
-              bgcolor: '#0a0e17',
-              backgroundImage: 'none',
-              borderRadius: logsDialogMaximized ? 0 : 3,
-              border: logsDialogMaximized ? 'none' : '1px solid rgba(255,255,255,0.08)',
-              overflow: 'hidden',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)',
-            },
-          },
-        }}
-      >
-        {/* Minimalist, Clean Header Bar */}
-        <DialogTitle
-          sx={{
-            bgcolor: '#0f1422',
-            color: '#f0f6fc',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            px: 3,
-            py: 1.75,
-            borderBottom: '1px solid rgba(255,255,255,0.06)',
-            flexWrap: 'wrap',
-            gap: 1.5,
-          }}
-        >
-          {/* Left: Clean Title without resource name */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <ReceiptLongIcon sx={{ color: '#38bdf8', fontSize: 22 }} />
-            <Typography variant="h6" sx={{ color: '#f8fafc', fontWeight: 800, fontSize: '1rem', lineHeight: 1.2 }}>
-              {logsResourceType === 'deployment' ? 'Deployment Logs' : 'Pod Logs'}
-            </Typography>
-          </Box>
-
-          {/* Center: Controls Stack in Uniform Height */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-            {/* Container Selector if Pod has multiple containers or container list */}
-            {selectedResource?.containers && selectedResource.containers.length > 0 && (
-              <FormControl size="small" sx={{ minWidth: 120 }}>
-                <Select
-                  value={selectedContainer || selectedResource.containers[0] || ''}
-                  onChange={(e) => {
-                    const newCont = e.target.value;
-                    setSelectedContainer(newCont);
-                    handleRefreshLogs(logsTimeFrame, newCont);
-                  }}
-                  MenuProps={{
-                    slotProps: {
+                  {/* Logs Dialog */}
+                  <Dialog
+                    open={logsDialogOpen}
+                    onClose={() => setLogsDialogOpen(false)}
+                    maxWidth={logsDialogMaximized ? false : "md"}
+                    fullWidth
+                    fullScreen={logsDialogMaximized}
+                    slotProps={{
                       paper: {
                         sx: {
-                          bgcolor: '#0f1422',
-                          color: '#f0f6fc',
-                          border: '1px solid rgba(255, 255, 255, 0.08)',
-                          borderRadius: 1.5,
-                          boxShadow: '0 20px 40px -10px rgba(0, 0, 0, 0.85)',
+                          bgcolor: isDark ? '#0a0e17' : '#ffffff',
                           backgroundImage: 'none',
-                          mt: 0.5,
-                          '& .MuiMenuItem-root': {
-                            fontSize: '0.8rem',
-                            color: '#cbd5e1',
-                            borderRadius: 1,
-                            py: 0.6,
-                            px: 1.25,
-                            my: 0.2,
-                            '&:hover': {
-                              bgcolor: 'rgba(255, 255, 255, 0.06)',
-                              color: '#f8fafc',
-                            },
-                            '&.Mui-selected': {
-                              bgcolor: 'rgba(56, 189, 248, 0.15)',
-                              color: '#38bdf8',
-                              fontWeight: 700,
-                            },
-                          },
+                          borderRadius: logsDialogMaximized ? 0 : 3,
+                          border: logsDialogMaximized ? 'none' : isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #e2e8f0',
+                          overflow: 'hidden',
+                          boxShadow: isDark
+                            ? '0 25px 50px -12px rgba(0, 0, 0, 0.7)'
+                            : '0 25px 50px -12px rgba(15, 23, 42, 0.16)',
                         },
                       },
-                    },
-                  }}
-                  sx={{
-                    height: 30,
-                    bgcolor: '#0a0e17',
-                    color: '#38bdf8',
-                    fontSize: '0.75rem',
-                    borderRadius: 1.5,
-                    fontWeight: 700,
-                    '& .MuiOutlinedInput-notchedOutline': {
-                      borderColor: 'rgba(56, 189, 248, 0.4)',
-                    },
-                    '&:hover .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#38bdf8',
-                    },
-                    '& .MuiSvgIcon-root': { color: '#38bdf8', fontSize: 18 },
-                  }}
-                >
-                  {selectedResource.containers.map((cName: string) => (
-                    <MenuItem key={cName} value={cName} sx={{ fontSize: '0.8rem' }}>
-                      {cName}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            )}
-
-            {/* Time Frame & Pre Selector */}
-            <FormControl size="small" sx={{ minWidth: 95 }}>
-              <Select
-                value={logsTimeFrame}
-                onChange={(e) => {
-                  const newTf = e.target.value;
-                  setLogsTimeFrame(newTf);
-                  setLogsPrevious(newTf === 'pre');
-                  handleRefreshLogs(newTf);
-                }}
-                MenuProps={{
-                  slotProps: {
-                    paper: {
-                      sx: {
-                        bgcolor: '#0f1422',
-                        color: '#f0f6fc',
-                        border: '1px solid rgba(255, 255, 255, 0.08)',
-                        borderRadius: 1.5,
-                        boxShadow: '0 20px 40px -10px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.06)',
-                        backgroundImage: 'none',
-                        mt: 0.5,
-                        '& .MuiList-root': {
-                          p: 0.5,
-                        },
-                        '& .MuiMenuItem-root': {
-                          fontSize: '0.8rem',
-                          color: '#cbd5e1',
-                          borderRadius: 1,
-                          py: 0.6,
-                          px: 1.25,
-                          my: 0.2,
-                          '&:hover': {
-                            bgcolor: 'rgba(255, 255, 255, 0.06)',
-                            color: '#f8fafc',
-                          },
-                          '&.Mui-selected': {
-                            bgcolor: 'rgba(56, 189, 248, 0.15)',
-                            color: '#38bdf8',
-                            fontWeight: 700,
-                            '&:hover': {
-                              bgcolor: 'rgba(56, 189, 248, 0.22)',
-                            },
-                          },
-                        },
-                        '& .MuiDivider-root': {
-                          my: 0.5,
-                          borderColor: 'rgba(255, 255, 255, 0.08)',
-                        },
-                      },
-                    },
-                  },
-                }}
-                sx={{
-                  height: 30,
-                  bgcolor: '#0a0e17',
-                  color: logsTimeFrame === 'pre' ? '#f59e0b' : '#f0f6fc',
-                  fontSize: '0.75rem',
-                  borderRadius: 1.5,
-                  fontWeight: 700,
-                  '& .MuiOutlinedInput-notchedOutline': {
-                    borderColor: logsTimeFrame === 'pre' ? 'rgba(245,158,11,0.5)' : 'rgba(255,255,255,0.12)',
-                  },
-                  '&:hover .MuiOutlinedInput-notchedOutline': {
-                    borderColor: logsTimeFrame === 'pre' ? '#f59e0b' : 'rgba(255,255,255,0.25)',
-                  },
-                  '& .MuiSvgIcon-root': { color: logsTimeFrame === 'pre' ? '#f59e0b' : '#94a3b8', fontSize: 18 },
-                }}
-              >
-                <MenuItem value="all" sx={{ fontSize: '0.8rem' }}>All Logs</MenuItem>
-                <MenuItem value="5m" sx={{ fontSize: '0.8rem' }}>Since 5m</MenuItem>
-                <MenuItem value="15m" sx={{ fontSize: '0.8rem' }}>Since 15m</MenuItem>
-                <MenuItem value="30m" sx={{ fontSize: '0.8rem' }}>Since 30m</MenuItem>
-                <MenuItem value="1h" sx={{ fontSize: '0.8rem' }}>Since 1h</MenuItem>
-                <MenuItem value="6h" sx={{ fontSize: '0.8rem' }}>Since 6h</MenuItem>
-                <MenuItem value="24h" sx={{ fontSize: '0.8rem' }}>Since 24h</MenuItem>
-                <Divider sx={{ my: 0.5, borderColor: 'rgba(255,255,255,0.08)' }} />
-                <MenuItem value="pre" sx={{ fontSize: '0.8rem', color: '#f59e0b', fontWeight: 800 }}>
-                  pre (Previous)
-                </MenuItem>
-              </Select>
-            </FormControl>
-
-            {/* Timezone Switch Button (Local Time vs UTC) */}
-            <Tooltip title={`Switch Timezone (Currently displaying: ${logsTimeMode === 'local' ? `Local Browser Time [${userTimezone}]` : 'Raw Pod Time [UTC]'})`}>
-              <Button
-                size="small"
-                onClick={() => setLogsTimeMode(logsTimeMode === 'local' ? 'utc' : 'local')}
-                startIcon={<AccessTimeIcon sx={{ fontSize: 15 }} />}
-                sx={{
-                  color: logsTimeMode === 'local' ? '#38bdf8' : '#94a3b8',
-                  bgcolor: logsTimeMode === 'local' ? 'rgba(56, 189, 248, 0.12)' : '#0a0e17',
-                  border: `1px solid ${logsTimeMode === 'local' ? 'rgba(56, 189, 248, 0.35)' : 'rgba(255,255,255,0.12)'}`,
-                  borderRadius: 1.5,
-                  height: 30,
-                  px: 1.2,
-                  fontSize: '0.74rem',
-                  fontWeight: 700,
-                  textTransform: 'none',
-                  whiteSpace: 'nowrap',
-                  '&:hover': {
-                    bgcolor: logsTimeMode === 'local' ? 'rgba(56, 189, 248, 0.2)' : 'rgba(255,255,255,0.06)',
-                    borderColor: logsTimeMode === 'local' ? '#38bdf8' : 'rgba(255,255,255,0.25)',
-                  },
-                }}
-              >
-                {logsTimeMode === 'local' ? 'Local Time' : 'UTC'}
-              </Button>
-            </Tooltip>
-
-            {/* Search Field */}
-            <TextField
-              size="small"
-              placeholder="Search logs..."
-              value={logsSearchQuery}
-              onChange={(e) => setLogsSearchQuery(e.target.value)}
-              slotProps={{
-                input: {
-                  startAdornment: <SearchIcon sx={{ color: 'rgba(255,255,255,0.4)', fontSize: 16, mr: 0.5 }} />,
-                  endAdornment: logsSearchQuery ? (
-                    <IconButton
-                      size="small"
-                      onClick={() => setLogsSearchQuery('')}
-                      sx={{ color: 'rgba(255,255,255,0.4)', p: 0.2, '&:hover': { color: '#f8fafc' } }}
+                    }}
+                  >
+                    {/* Minimalist, Clean Header Bar */}
+                    <DialogTitle
+                      sx={{
+                        bgcolor: isDark ? '#0f1422' : '#f8fafc',
+                        color: isDark ? '#f0f6fc' : '#0f172a',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        px: 3,
+                        py: 1.75,
+                        borderBottom: isDark ? '1px solid rgba(255,255,255,0.06)' : '1px solid #e2e8f0',
+                        flexWrap: 'wrap',
+                        gap: 1.5,
+                      }}
                     >
-                      <ClearIcon sx={{ fontSize: 14 }} />
-                    </IconButton>
-                  ) : null,
-                },
-              }}
-              sx={{
-                width: 170,
-                '& .MuiOutlinedInput-root': {
-                  bgcolor: '#0a0e17',
-                  color: '#f0f6fc',
-                  fontSize: '0.78rem',
-                  height: 30,
-                  borderRadius: 1.5,
-                  pr: 0.5,
-                  '& fieldset': { borderColor: 'rgba(255,255,255,0.12)' },
-                  '&:hover fieldset': { borderColor: 'rgba(255,255,255,0.25)' },
-                },
-              }}
-            />
-
-            {/* Live Search Matched Badge */}
-            {logsSearchQuery.trim() && (
-              <Chip
-                label={`${filteredLogsLines.length} matched`}
-                size="small"
-                sx={{
-                  bgcolor: filteredLogsLines.length > 0 ? 'rgba(56,189,248,0.15)' : 'rgba(239,68,68,0.15)',
-                  color: filteredLogsLines.length > 0 ? '#38bdf8' : '#ef4444',
-                  fontSize: '0.68rem',
-                  fontWeight: 700,
-                  height: 22,
-                }}
-              />
-            )}
-
-            {/* Refresh Button */}
-            <Tooltip title="Refresh Logs">
-              <IconButton
-                size="small"
-                onClick={() => handleRefreshLogs(logsTimeFrame)}
-                disabled={logsLoading}
-                sx={{
-                  color: '#e2e8f0',
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  borderRadius: 1.5,
-                  p: 0.6,
-                }}
-              >
-                <RefreshIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-
-            {/* Copy Button */}
-            <Tooltip title={logsCopied ? "Copied!" : "Copy Logs"}>
-              <IconButton
-                size="small"
-                onClick={handleCopyLogsWithFeedback}
-                sx={{
-                  color: logsCopied ? '#34d399' : '#e2e8f0',
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  borderRadius: 1.5,
-                  p: 0.6,
-                }}
-              >
-                {logsCopied ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}
-              </IconButton>
-            </Tooltip>
-
-            {/* Download Button */}
-            <Tooltip title="Download Logs">
-              <IconButton
-                size="small"
-                onClick={handleDownloadLogs}
-                sx={{
-                  color: '#e2e8f0',
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  borderRadius: 1.5,
-                  p: 0.6,
-                }}
-              >
-                <FileDownloadIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          </Box>
-
-          {/* Far Right Corner: Window Controls Pinned to the Right */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-            {/* Maximize / Restore Window */}
-            <Tooltip title={logsDialogMaximized ? 'Restore Window' : 'Maximize Window'}>
-              <IconButton
-                size="small"
-                onClick={() => setLogsDialogMaximized(!logsDialogMaximized)}
-                sx={{
-                  color: '#e2e8f0',
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  borderRadius: 1.5,
-                  p: 0.6,
-                }}
-              >
-                {logsDialogMaximized ? <FullscreenExitIcon fontSize="small" /> : <FullscreenIcon fontSize="small" />}
-              </IconButton>
-            </Tooltip>
-
-            {/* Close Window */}
-            <Tooltip title="Close Window">
-              <IconButton
-                size="small"
-                onClick={() => setLogsDialogOpen(false)}
-                sx={{
-                  color: '#e2e8f0',
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  borderRadius: 1.5,
-                  p: 0.6,
-                }}
-              >
-                <CloseIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          </Box>
-        </DialogTitle>
-
-        {/* Log Stream Content */}
-        <DialogContent
-          sx={{
-            bgcolor: '#0a0e17',
-            color: '#c9d1d9',
-            p: 2,
-            fontFamily: 'Consolas, Monaco, monospace',
-            fontSize: '0.8rem',
-            height: logsDialogMaximized ? 'calc(100vh - 128px)' : '480px',
-            overflowY: 'auto',
-          }}
-        >
-          {logsLoading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-              <CircularProgress sx={{ color: '#38bdf8' }} />
-            </Box>
-          ) : filteredLogsLines.length === 0 ? (
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', py: 6, gap: 1.5 }}>
-              <Typography variant="body2" sx={{ color: '#94a3b8', fontWeight: 600 }}>
-                {logsSearchQuery.trim()
-                  ? `No log lines matching "${logsSearchQuery}"`
-                  : 'No logs available for this resource.'}
-              </Typography>
-              {logsSearchQuery.trim() && (
-                <Button
-                  size="small"
-                  variant="outlined"
-                  onClick={() => setLogsSearchQuery('')}
-                  sx={{ color: '#38bdf8', borderColor: 'rgba(56,189,248,0.3)', textTransform: 'none', fontSize: '0.75rem', fontWeight: 700 }}
-                >
-                  Clear Search Filter
-                </Button>
-              )}
-            </Box>
-          ) : (
-            <Box component="pre" sx={{ m: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'inherit', lineHeight: 1.6 }}>
-              {filteredLogsLines.map((line, idx) => (
-                <React.Fragment key={idx}>
-                  {renderEnhancedLogLine(line, logsSearchQuery.trim(), logsTimeMode)}
-                </React.Fragment>
-              ))}
-            </Box>
-          )}
-        </DialogContent>
-
-        {/* Sleek Status Footer Bar */}
-        <DialogActions
-          sx={{
-            px: 3,
-            py: 1.25,
-            bgcolor: '#0f1422',
-            borderTop: '1px solid rgba(255,255,255,0.06)',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: 1,
-          }}
-        >
-          {/* Left: Resource Name & Namespace & Pre Indicator */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-            <Chip
-              label={`${logsResourceType === 'deployment' ? 'Deployment' : 'Pod'}: ${selectedResource?.name}`}
-              size="small"
-              sx={{
-                bgcolor: 'rgba(56,189,248,0.15)',
-                color: '#38bdf8',
-                fontSize: '0.72rem',
-                fontWeight: 800,
-                fontFamily: 'monospace',
-                height: 24,
-                borderRadius: 1.5,
-              }}
-            />
-            <Chip
-              label={`Namespace: ${selectedResource?.namespace || 'default'}`}
-              size="small"
-              sx={{
-                bgcolor: 'rgba(148,163,184,0.12)',
-                color: '#cbd5e1',
-                fontSize: '0.7rem',
-                fontWeight: 700,
-                height: 24,
-                borderRadius: 1.5,
-              }}
-            />
-            {(logsTimeFrame === 'pre' || logsPrevious) && (
-              <Chip
-                label="⚠️ Previous Terminated Container (pre)"
-                size="small"
-                color="warning"
-                sx={{
-                  fontSize: '0.7rem',
-                  fontWeight: 800,
-                  height: 24,
-                  borderRadius: 1.5,
-                }}
-              />
-            )}
-          </Box>
-
-          {/* Right: Line Count Telemetry */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography variant="caption" sx={{ color: '#8b949e', fontWeight: 600, fontFamily: 'monospace' }}>
-              {logsSearchQuery.trim()
-                ? `${filteredLogsLines.length} matched / ${logsContent ? logsContent.split('\n').length : 0} lines`
-                : `${logsContent ? logsContent.split('\n').length : 0} lines`}
-            </Typography>
-          </Box>
-        </DialogActions>
-      </Dialog>
-
-      {/* Set Container Image Dialog */}
-      <Dialog open={imageDialogOpen} onClose={() => !imageLoading && setImageDialogOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontWeight: 700 }}>Update Container Image</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Specify the new container image repository and tag for <b>{selectedResource?.name}</b> in namespace <b>{selectedResource?.namespace}</b>.
-          </Typography>
-          <TextField
-            fullWidth
-            size="small"
-            label="Image Repository:Tag"
-            placeholder="e.g. nginx:1.25-alpine"
-            value={imageInputVal}
-            onChange={(e) => setImageInputVal(e.target.value)}
-            disabled={imageLoading}
-            autoFocus
-          />
-        </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
-          <Button onClick={() => setImageDialogOpen(false)} disabled={imageLoading} sx={{ fontWeight: 700 }}>Cancel</Button>
-          <Button onClick={handleApplyImageUpdate} color="primary" variant="contained" disabled={imageLoading || !imageInputVal.trim()} sx={{ fontWeight: 700 }}>
-            {imageLoading ? <CircularProgress size={20} color="inherit" /> : 'Update Image'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Scale Deployment Dialog */}
-      <Dialog open={scaleDialogOpen} onClose={() => !scaleLoading && setScaleDialogOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontWeight: 700 }}>Scale Deployment</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
-            Set target replicas count for <b>{selectedResource?.name}</b> in namespace <b>{selectedResource?.namespace}</b>.
-          </Typography>
-          <Box sx={{ px: 2 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-              <Typography variant="caption" color="text.secondary">Desired Replicas</Typography>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700 }} color="primary">{scaleReplicas} pods</Typography>
-            </Box>
-            <Slider value={scaleReplicas} min={0} max={10} step={1} marks valueLabelDisplay="auto" onChange={(e, val) => setScaleReplicas(val as number)} disabled={scaleLoading} />
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setScaleDialogOpen(false)} disabled={scaleLoading} sx={{ fontWeight: 700 }}>Cancel</Button>
-          <Button onClick={handleApplyScale} variant="contained" disabled={scaleLoading} sx={{ fontWeight: 700 }}>
-            {scaleLoading ? <CircularProgress size={20} /> : 'Apply Scale'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Restart Pod Dialog */}
-      <Dialog open={restartDialogOpen} onClose={() => !restartLoading && setRestartDialogOpen(false)}>
-        <DialogTitle sx={{ fontWeight: 700 }}>Restart Pod</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary">
-            Are you sure you want to terminate and restart pod <b>{selectedResource?.name}</b>?
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setRestartDialogOpen(false)} disabled={restartLoading} sx={{ fontWeight: 700 }}>Cancel</Button>
-          <Button onClick={handleApplyRestart} color="warning" variant="contained" disabled={restartLoading} sx={{ fontWeight: 700 }}>
-            {restartLoading ? <CircularProgress size={20} color="inherit" /> : 'Confirm Restart'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Delete Resource Dialog */}
-      <Dialog open={deleteDialogOpen} onClose={() => !deleteLoading && setDeleteDialogOpen(false)}>
-        <DialogTitle sx={{ fontWeight: 700 }}>Delete Resource</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary">
-            Are you sure you want to delete <b>{selectedResource?.name}</b>? This action is irreversible.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteDialogOpen(false)} disabled={deleteLoading} sx={{ fontWeight: 700 }}>Cancel</Button>
-          <Button onClick={handleApplyDelete} color="error" variant="contained" disabled={deleteLoading} sx={{ fontWeight: 700 }}>
-            {deleteLoading ? <CircularProgress size={20} color="inherit" /> : 'Delete'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Rollout & Rollback Dialog */}
-      <Dialog
-        open={rolloutDialogOpen}
-        onClose={() => !rolloutLoading && setRolloutDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-        slotProps={{
-          paper: {
-            sx: {
-              bgcolor: '#0a0e17',
-              backgroundImage: 'none',
-              borderRadius: 3,
-              border: '1px solid rgba(255,255,255,0.08)',
-              overflow: 'hidden',
-            },
-          },
-        }}
-      >
-        <DialogTitle sx={{ fontWeight: 800, bgcolor: '#0f1422', color: '#f8fafc', px: 3, py: 2, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-          Rollout & Rollback: {selectedResource?.name}
-        </DialogTitle>
-        <DialogContent sx={{ p: 3, bgcolor: '#0a0e17' }}>
-          {/* Mode Tabs */}
-          <Box sx={{ display: 'flex', gap: 1, mb: 3 }}>
-            <Button
-              variant={rolloutMode === 'restart' ? 'contained' : 'outlined'}
-              onClick={() => setRolloutMode('restart')}
-              sx={{ fontWeight: 700, textTransform: 'none', flex: 1 }}
-            >
-              Rolling Restart
-            </Button>
-            <Button
-              variant={rolloutMode === 'rollback' ? 'contained' : 'outlined'}
-              onClick={() => setRolloutMode('rollback')}
-              sx={{ fontWeight: 700, textTransform: 'none', flex: 1 }}
-            >
-              Rollback to Revision
-            </Button>
-          </Box>
-
-          {rolloutMode === 'restart' ? (
-            <Box sx={{ p: 2, bgcolor: '#0f1422', borderRadius: 2, border: '1px solid rgba(255,255,255,0.06)' }}>
-              <Typography variant="body2" sx={{ color: '#e2e8f0', mb: 1, fontWeight: 600 }}>
-                Trigger a zero-downtime rolling restart for <b>{selectedResource?.name}</b> in namespace <b>{selectedResource?.namespace}</b>.
-              </Typography>
-              <Typography variant="caption" sx={{ color: '#8b949e' }}>
-                Kubernetes will progressively recreate all replica pods with the current configuration.
-              </Typography>
-            </Box>
-          ) : (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-              <Typography variant="caption" sx={{ color: '#8b949e', fontWeight: 700, textTransform: 'uppercase' }}>
-                Select Target Historical Revision (--to-revision):
-              </Typography>
-              {rolloutRevisions && rolloutRevisions.length > 0 ? (
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, maxHeight: 220, overflowY: 'auto' }}>
-                  {rolloutRevisions.map((rev) => {
-                    const isSelected = selectedRolloutRevision === rev.revision;
-                    return (
-                      <Box
-                        key={rev.revision}
-                        onClick={() => setSelectedRolloutRevision(rev.revision)}
-                        sx={{
-                          p: 1.5,
-                          borderRadius: 2,
-                          bgcolor: isSelected ? 'rgba(56,189,248,0.1)' : '#0f1422',
-                          border: isSelected ? '1px solid #38bdf8' : '1px solid rgba(255,255,255,0.06)',
-                          cursor: 'pointer',
-                          transition: 'all 0.15s ease',
-                          '&:hover': { bgcolor: 'rgba(255,255,255,0.04)' },
-                        }}
-                      >
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-                          <Chip
-                            label={`Revision #${rev.revision}`}
-                            size="small"
-                            color={isSelected ? 'primary' : 'default'}
-                            sx={{ fontWeight: 800, fontSize: '0.7rem', height: 20 }}
-                          />
-                          <Typography variant="caption" sx={{ color: '#8b949e' }}>{rev.timestamp}</Typography>
-                        </Box>
-                        <Typography variant="caption" sx={{ fontFamily: 'monospace', color: isSelected ? '#38bdf8' : '#e2e8f0', wordBreak: 'break-all' }}>
-                          {rev.image}
+                      {/* Left: Clean Title without resource name */}
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <ReceiptLongIcon sx={{ color: isDark ? '#38bdf8' : '#0284c7', fontSize: 22 }} />
+                        <Typography variant="h6" sx={{ color: isDark ? '#f8fafc' : '#0f172a', fontWeight: 800, fontSize: '1rem', lineHeight: 1.2 }}>
+                          {logsResourceType === 'deployment' ? 'Deployment Logs' : 'Pod Logs'}
                         </Typography>
-                        {rev.changeCause && (
-                          <Typography variant="caption" sx={{ color: '#8b949e', display: 'block', mt: 0.25 }}>
-                            Cause: {rev.changeCause}
+                      </Box>
+
+                      {/* Center: Controls Stack in Uniform Height */}
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                        {/* Container Selector if Pod has multiple containers or container list */}
+                        {selectedResource?.containers && selectedResource.containers.length > 0 && (
+                          <FormControl size="small" sx={{ minWidth: 120 }}>
+                            <Select
+                              value={selectedContainer || selectedResource.containers[0] || ''}
+                              onChange={(e) => {
+                                const newCont = e.target.value;
+                                setSelectedContainer(newCont);
+                                handleRefreshLogs(logsTimeFrame, newCont);
+                              }}
+                              MenuProps={{
+                                slotProps: {
+                                  paper: {
+                                    sx: {
+                                      bgcolor: '#0f1422',
+                                      color: '#f0f6fc',
+                                      border: '1px solid rgba(255, 255, 255, 0.08)',
+                                      borderRadius: 1.5,
+                                      boxShadow: '0 20px 40px -10px rgba(0, 0, 0, 0.85)',
+                                      backgroundImage: 'none',
+                                      mt: 0.5,
+                                      '& .MuiMenuItem-root': {
+                                        fontSize: '0.8rem',
+                                        color: '#cbd5e1',
+                                        borderRadius: 1,
+                                        py: 0.6,
+                                        px: 1.25,
+                                        my: 0.2,
+                                        '&:hover': {
+                                          bgcolor: 'rgba(255, 255, 255, 0.06)',
+                                          color: '#f8fafc',
+                                        },
+                                        '&.Mui-selected': {
+                                          bgcolor: 'rgba(56, 189, 248, 0.15)',
+                                          color: '#38bdf8',
+                                          fontWeight: 700,
+                                        },
+                                      },
+                                    },
+                                  },
+                                },
+                              }}
+                              sx={{
+                                height: 30,
+                                bgcolor: '#0a0e17',
+                                color: '#38bdf8',
+                                fontSize: '0.75rem',
+                                borderRadius: 1.5,
+                                fontWeight: 700,
+                                '& .MuiOutlinedInput-notchedOutline': {
+                                  borderColor: 'rgba(56, 189, 248, 0.4)',
+                                },
+                                '&:hover .MuiOutlinedInput-notchedOutline': {
+                                  borderColor: '#38bdf8',
+                                },
+                                '& .MuiSvgIcon-root': { color: '#38bdf8', fontSize: 18 },
+                              }}
+                            >
+                              {selectedResource.containers.map((cName: string) => (
+                                <MenuItem key={cName} value={cName} sx={{ fontSize: '0.8rem' }}>
+                                  {cName}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                        )}
+
+                        {/* Time Frame & Pre Selector */}
+                        <FormControl size="small" sx={{ minWidth: 95 }}>
+                          <Select
+                            value={logsTimeFrame}
+                            onChange={(e) => {
+                              const newTf = e.target.value;
+                              setLogsTimeFrame(newTf);
+                              setLogsPrevious(newTf === 'pre');
+                              handleRefreshLogs(newTf);
+                            }}
+                            MenuProps={{
+                              slotProps: {
+                                paper: {
+                                  sx: {
+                                    bgcolor: '#0f1422',
+                                    color: '#f0f6fc',
+                                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                                    borderRadius: 1.5,
+                                    boxShadow: '0 20px 40px -10px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.06)',
+                                    backgroundImage: 'none',
+                                    mt: 0.5,
+                                    '& .MuiList-root': {
+                                      p: 0.5,
+                                    },
+                                    '& .MuiMenuItem-root': {
+                                      fontSize: '0.8rem',
+                                      color: '#cbd5e1',
+                                      borderRadius: 1,
+                                      py: 0.6,
+                                      px: 1.25,
+                                      my: 0.2,
+                                      '&:hover': {
+                                        bgcolor: 'rgba(255, 255, 255, 0.06)',
+                                        color: '#f8fafc',
+                                      },
+                                      '&.Mui-selected': {
+                                        bgcolor: 'rgba(56, 189, 248, 0.15)',
+                                        color: '#38bdf8',
+                                        fontWeight: 700,
+                                        '&:hover': {
+                                          bgcolor: 'rgba(56, 189, 248, 0.22)',
+                                        },
+                                      },
+                                    },
+                                    '& .MuiDivider-root': {
+                                      my: 0.5,
+                                      borderColor: 'rgba(255, 255, 255, 0.08)',
+                                    },
+                                  },
+                                },
+                              },
+                            }}
+                            sx={{
+                              height: 30,
+                              bgcolor: '#0a0e17',
+                              color: logsTimeFrame === 'pre' ? '#f59e0b' : '#f0f6fc',
+                              fontSize: '0.75rem',
+                              borderRadius: 1.5,
+                              fontWeight: 700,
+                              '& .MuiOutlinedInput-notchedOutline': {
+                                borderColor: logsTimeFrame === 'pre' ? 'rgba(245,158,11,0.5)' : 'rgba(255,255,255,0.12)',
+                              },
+                              '&:hover .MuiOutlinedInput-notchedOutline': {
+                                borderColor: logsTimeFrame === 'pre' ? '#f59e0b' : 'rgba(255,255,255,0.25)',
+                              },
+                              '& .MuiSvgIcon-root': { color: logsTimeFrame === 'pre' ? '#f59e0b' : '#94a3b8', fontSize: 18 },
+                            }}
+                          >
+                            <MenuItem value="all" sx={{ fontSize: '0.8rem' }}>All Logs</MenuItem>
+                            <MenuItem value="5m" sx={{ fontSize: '0.8rem' }}>Since 5m</MenuItem>
+                            <MenuItem value="15m" sx={{ fontSize: '0.8rem' }}>Since 15m</MenuItem>
+                            <MenuItem value="30m" sx={{ fontSize: '0.8rem' }}>Since 30m</MenuItem>
+                            <MenuItem value="1h" sx={{ fontSize: '0.8rem' }}>Since 1h</MenuItem>
+                            <MenuItem value="6h" sx={{ fontSize: '0.8rem' }}>Since 6h</MenuItem>
+                            <MenuItem value="24h" sx={{ fontSize: '0.8rem' }}>Since 24h</MenuItem>
+                            <Divider sx={{ my: 0.5, borderColor: 'rgba(255,255,255,0.08)' }} />
+                            <MenuItem value="pre" sx={{ fontSize: '0.8rem', color: '#f59e0b', fontWeight: 800 }}>
+                              pre (Previous)
+                            </MenuItem>
+                          </Select>
+                        </FormControl>
+
+                        {/* Timezone Switch Button (Local Time vs UTC) */}
+                        <Tooltip title={`Switch Timezone (Currently displaying: ${logsTimeMode === 'local' ? `Local Browser Time [${userTimezone}]` : 'Raw Pod Time [UTC]'})`}>
+                          <Button
+                            size="small"
+                            onClick={() => setLogsTimeMode(logsTimeMode === 'local' ? 'utc' : 'local')}
+                            startIcon={<AccessTimeIcon sx={{ fontSize: 15 }} />}
+                            sx={{
+                              color: logsTimeMode === 'local' ? '#38bdf8' : '#94a3b8',
+                              bgcolor: logsTimeMode === 'local' ? 'rgba(56, 189, 248, 0.12)' : '#0a0e17',
+                              border: `1px solid ${logsTimeMode === 'local' ? 'rgba(56, 189, 248, 0.35)' : 'rgba(255,255,255,0.12)'}`,
+                              borderRadius: 1.5,
+                              height: 30,
+                              px: 1.2,
+                              fontSize: '0.74rem',
+                              fontWeight: 700,
+                              textTransform: 'none',
+                              whiteSpace: 'nowrap',
+                              '&:hover': {
+                                bgcolor: logsTimeMode === 'local' ? 'rgba(56, 189, 248, 0.2)' : 'rgba(255,255,255,0.06)',
+                                borderColor: logsTimeMode === 'local' ? '#38bdf8' : 'rgba(255,255,255,0.25)',
+                              },
+                            }}
+                          >
+                            {logsTimeMode === 'local' ? 'Local Time' : 'UTC'}
+                          </Button>
+                        </Tooltip>
+
+                        {/* Search Field */}
+                        <TextField
+                          size="small"
+                          placeholder="Search logs..."
+                          value={logsSearchQuery}
+                          onChange={(e) => setLogsSearchQuery(e.target.value)}
+                          slotProps={{
+                            input: {
+                              startAdornment: <SearchIcon sx={{ color: 'rgba(255,255,255,0.4)', fontSize: 16, mr: 0.5 }} />,
+                              endAdornment: logsSearchQuery ? (
+                                <IconButton
+                                  size="small"
+                                  onClick={() => setLogsSearchQuery('')}
+                                  sx={{ color: 'rgba(255,255,255,0.4)', p: 0.2, '&:hover': { color: '#f8fafc' } }}
+                                >
+                                  <ClearIcon sx={{ fontSize: 14 }} />
+                                </IconButton>
+                              ) : null,
+                            },
+                          }}
+                          sx={{
+                            width: 170,
+                            '& .MuiOutlinedInput-root': {
+                              bgcolor: '#0a0e17',
+                              color: '#f0f6fc',
+                              fontSize: '0.78rem',
+                              height: 30,
+                              borderRadius: 1.5,
+                              pr: 0.5,
+                              '& fieldset': { borderColor: 'rgba(255,255,255,0.12)' },
+                              '&:hover fieldset': { borderColor: 'rgba(255,255,255,0.25)' },
+                            },
+                          }}
+                        />
+
+                        {/* Live Search Matched Badge */}
+                        {logsSearchQuery.trim() && (
+                          <Chip
+                            label={`${filteredLogsLines.length} matched`}
+                            size="small"
+                            sx={{
+                              bgcolor: filteredLogsLines.length > 0 ? 'rgba(56,189,248,0.15)' : 'rgba(239,68,68,0.15)',
+                              color: filteredLogsLines.length > 0 ? '#38bdf8' : '#ef4444',
+                              fontSize: '0.68rem',
+                              fontWeight: 700,
+                              height: 22,
+                            }}
+                          />
+                        )}
+
+                        {/* Refresh Button */}
+                        <Tooltip title="Refresh Logs">
+                          <IconButton
+                            size="small"
+                            onClick={() => handleRefreshLogs(logsTimeFrame)}
+                            disabled={logsLoading}
+                            sx={{
+                              color: '#e2e8f0',
+                              border: '1px solid rgba(255,255,255,0.12)',
+                              borderRadius: 1.5,
+                              p: 0.6,
+                            }}
+                          >
+                            <RefreshIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+
+                        {/* Copy Button */}
+                        <Tooltip title={logsCopied ? "Copied!" : "Copy Logs"}>
+                          <IconButton
+                            size="small"
+                            onClick={handleCopyLogsWithFeedback}
+                            sx={{
+                              color: logsCopied ? '#34d399' : '#e2e8f0',
+                              border: '1px solid rgba(255,255,255,0.12)',
+                              borderRadius: 1.5,
+                              p: 0.6,
+                            }}
+                          >
+                            {logsCopied ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}
+                          </IconButton>
+                        </Tooltip>
+
+                        {/* Download Button */}
+                        <Tooltip title="Download Logs">
+                          <IconButton
+                            size="small"
+                            onClick={handleDownloadLogs}
+                            sx={{
+                              color: '#e2e8f0',
+                              border: '1px solid rgba(255,255,255,0.12)',
+                              borderRadius: 1.5,
+                              p: 0.6,
+                            }}
+                          >
+                            <FileDownloadIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
+
+                      {/* Far Right Corner: Window Controls Pinned to the Right */}
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                        {/* Maximize / Restore Window */}
+                        <Tooltip title={logsDialogMaximized ? 'Restore Window' : 'Maximize Window'}>
+                          <IconButton
+                            size="small"
+                            onClick={() => setLogsDialogMaximized(!logsDialogMaximized)}
+                            sx={{
+                              color: '#e2e8f0',
+                              border: '1px solid rgba(255,255,255,0.12)',
+                              borderRadius: 1.5,
+                              p: 0.6,
+                            }}
+                          >
+                            {logsDialogMaximized ? <FullscreenExitIcon fontSize="small" /> : <FullscreenIcon fontSize="small" />}
+                          </IconButton>
+                        </Tooltip>
+
+                        {/* Close Window */}
+                        <Tooltip title="Close Window">
+                          <IconButton
+                            size="small"
+                            onClick={() => setLogsDialogOpen(false)}
+                            sx={{
+                              color: '#e2e8f0',
+                              border: '1px solid rgba(255,255,255,0.12)',
+                              borderRadius: 1.5,
+                              p: 0.6,
+                            }}
+                          >
+                            <CloseIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
+                    </DialogTitle>
+
+                    {/* Log Stream Content */}
+                    <DialogContent
+                      sx={{
+                        bgcolor: '#0a0e17',
+                        color: '#c9d1d9',
+                        p: 2,
+                        fontFamily: 'Consolas, Monaco, monospace',
+                        fontSize: '0.8rem',
+                        height: logsDialogMaximized ? 'calc(100vh - 128px)' : '480px',
+                        overflowY: 'auto',
+                      }}
+                    >
+                      {logsLoading ? (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                          <CircularProgress sx={{ color: '#38bdf8' }} />
+                        </Box>
+                      ) : filteredLogsLines.length === 0 ? (
+                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', py: 6, gap: 1.5 }}>
+                          <Typography variant="body2" sx={{ color: '#94a3b8', fontWeight: 600 }}>
+                            {logsSearchQuery.trim()
+                              ? `No log lines matching "${logsSearchQuery}"`
+                              : 'No logs available for this resource.'}
                           </Typography>
+                          {logsSearchQuery.trim() && (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => setLogsSearchQuery('')}
+                              sx={{ color: '#38bdf8', borderColor: 'rgba(56,189,248,0.3)', textTransform: 'none', fontSize: '0.75rem', fontWeight: 700 }}
+                            >
+                              Clear Search Filter
+                            </Button>
+                          )}
+                        </Box>
+                      ) : (
+                        <Box component="pre" sx={{ m: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'inherit', lineHeight: 1.6 }}>
+                          {filteredLogsLines.map((line, idx) => (
+                            <React.Fragment key={idx}>
+                              {renderEnhancedLogLine(line, logsSearchQuery.trim(), logsTimeMode)}
+                            </React.Fragment>
+                          ))}
+                        </Box>
+                      )}
+                    </DialogContent>
+
+                    {/* Sleek Status Footer Bar */}
+                    <DialogActions
+                      sx={{
+                        px: 3,
+                        py: 1.25,
+                        bgcolor: '#0f1422',
+                        borderTop: '1px solid rgba(255,255,255,0.06)',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: 1,
+                      }}
+                    >
+                      {/* Left: Resource Name & Namespace & Pre Indicator */}
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                        <Chip
+                          label={`${logsResourceType === 'deployment' ? 'Deployment' : 'Pod'}: ${selectedResource?.name}`}
+                          size="small"
+                          sx={{
+                            bgcolor: 'rgba(56,189,248,0.15)',
+                            color: '#38bdf8',
+                            fontSize: '0.72rem',
+                            fontWeight: 800,
+                            fontFamily: 'monospace',
+                            height: 24,
+                            borderRadius: 1.5,
+                          }}
+                        />
+                        <Chip
+                          label={`Namespace: ${selectedResource?.namespace || 'default'}`}
+                          size="small"
+                          sx={{
+                            bgcolor: 'rgba(148,163,184,0.12)',
+                            color: '#cbd5e1',
+                            fontSize: '0.7rem',
+                            fontWeight: 700,
+                            height: 24,
+                            borderRadius: 1.5,
+                          }}
+                        />
+                        {(logsTimeFrame === 'pre' || logsPrevious) && (
+                          <Chip
+                            label="⚠️ Previous Terminated Container (pre)"
+                            size="small"
+                            color="warning"
+                            sx={{
+                              fontSize: '0.7rem',
+                              fontWeight: 800,
+                              height: 24,
+                              borderRadius: 1.5,
+                            }}
+                          />
                         )}
                       </Box>
-                    );
-                  })}
+
+                      {/* Right: Line Count Telemetry */}
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="caption" sx={{ color: '#8b949e', fontWeight: 600, fontFamily: 'monospace' }}>
+                          {logsSearchQuery.trim()
+                            ? `${filteredLogsLines.length} matched / ${logsContent ? logsContent.split('\n').length : 0} lines`
+                            : `${logsContent ? logsContent.split('\n').length : 0} lines`}
+                        </Typography>
+                      </Box>
+                    </DialogActions>
+                  </Dialog>
+
+                  {/* Set Container Image Dialog */}
+                  <Dialog open={imageDialogOpen} onClose={() => !imageLoading && setImageDialogOpen(false)} maxWidth="xs" fullWidth>
+                    <DialogTitle sx={{ fontWeight: 700 }}>Update Container Image</DialogTitle>
+                    <DialogContent>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        Specify the new container image repository and tag for <b>{selectedResource?.name}</b> in namespace <b>{selectedResource?.namespace}</b>.
+                      </Typography>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Image Repository:Tag"
+                        placeholder="e.g. nginx:1.25-alpine"
+                        value={imageInputVal}
+                        onChange={(e) => setImageInputVal(e.target.value)}
+                        disabled={imageLoading}
+                        autoFocus
+                      />
+                    </DialogContent>
+                    <DialogActions sx={{ p: 2 }}>
+                      <Button onClick={() => setImageDialogOpen(false)} disabled={imageLoading} sx={{ fontWeight: 700 }}>Cancel</Button>
+                      <Button onClick={handleApplyImageUpdate} color="primary" variant="contained" disabled={imageLoading || !imageInputVal.trim()} sx={{ fontWeight: 700 }}>
+                        {imageLoading ? <CircularProgress size={20} color="inherit" /> : 'Update Image'}
+                      </Button>
+                    </DialogActions>
+                  </Dialog>
+
+                  {/* Scale Deployment Dialog */}
+                  <Dialog open={scaleDialogOpen} onClose={() => !scaleLoading && setScaleDialogOpen(false)} maxWidth="xs" fullWidth>
+                    <DialogTitle sx={{ fontWeight: 700 }}>Scale Deployment</DialogTitle>
+                    <DialogContent>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
+                        Set target replicas count for <b>{selectedResource?.name}</b> in namespace <b>{selectedResource?.namespace}</b>.
+                      </Typography>
+                      <Box sx={{ px: 2 }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                          <Typography variant="caption" color="text.secondary">Desired Replicas</Typography>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700 }} color="primary">{scaleReplicas} pods</Typography>
+                        </Box>
+                        <Slider value={scaleReplicas} min={0} max={10} step={1} marks valueLabelDisplay="auto" onChange={(e, val) => setScaleReplicas(val as number)} disabled={scaleLoading} />
+                      </Box>
+                    </DialogContent>
+                    <DialogActions>
+                      <Button onClick={() => setScaleDialogOpen(false)} disabled={scaleLoading} sx={{ fontWeight: 700 }}>Cancel</Button>
+                      <Button onClick={handleApplyScale} variant="contained" disabled={scaleLoading} sx={{ fontWeight: 700 }}>
+                        {scaleLoading ? <CircularProgress size={20} /> : 'Apply Scale'}
+                      </Button>
+                    </DialogActions>
+                  </Dialog>
+
+                  {/* Restart Pod Dialog */}
+                  <Dialog open={restartDialogOpen} onClose={() => !restartLoading && setRestartDialogOpen(false)}>
+                    <DialogTitle sx={{ fontWeight: 700 }}>Restart Pod</DialogTitle>
+                    <DialogContent>
+                      <Typography variant="body2" color="text.secondary">
+                        Are you sure you want to terminate and restart pod <b>{selectedResource?.name}</b>?
+                      </Typography>
+                    </DialogContent>
+                    <DialogActions>
+                      <Button onClick={() => setRestartDialogOpen(false)} disabled={restartLoading} sx={{ fontWeight: 700 }}>Cancel</Button>
+                      <Button onClick={handleApplyRestart} color="warning" variant="contained" disabled={restartLoading} sx={{ fontWeight: 700 }}>
+                        {restartLoading ? <CircularProgress size={20} color="inherit" /> : 'Confirm Restart'}
+                      </Button>
+                    </DialogActions>
+                  </Dialog>
+
+                  {/* Delete Resource Dialog */}
+                  <Dialog open={deleteDialogOpen} onClose={() => !deleteLoading && setDeleteDialogOpen(false)}>
+                    <DialogTitle sx={{ fontWeight: 700 }}>Delete Resource</DialogTitle>
+                    <DialogContent>
+                      <Typography variant="body2" color="text.secondary">
+                        Are you sure you want to delete <b>{selectedResource?.name}</b>? This action is irreversible.
+                      </Typography>
+                    </DialogContent>
+                    <DialogActions>
+                      <Button onClick={() => setDeleteDialogOpen(false)} disabled={deleteLoading} sx={{ fontWeight: 700 }}>Cancel</Button>
+                      <Button onClick={handleApplyDelete} color="error" variant="contained" disabled={deleteLoading} sx={{ fontWeight: 700 }}>
+                        {deleteLoading ? <CircularProgress size={20} color="inherit" /> : 'Delete'}
+                      </Button>
+                    </DialogActions>
+                  </Dialog>
+
+                  {/* Rollout & Rollback Dialog */}
+                  <Dialog
+                    open={rolloutDialogOpen}
+                    onClose={() => !rolloutLoading && setRolloutDialogOpen(false)}
+                    maxWidth="sm"
+                    fullWidth
+                    slotProps={{
+                      paper: {
+                        sx: {
+                          bgcolor: '#0a0e17',
+                          backgroundImage: 'none',
+                          borderRadius: 3,
+                          border: '1px solid rgba(255,255,255,0.08)',
+                          overflow: 'hidden',
+                        },
+                      },
+                    }}
+                  >
+                    <DialogTitle sx={{ fontWeight: 800, bgcolor: '#0f1422', color: '#f8fafc', px: 3, py: 2, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                      Rollout & Rollback: {selectedResource?.name}
+                    </DialogTitle>
+                    <DialogContent sx={{ p: 3, bgcolor: '#0a0e17' }}>
+                      {/* Mode Tabs */}
+                      <Box sx={{ display: 'flex', gap: 1, mb: 3 }}>
+                        <Button
+                          variant={rolloutMode === 'restart' ? 'contained' : 'outlined'}
+                          onClick={() => setRolloutMode('restart')}
+                          sx={{ fontWeight: 700, textTransform: 'none', flex: 1 }}
+                        >
+                          Rolling Restart
+                        </Button>
+                        <Button
+                          variant={rolloutMode === 'rollback' ? 'contained' : 'outlined'}
+                          onClick={() => setRolloutMode('rollback')}
+                          sx={{ fontWeight: 700, textTransform: 'none', flex: 1 }}
+                        >
+                          Rollback to Revision
+                        </Button>
+                      </Box>
+
+                      {rolloutMode === 'restart' ? (
+                        <Box sx={{ p: 2, bgcolor: '#0f1422', borderRadius: 2, border: '1px solid rgba(255,255,255,0.06)' }}>
+                          <Typography variant="body2" sx={{ color: '#e2e8f0', mb: 1, fontWeight: 600 }}>
+                            Trigger a zero-downtime rolling restart for <b>{selectedResource?.name}</b> in namespace <b>{selectedResource?.namespace}</b>.
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: '#8b949e' }}>
+                            Kubernetes will progressively recreate all replica pods with the current configuration.
+                          </Typography>
+                        </Box>
+                      ) : (
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                          <Typography variant="caption" sx={{ color: '#8b949e', fontWeight: 700, textTransform: 'uppercase' }}>
+                            Select Target Historical Revision (--to-revision):
+                          </Typography>
+                          {rolloutRevisions && rolloutRevisions.length > 0 ? (
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, maxHeight: 220, overflowY: 'auto' }}>
+                              {rolloutRevisions.map((rev) => {
+                                const isSelected = selectedRolloutRevision === rev.revision;
+                                return (
+                                  <Box
+                                    key={rev.revision}
+                                    onClick={() => setSelectedRolloutRevision(rev.revision)}
+                                    sx={{
+                                      p: 1.5,
+                                      borderRadius: 2,
+                                      bgcolor: isSelected ? 'rgba(56,189,248,0.1)' : '#0f1422',
+                                      border: isSelected ? '1px solid #38bdf8' : '1px solid rgba(255,255,255,0.06)',
+                                      cursor: 'pointer',
+                                      transition: 'all 0.15s ease',
+                                      '&:hover': { bgcolor: 'rgba(255,255,255,0.04)' },
+                                    }}
+                                  >
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                                      <Chip
+                                        label={`Revision #${rev.revision}`}
+                                        size="small"
+                                        color={isSelected ? 'primary' : 'default'}
+                                        sx={{ fontWeight: 800, fontSize: '0.7rem', height: 20 }}
+                                      />
+                                      <Typography variant="caption" sx={{ color: '#8b949e' }}>{rev.timestamp}</Typography>
+                                    </Box>
+                                    <Typography variant="caption" sx={{ fontFamily: 'monospace', color: isSelected ? '#38bdf8' : '#e2e8f0', wordBreak: 'break-all' }}>
+                                      {rev.image}
+                                    </Typography>
+                                    {rev.changeCause && (
+                                      <Typography variant="caption" sx={{ color: '#8b949e', display: 'block', mt: 0.25 }}>
+                                        Cause: {rev.changeCause}
+                                      </Typography>
+                                    )}
+                                  </Box>
+                                );
+                              })}
+                            </Box>
+                          ) : (
+                            <Typography variant="body2" sx={{ color: '#8b949e', py: 2 }}>
+                              No historical revisions found for this resource.
+                            </Typography>
+                          )}
+                        </Box>
+                      )}
+                    </DialogContent>
+                    <DialogActions sx={{ px: 3, py: 2, bgcolor: '#0f1422', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                      <Button onClick={() => setRolloutDialogOpen(false)} disabled={rolloutLoading} sx={{ fontWeight: 700, color: '#94a3b8' }}>
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={handleApplyRollout}
+                        color={rolloutMode === 'rollback' ? 'warning' : 'primary'}
+                        variant="contained"
+                        disabled={rolloutLoading || (rolloutMode === 'rollback' && !selectedRolloutRevision)}
+                        sx={{ fontWeight: 700 }}
+                      >
+                        {rolloutLoading ? (
+                          <CircularProgress size={20} color="inherit" />
+                        ) : rolloutMode === 'rollback' ? (
+                          `Rollback to Revision #${selectedRolloutRevision || '?'}`
+                        ) : (
+                          'Trigger Rolling Restart'
+                        )}
+                      </Button>
+                    </DialogActions>
+                  </Dialog>
+
+                  {/* Bulk Delete Dialog */}
+                  <Dialog open={bulkDeleteDialogOpen} onClose={() => !bulkDeleteLoading && setBulkDeleteDialogOpen(false)}>
+                    <DialogTitle sx={{ fontWeight: 700 }}>Delete Resources</DialogTitle>
+                    <DialogContent>
+                      <Typography variant="body2" color="text.secondary">
+                        Are you sure you want to delete <b>{selectedResources.length}</b> selected resources?
+                      </Typography>
+                    </DialogContent>
+                    <DialogActions>
+                      <Button onClick={() => setBulkDeleteDialogOpen(false)} disabled={bulkDeleteLoading} sx={{ fontWeight: 700 }}>Cancel</Button>
+                      <Button onClick={handleApplyBulkDelete} color="error" variant="contained" disabled={bulkDeleteLoading} sx={{ fontWeight: 700 }}>
+                        {bulkDeleteLoading ? <CircularProgress size={20} color="inherit" /> : 'Delete All'}
+                      </Button>
+                    </DialogActions>
+                  </Dialog>
+
+                  {/* Phase 6: Helm Values Inspection Dialog */}
+                  <Dialog
+                    open={helmValuesOpen}
+                    onClose={() => setHelmValuesOpen(false)}
+                    maxWidth="md"
+                    fullWidth
+                    slotProps={{
+                      paper: {
+                        sx: {
+                          bgcolor: (theme) => (theme.palette.mode === 'dark' ? '#0f1422' : '#ffffff'),
+                          borderRadius: 2,
+                          border: '1px solid',
+                          borderColor: 'divider',
+                        },
+                      },
+                    }}
+                  >
+                    <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <StorageIcon sx={{ color: 'primary.main', fontSize: 22 }} />
+                        <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                          Helm Release Values: {activeHelmRelease?.name}
+                        </Typography>
+                        <Chip label={activeHelmRelease?.namespace || 'default'} size="small" sx={{ fontSize: '0.65rem' }} />
+                        <Chip label={`rev ${activeHelmRelease?.revision || 1}`} size="small" color="primary" sx={{ fontSize: '0.65rem', fontWeight: 750 }} />
+                      </Box>
+                      <IconButton size="small" onClick={() => setHelmValuesOpen(false)} sx={{ color: 'text.secondary' }}>
+                        <CloseIcon fontSize="small" />
+                      </IconButton>
+                    </DialogTitle>
+                    <DialogContent dividers sx={{ p: 2 }}>
+                      {helmValuesLoading ? (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 8 }}>
+                          <CircularProgress size={32} />
+                        </Box>
+                      ) : (
+                        <Paper
+                          variant="outlined"
+                          sx={{
+                            bgcolor: 'action.hover',
+                            border: '1px solid',
+                            borderColor: 'divider',
+                            borderRadius: 1.5,
+                            overflow: 'hidden',
+                          }}
+                        >
+                          <Box
+                            component="pre"
+                            sx={{
+                              m: 0,
+                              p: 2,
+                              fontFamily: 'Consolas, Monaco, "Liberation Mono", monospace',
+                              fontSize: '0.8rem',
+                              lineHeight: 1.55,
+                              color: 'text.primary',
+                              maxHeight: 460,
+                              overflowX: 'auto',
+                              overflowY: 'auto',
+                              whiteSpace: 'pre',
+                            }}
+                          >
+                            {helmValuesContent}
+                          </Box>
+                        </Paper>
+                      )}
+                    </DialogContent>
+                    <DialogActions sx={{ px: 3, py: 1.5 }}>
+                      <Button
+                        startIcon={<ContentCopyIcon fontSize="small" />}
+                        onClick={() => {
+                          navigator.clipboard.writeText(helmValuesContent);
+                          setToastSeverity('success');
+                          setToastMessage('Helm release values copied to clipboard.');
+                        }}
+                        sx={{ fontWeight: 700, textTransform: 'none' }}
+                      >
+                        Copy Values
+                      </Button>
+                      <Button
+                        variant="contained"
+                        onClick={() => setHelmValuesOpen(false)}
+                        sx={{ fontWeight: 700, textTransform: 'none' }}
+                      >
+                        Close
+                      </Button>
+                    </DialogActions>
+                  </Dialog>
+
+                  {/* Phase 6: Helm Rollback Dialog */}
+                  <Dialog
+                    open={helmRollbackOpen}
+                    onClose={() => !helmRollbackLoading && setHelmRollbackOpen(false)}
+                    maxWidth="xs"
+                    fullWidth
+                    slotProps={{
+                      paper: {
+                        sx: {
+                          bgcolor: (theme) => (theme.palette.mode === 'dark' ? '#0f1422' : '#ffffff'),
+                          borderRadius: 2,
+                          border: '1px solid',
+                          borderColor: 'divider',
+                        },
+                      },
+                    }}
+                  >
+                    <DialogTitle sx={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <HistoryIcon sx={{ color: 'warning.main' }} />
+                      Rollback Helm Release
+                    </DialogTitle>
+                    <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        Rollback release <b>{activeHelmRelease?.name}</b> (current revision: <b>{activeHelmRelease?.revision}</b>) to a prior release revision.
+                      </Typography>
+                      <TextField
+                        label="Target Revision"
+                        type="number"
+                        size="small"
+                        fullWidth
+                        value={helmRollbackRev}
+                        onChange={(e) => setHelmRollbackRev(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                        slotProps={{
+                          htmlInput: { min: 1 },
+                        }}
+                        helperText="Enter the historical release revision number to restore."
+                      />
+                    </DialogContent>
+                    <DialogActions sx={{ px: 3, py: 2 }}>
+                      <Button
+                        onClick={() => setHelmRollbackOpen(false)}
+                        disabled={helmRollbackLoading}
+                        sx={{ fontWeight: 700, color: 'text.secondary' }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        variant="contained"
+                        color="warning"
+                        onClick={handleApplyHelmRollback}
+                        disabled={helmRollbackLoading || helmRollbackRev <= 0}
+                        sx={{ fontWeight: 700, textTransform: 'none' }}
+                      >
+                        {helmRollbackLoading ? <CircularProgress size={20} color="inherit" /> : `Rollback to Rev ${helmRollbackRev}`}
+                      </Button>
+                    </DialogActions>
+                  </Dialog>
+
+                  {/* Phase 6: Helm Uninstall Dialog */}
+                  <Dialog
+                    open={helmUninstallOpen}
+                    onClose={() => !helmUninstallLoading && setHelmUninstallOpen(false)}
+                    maxWidth="xs"
+                    fullWidth
+                    slotProps={{
+                      paper: {
+                        sx: {
+                          bgcolor: (theme) => (theme.palette.mode === 'dark' ? '#0f1422' : '#ffffff'),
+                          borderRadius: 2,
+                          border: '1px solid',
+                          borderColor: 'divider',
+                        },
+                      },
+                    }}
+                  >
+                    <DialogTitle sx={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: 1, color: 'error.main' }}>
+                      <ClearIcon />
+                      Uninstall Helm Release
+                    </DialogTitle>
+                    <DialogContent>
+                      <Typography variant="body2" color="text.secondary">
+                        Are you sure you want to uninstall Helm release <b>{activeHelmRelease?.name}</b> in namespace <b>{activeHelmRelease?.namespace}</b>?
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: 'error.main', mt: 1, display: 'block', fontWeight: 600 }}>
+                        Warning: This will delete all Kubernetes resources (Deployments, Services, ConfigMaps, Secrets) managed by this release.
+                      </Typography>
+                    </DialogContent>
+                    <DialogActions sx={{ px: 3, py: 2 }}>
+                      <Button
+                        onClick={() => setHelmUninstallOpen(false)}
+                        disabled={helmUninstallLoading}
+                        sx={{ fontWeight: 700, color: 'text.secondary' }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        variant="contained"
+                        color="error"
+                        onClick={handleApplyHelmUninstall}
+                        disabled={helmUninstallLoading}
+                        sx={{ fontWeight: 700, textTransform: 'none' }}
+                      >
+                        {helmUninstallLoading ? <CircularProgress size={20} color="inherit" /> : 'Uninstall Release'}
+                      </Button>
+                    </DialogActions>
+                  </Dialog>
+
+                  {/* Exec Terminal */}
+                  <TerminalWindow
+                    open={terminalOpen}
+                    minimized={terminalMinimized}
+                    onMinimize={() => setTerminalMinimized(true)}
+                    onRestore={() => setTerminalMinimized(false)}
+                    onClose={() => {
+                      setTerminalOpen(false);
+                      setTerminalMinimized(false);
+                    }}
+                    resourceName={terminalResourceName}
+                    resourceType={terminalResourceType}
+                    clusterId={id}
+                    namespace={terminalNamespace}
+                    container={terminalContainer || undefined}
+                  />
+
+                  {/* Quick Action Dock */}
+                  <ActionDock
+                    isConsoleOpen={kubectlShellOpen}
+                    onToggleConsole={() => setKubectlShellOpen(!kubectlShellOpen)}
+                    onCreateResource={() => setCreateDialogOpen(true)}
+                    onOpenSettings={() => setSettingsDialogOpen(true)}
+                    onLogout={() => logout()}
+                    hasActiveExec={terminalOpen}
+                    isExecMinimized={terminalMinimized}
+                    onToggleExec={() => setTerminalMinimized((prev) => !prev)}
+                    execResourceName={terminalResourceName}
+                  />
+
+                  {/* KubeConsole Window */}
+                  {/* Modal Dialog KubeConsole Window */}
+                  <KubectlTerminalDrawer
+                    open={kubectlShellOpen}
+                    onClose={() => setKubectlShellOpen(false)}
+                    clusterId={id}
+                  />
+
+                  {/* System & Workspace Settings Dialog */}
+                  <SettingsDialog
+                    open={settingsDialogOpen}
+                    onClose={() => setSettingsDialogOpen(false)}
+                  />
+
+                  {/* Toast Feedback */}
+                  <Snackbar
+                    open={Boolean(toastMessage)}
+                    autoHideDuration={4000}
+                    onClose={() => setToastMessage(null)}
+                    anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                  >
+                    <Alert severity={toastSeverity} onClose={() => setToastMessage(null)} sx={{ width: '100%', fontWeight: 600, borderRadius: 2 }}>
+                      {toastMessage}
+                    </Alert>
+                  </Snackbar>
                 </Box>
-              ) : (
-                <Typography variant="body2" sx={{ color: '#8b949e', py: 2 }}>
-                  No historical revisions found for this resource.
-                </Typography>
-              )}
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2, bgcolor: '#0f1422', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-          <Button onClick={() => setRolloutDialogOpen(false)} disabled={rolloutLoading} sx={{ fontWeight: 700, color: '#94a3b8' }}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleApplyRollout}
-            color={rolloutMode === 'rollback' ? 'warning' : 'primary'}
-            variant="contained"
-            disabled={rolloutLoading || (rolloutMode === 'rollback' && !selectedRolloutRevision)}
-            sx={{ fontWeight: 700 }}
-          >
-            {rolloutLoading ? (
-              <CircularProgress size={20} color="inherit" />
-            ) : rolloutMode === 'rollback' ? (
-              `Rollback to Revision #${selectedRolloutRevision || '?'}`
-            ) : (
-              'Trigger Rolling Restart'
-            )}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Bulk Delete Dialog */}
-      <Dialog open={bulkDeleteDialogOpen} onClose={() => !bulkDeleteLoading && setBulkDeleteDialogOpen(false)}>
-        <DialogTitle sx={{ fontWeight: 700 }}>Delete Resources</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary">
-            Are you sure you want to delete <b>{selectedResources.length}</b> selected resources?
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setBulkDeleteDialogOpen(false)} disabled={bulkDeleteLoading} sx={{ fontWeight: 700 }}>Cancel</Button>
-          <Button onClick={handleApplyBulkDelete} color="error" variant="contained" disabled={bulkDeleteLoading} sx={{ fontWeight: 700 }}>
-            {bulkDeleteLoading ? <CircularProgress size={20} color="inherit" /> : 'Delete All'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Phase 6: Helm Values Inspection Dialog */}
-      <Dialog
-        open={helmValuesOpen}
-        onClose={() => setHelmValuesOpen(false)}
-        maxWidth="md"
-        fullWidth
-        slotProps={{
-          paper: {
-            sx: {
-              bgcolor: (theme) => (theme.palette.mode === 'dark' ? '#0f1422' : '#ffffff'),
-              borderRadius: 2,
-              border: '1px solid',
-              borderColor: 'divider',
-            },
-          },
-        }}
-      >
-        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <StorageIcon sx={{ color: 'primary.main', fontSize: 22 }} />
-            <Typography variant="h6" sx={{ fontWeight: 800 }}>
-              Helm Release Values: {activeHelmRelease?.name}
-            </Typography>
-            <Chip label={activeHelmRelease?.namespace || 'default'} size="small" sx={{ fontSize: '0.65rem' }} />
-            <Chip label={`rev ${activeHelmRelease?.revision || 1}`} size="small" color="primary" sx={{ fontSize: '0.65rem', fontWeight: 750 }} />
-          </Box>
-          <IconButton size="small" onClick={() => setHelmValuesOpen(false)} sx={{ color: 'text.secondary' }}>
-            <CloseIcon fontSize="small" />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent dividers sx={{ p: 2 }}>
-          {helmValuesLoading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 8 }}>
-              <CircularProgress size={32} />
-            </Box>
-          ) : (
-            <Paper
-              variant="outlined"
-              sx={{
-                bgcolor: 'action.hover',
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 1.5,
-                overflow: 'hidden',
-              }}
-            >
-              <Box
-                component="pre"
-                sx={{
-                  m: 0,
-                  p: 2,
-                  fontFamily: 'Consolas, Monaco, "Liberation Mono", monospace',
-                  fontSize: '0.8rem',
-                  lineHeight: 1.55,
-                  color: 'text.primary',
-                  maxHeight: 460,
-                  overflowX: 'auto',
-                  overflowY: 'auto',
-                  whiteSpace: 'pre',
-                }}
-              >
-                {helmValuesContent}
-              </Box>
-            </Paper>
-          )}
-        </DialogContent>
-        <DialogActions sx={{ px: 3, py: 1.5 }}>
-          <Button
-            startIcon={<ContentCopyIcon fontSize="small" />}
-            onClick={() => {
-              navigator.clipboard.writeText(helmValuesContent);
-              setToastSeverity('success');
-              setToastMessage('Helm release values copied to clipboard.');
-            }}
-            sx={{ fontWeight: 700, textTransform: 'none' }}
-          >
-            Copy Values
-          </Button>
-          <Button
-            variant="contained"
-            onClick={() => setHelmValuesOpen(false)}
-            sx={{ fontWeight: 700, textTransform: 'none' }}
-          >
-            Close
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Phase 6: Helm Rollback Dialog */}
-      <Dialog
-        open={helmRollbackOpen}
-        onClose={() => !helmRollbackLoading && setHelmRollbackOpen(false)}
-        maxWidth="xs"
-        fullWidth
-        slotProps={{
-          paper: {
-            sx: {
-              bgcolor: (theme) => (theme.palette.mode === 'dark' ? '#0f1422' : '#ffffff'),
-              borderRadius: 2,
-              border: '1px solid',
-              borderColor: 'divider',
-            },
-          },
-        }}
-      >
-        <DialogTitle sx={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: 1 }}>
-          <HistoryIcon sx={{ color: 'warning.main' }} />
-          Rollback Helm Release
-        </DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-          <Typography variant="body2" color="text.secondary">
-            Rollback release <b>{activeHelmRelease?.name}</b> (current revision: <b>{activeHelmRelease?.revision}</b>) to a prior release revision.
-          </Typography>
-          <TextField
-            label="Target Revision"
-            type="number"
-            size="small"
-            fullWidth
-            value={helmRollbackRev}
-            onChange={(e) => setHelmRollbackRev(Math.max(1, parseInt(e.target.value, 10) || 1))}
-            slotProps={{
-              htmlInput: { min: 1 },
-            }}
-            helperText="Enter the historical release revision number to restore."
-          />
-        </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button
-            onClick={() => setHelmRollbackOpen(false)}
-            disabled={helmRollbackLoading}
-            sx={{ fontWeight: 700, color: 'text.secondary' }}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            color="warning"
-            onClick={handleApplyHelmRollback}
-            disabled={helmRollbackLoading || helmRollbackRev <= 0}
-            sx={{ fontWeight: 700, textTransform: 'none' }}
-          >
-            {helmRollbackLoading ? <CircularProgress size={20} color="inherit" /> : `Rollback to Rev ${helmRollbackRev}`}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Phase 6: Helm Uninstall Dialog */}
-      <Dialog
-        open={helmUninstallOpen}
-        onClose={() => !helmUninstallLoading && setHelmUninstallOpen(false)}
-        maxWidth="xs"
-        fullWidth
-        slotProps={{
-          paper: {
-            sx: {
-              bgcolor: (theme) => (theme.palette.mode === 'dark' ? '#0f1422' : '#ffffff'),
-              borderRadius: 2,
-              border: '1px solid',
-              borderColor: 'divider',
-            },
-          },
-        }}
-      >
-        <DialogTitle sx={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: 1, color: 'error.main' }}>
-          <ClearIcon />
-          Uninstall Helm Release
-        </DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary">
-            Are you sure you want to uninstall Helm release <b>{activeHelmRelease?.name}</b> in namespace <b>{activeHelmRelease?.namespace}</b>?
-          </Typography>
-          <Typography variant="caption" sx={{ color: 'error.main', mt: 1, display: 'block', fontWeight: 600 }}>
-            Warning: This will delete all Kubernetes resources (Deployments, Services, ConfigMaps, Secrets) managed by this release.
-          </Typography>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button
-            onClick={() => setHelmUninstallOpen(false)}
-            disabled={helmUninstallLoading}
-            sx={{ fontWeight: 700, color: 'text.secondary' }}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            color="error"
-            onClick={handleApplyHelmUninstall}
-            disabled={helmUninstallLoading}
-            sx={{ fontWeight: 700, textTransform: 'none' }}
-          >
-            {helmUninstallLoading ? <CircularProgress size={20} color="inherit" /> : 'Uninstall Release'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Exec Terminal */}
-      <TerminalWindow
-        open={terminalOpen}
-        onClose={() => setTerminalOpen(false)}
-        resourceName={terminalResourceName}
-        resourceType={terminalResourceType}
-        clusterId={id}
-        namespace={terminalNamespace}
-        container={terminalContainer || undefined}
-      />
-
-      {/* Interactive Kubectl Shell Drawer */}
-      <KubectlTerminalDrawer
-        open={kubectlShellOpen}
-        onClose={() => setKubectlShellOpen(false)}
-        clusterId={id}
-      />
-
-      {/* Toast Feedback */}
-      <Snackbar
-        open={Boolean(toastMessage)}
-        autoHideDuration={4000}
-        onClose={() => setToastMessage(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-      >
-        <Alert severity={toastSeverity} onClose={() => setToastMessage(null)} sx={{ width: '100%', fontWeight: 600, borderRadius: 2 }}>
-          {toastMessage}
-        </Alert>
-      </Snackbar>
-    </Box>
-  );
+                );
 }

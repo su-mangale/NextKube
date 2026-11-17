@@ -13,6 +13,7 @@ import {
   Tooltip,
   CircularProgress,
   Alert,
+  useTheme,
 } from '@mui/material';
 import CodeIcon from '@mui/icons-material/Code';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
@@ -65,6 +66,9 @@ export default function YamlEditorDialog({
   onToggleSecretDecode,
   initialMaximized = false,
 }: YamlEditorDialogProps) {
+  const muiTheme = useTheme();
+  const isDark = muiTheme.palette.mode === 'dark';
+
   const [maximized, setMaximized] = useState(initialMaximized);
   const [copied, setCopied] = useState(false);
 
@@ -114,12 +118,14 @@ export default function YamlEditorDialog({
       slotProps={{
         paper: {
           sx: {
-            bgcolor: '#0a0e17',
+            bgcolor: isDark ? '#0a0e17' : '#ffffff',
             backgroundImage: 'none',
             borderRadius: maximized ? 0 : 3,
-            border: maximized ? 'none' : '1px solid rgba(255,255,255,0.08)',
+            border: maximized ? 'none' : isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #e2e8f0',
             overflow: 'hidden',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)',
+            boxShadow: isDark
+              ? '0 25px 50px -12px rgba(0, 0, 0, 0.7)'
+              : '0 25px 50px -12px rgba(15, 23, 42, 0.16)',
           },
         },
       }}
@@ -129,20 +135,20 @@ export default function YamlEditorDialog({
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          bgcolor: '#0f1422',
-          color: '#f0f6fc',
+          bgcolor: isDark ? '#0f1422' : '#f8fafc',
+          color: isDark ? '#f0f6fc' : '#0f172a',
           px: 3,
           py: 2,
-          borderBottom: '1px solid rgba(255,255,255,0.06)',
+          borderBottom: isDark ? '1px solid rgba(255,255,255,0.06)' : '1px solid #e2e8f0',
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0, pr: 2 }}>
-          <CodeIcon sx={{ color: '#38bdf8', fontSize: 22, flexShrink: 0 }} />
+          <CodeIcon sx={{ color: isDark ? '#38bdf8' : '#0284c7', fontSize: 22, flexShrink: 0 }} />
           <Box sx={{ minWidth: 0 }}>
             <Typography
               variant="h6"
               sx={{
-                color: '#f8fafc',
+                color: isDark ? '#f8fafc' : '#0f172a',
                 fontWeight: 800,
                 fontSize: '1rem',
                 lineHeight: 1.2,
@@ -157,7 +163,7 @@ export default function YamlEditorDialog({
               <Typography
                 variant="caption"
                 sx={{
-                  color: '#8b949e',
+                  color: isDark ? '#8b949e' : '#64748b',
                   fontSize: '0.75rem',
                   display: 'block',
                   mt: 0.25,
@@ -179,11 +185,11 @@ export default function YamlEditorDialog({
                 size="small"
                 onClick={onToggleSecretDecode}
                 sx={{
-                  color: secretDecoded ? '#38bdf8' : '#e2e8f0',
-                  border: '1px solid rgba(255,255,255,0.12)',
+                  color: secretDecoded ? (isDark ? '#38bdf8' : '#0284c7') : (isDark ? '#e2e8f0' : '#475569'),
+                  border: isDark ? '1px solid rgba(255,255,255,0.12)' : '1px solid #cbd5e1',
                   borderRadius: 1.5,
                   p: 0.6,
-                  bgcolor: secretDecoded ? 'rgba(56, 189, 248, 0.15)' : 'transparent',
+                  bgcolor: secretDecoded ? (isDark ? 'rgba(56, 189, 248, 0.15)' : 'rgba(2, 132, 199, 0.1)') : 'transparent',
                 }}
               >
                 {secretDecoded ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
@@ -196,8 +202,8 @@ export default function YamlEditorDialog({
             startIcon={<ContentCopyIcon fontSize="small" />}
             onClick={handleCopy}
             sx={{
-              color: copied ? '#34d399' : '#e2e8f0',
-              border: '1px solid rgba(255,255,255,0.12)',
+              color: copied ? '#10b981' : (isDark ? '#e2e8f0' : '#475569'),
+              border: isDark ? '1px solid rgba(255,255,255,0.12)' : '1px solid #cbd5e1',
               borderRadius: 1.5,
               px: 1.2,
               py: 0.4,
@@ -205,8 +211,8 @@ export default function YamlEditorDialog({
               fontSize: '0.78rem',
               textTransform: 'none',
               '&:hover': {
-                bgcolor: 'rgba(255,255,255,0.06)',
-                borderColor: 'rgba(255,255,255,0.2)',
+                bgcolor: isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9',
+                borderColor: isDark ? 'rgba(255,255,255,0.2)' : '#94a3b8',
               },
             }}
           >
@@ -218,13 +224,13 @@ export default function YamlEditorDialog({
               size="small"
               onClick={handleDownload}
               sx={{
-                color: '#e2e8f0',
-                border: '1px solid rgba(255,255,255,0.12)',
+                color: isDark ? '#e2e8f0' : '#475569',
+                border: isDark ? '1px solid rgba(255,255,255,0.12)' : '1px solid #cbd5e1',
                 borderRadius: 1.5,
                 p: 0.6,
                 '&:hover': {
-                  bgcolor: 'rgba(255,255,255,0.06)',
-                  borderColor: 'rgba(255,255,255,0.2)',
+                  bgcolor: isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9',
+                  borderColor: isDark ? 'rgba(255,255,255,0.2)' : '#94a3b8',
                 },
               }}
             >
@@ -237,13 +243,13 @@ export default function YamlEditorDialog({
               size="small"
               onClick={() => setMaximized(!maximized)}
               sx={{
-                color: '#e2e8f0',
-                border: '1px solid rgba(255,255,255,0.12)',
+                color: isDark ? '#e2e8f0' : '#475569',
+                border: isDark ? '1px solid rgba(255,255,255,0.12)' : '1px solid #cbd5e1',
                 borderRadius: 1.5,
                 p: 0.6,
                 '&:hover': {
-                  bgcolor: 'rgba(255,255,255,0.06)',
-                  borderColor: 'rgba(255,255,255,0.2)',
+                  bgcolor: isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9',
+                  borderColor: isDark ? 'rgba(255,255,255,0.2)' : '#94a3b8',
                 },
               }}
             >
@@ -256,8 +262,8 @@ export default function YamlEditorDialog({
               size="small"
               onClick={onClose}
               sx={{
-                color: '#e2e8f0',
-                border: '1px solid rgba(255,255,255,0.12)',
+                color: isDark ? '#e2e8f0' : '#64748b',
+                border: isDark ? '1px solid rgba(255,255,255,0.12)' : '1px solid #cbd5e1',
                 borderRadius: 1.5,
                 p: 0.6,
                 '&:hover': {
@@ -273,93 +279,93 @@ export default function YamlEditorDialog({
         </Box>
       </DialogTitle>
 
-      <DialogContent sx={{ p: 0, bgcolor: '#0a0e17', overflow: 'hidden' }}>
-        {error && (
-          <Box sx={{ p: 1.5, bgcolor: 'rgba(239, 68, 68, 0.12)', borderBottom: '1px solid rgba(239, 68, 68, 0.25)' }}>
-            <Alert severity="error" sx={{ bgcolor: 'transparent', color: '#fca5a5', py: 0 }}>
-              {error}
-            </Alert>
-          </Box>
-        )}
+        <DialogContent sx={{ p: 0, bgcolor: isDark ? '#0a0e17' : '#ffffff', overflow: 'hidden' }}>
+          {error && (
+            <Box sx={{ p: 1.5, bgcolor: 'rgba(239, 68, 68, 0.12)', borderBottom: '1px solid rgba(239, 68, 68, 0.25)' }}>
+              <Alert severity="error" sx={{ bgcolor: 'transparent', color: '#fca5a5', py: 0 }}>
+                {error}
+              </Alert>
+            </Box>
+          )}
 
-        {loading ? (
-          <Box
-            sx={{
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'center',
-              alignItems: 'center',
-              height: maximized ? 'calc(100vh - 140px)' : height,
-              gap: 2,
-            }}
-          >
-            <CircularProgress sx={{ color: '#38bdf8' }} />
-            <Typography variant="caption" sx={{ color: '#8b949e', fontWeight: 600 }}>
-              Loading YAML content...
-            </Typography>
-          </Box>
-        ) : (
-          <YamlIdeEditor
-            value={value}
-            onChange={onChange}
-            readOnly={readOnly}
-            height={maximized ? 'calc(100vh - 140px)' : height}
-            embedded
-            hideHeader
-          />
-        )}
-      </DialogContent>
-
-      <DialogActions
-        sx={{
-          px: 3,
-          py: 2,
-          bgcolor: '#0f1422',
-          borderTop: '1px solid rgba(255,255,255,0.06)',
-          justifyContent: 'space-between',
-        }}
-      >
-        <Typography variant="caption" sx={{ color: '#8b949e', fontSize: '0.75rem' }}>
-          {readOnly ? 'Read-only mode' : 'Press Save to reconcile modifications'}
-        </Typography>
-
-        <Box sx={{ display: 'flex', gap: 1.5 }}>
-          <Button
-            onClick={onClose}
-            disabled={saving || loading}
-            sx={{
-              fontWeight: 700,
-              color: '#94a3b8',
-              textTransform: 'none',
-              px: 2,
-              '&:hover': {
-                color: '#f8fafc',
-                bgcolor: 'rgba(255,255,255,0.05)',
-              },
-            }}
-          >
-            Cancel
-          </Button>
-
-          {!readOnly && (
-            <Button
-              onClick={handleSaveClick}
-              variant="contained"
-              color="primary"
-              disabled={saving || loading}
-              startIcon={saving && <CircularProgress size={16} color="inherit" />}
+          {loading ? (
+            <Box
               sx={{
-                fontWeight: 750,
-                textTransform: 'none',
-                borderRadius: 2,
-                px: 2.5,
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                alignItems: 'center',
+                height: maximized ? 'calc(100vh - 140px)' : height,
+                gap: 2,
               }}
             >
-              {saving ? 'Saving...' : saveButtonText}
-            </Button>
+                <CircularProgress sx={{ color: isDark ? '#38bdf8' : '#0284c7' }} />
+                <Typography variant="caption" sx={{ color: isDark ? '#8b949e' : '#64748b', fontWeight: 600 }}>
+                  Loading YAML content...
+                </Typography>
+            </Box>
+          ) : (
+            <YamlIdeEditor
+              value={value}
+              onChange={onChange}
+              readOnly={readOnly}
+              height={maximized ? 'calc(100vh - 140px)' : height}
+              embedded
+              hideHeader
+            />
           )}
-        </Box>
-      </DialogActions>
+        </DialogContent>
+
+        <DialogActions
+          sx={{
+            px: 3,
+            py: 2,
+            bgcolor: isDark ? '#0f1422' : '#f8fafc',
+            borderTop: isDark ? '1px solid rgba(255,255,255,0.06)' : '1px solid #e2e8f0',
+            justifyContent: 'space-between',
+          }}
+        >
+            <Typography variant="caption" sx={{ color: isDark ? '#8b949e' : '#64748b', fontSize: '0.75rem' }}>
+              {readOnly ? 'Read-only mode' : 'Press Save to reconcile modifications'}
+            </Typography>
+
+            <Box sx={{ display: 'flex', gap: 1.5 }}>
+              <Button
+                onClick={onClose}
+                disabled={saving || loading}
+                sx={{
+                  fontWeight: 700,
+                  color: isDark ? '#94a3b8' : '#64748b',
+                  textTransform: 'none',
+                  px: 2,
+                  '&:hover': {
+                    color: isDark ? '#f8fafc' : '#0f172a',
+                    bgcolor: isDark ? 'rgba(255,255,255,0.05)' : '#e2e8f0',
+                  },
+                }}
+              >
+                Cancel
+              </Button>
+
+              {!readOnly && (
+                <Button
+                  onClick={handleSaveClick}
+                  variant="contained"
+                  color="primary"
+                  disabled={saving || loading}
+                  startIcon={saving && <CircularProgress size={16} color="inherit" />}
+                  sx={{
+                    fontWeight: 750,
+                    textTransform: 'none',
+                    borderRadius: 2,
+                    px: 2.5,
+                  }}
+                >
+                  {saving ? 'Saving...' : saveButtonText}
+                </Button>
+              )}
+            </Box>
+        </DialogActions>
     </Dialog>
   );
 }

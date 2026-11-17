@@ -2,23 +2,29 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
   Box,
-  Paper,
   Typography,
   IconButton,
   Tooltip,
   Chip,
   Button,
+  useTheme,
 } from '@mui/material';
-import TerminalIcon from '@mui/icons-material/Terminal';
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
-import CloseIcon from '@mui/icons-material/Close';
-import RemoveIcon from '@mui/icons-material/Remove';
-import OpenInFullIcon from '@mui/icons-material/OpenInFull';
-import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import CloudQueueIcon from '@mui/icons-material/CloudQueue';
+import DnsIcon from '@mui/icons-material/Dns';
+import ViewAgendaOutlinedIcon from '@mui/icons-material/ViewAgendaOutlined';
+import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
+import LanOutlinedIcon from '@mui/icons-material/LanOutlined';
+import EventNoteOutlinedIcon from '@mui/icons-material/EventNoteOutlined';
+import CodeIcon from '@mui/icons-material/Code';
+import CloseIcon from '@mui/icons-material/Close';
 
 import '@xterm/xterm/css/xterm.css';
 import type { Terminal } from '@xterm/xterm';
@@ -27,70 +33,138 @@ import type { FitAddon } from '@xterm/addon-fit';
 export interface KubectlTerminalDrawerProps {
   open: boolean;
   onClose: () => void;
+  onOpen?: () => void;
   clusterId: string;
 }
+
+// Light theme inspired by VS Code Light+ / GitHub Light
+const lightTerminalTheme = {
+  background: '#ffffff',
+  foreground: '#0f172a', // slate-900
+  cursor: '#0284c7', // sky-600
+  cursorAccent: '#ffffff',
+  selectionBackground: '#bae6fd',
+  selectionForeground: '#0f172a',
+  black: '#1e293b',
+  red: '#dc2626',
+  green: '#16a34a',
+  yellow: '#ca8a04',
+  blue: '#2563eb',
+  magenta: '#9333ea',
+  cyan: '#0284c7',
+  white: '#64748b',
+  brightBlack: '#475569',
+  brightRed: '#ef4444',
+  brightGreen: '#22c55e',
+  brightYellow: '#eab308',
+  brightBlue: '#3b82f6',
+  brightMagenta: '#a855f7',
+  brightCyan: '#06b6d4',
+  brightWhite: '#0f172a',
+};
+
+// Dark theme inspired by GitHub Dark Default / OneDark
+const darkTerminalTheme = {
+  background: '#090d16', // deep dark slate
+  foreground: '#e2e8f0', // slate-200
+  cursor: '#38bdf8', // sky-400
+  cursorAccent: '#090d16',
+  selectionBackground: 'rgba(56, 189, 248, 0.25)',
+  selectionForeground: '#ffffff',
+  black: '#1e293b',
+  red: '#f87171',
+  green: '#4ade80',
+  yellow: '#facc15',
+  blue: '#60a5fa',
+  magenta: '#c084fc',
+  cyan: '#38bdf8',
+  white: '#f1f5f9',
+  brightBlack: '#64748b',
+  brightRed: '#fb7185',
+  brightGreen: '#86efac',
+  brightYellow: '#fde047',
+  brightBlue: '#93c5fd',
+  brightMagenta: '#d8b4fe',
+  brightCyan: '#67e8f9',
+  brightWhite: '#ffffff',
+};
 
 export function KubectlTerminalDrawer({
   open,
   onClose,
+  onOpen,
   clusterId,
 }: KubectlTerminalDrawerProps) {
-  const [maximized, setMaximized] = useState(false);
-  const [minimized, setMinimized] = useState(false);
-  const [connected, setConnected] = useState(false);
+  const muiTheme = useTheme();
+  const isDark = muiTheme.palette.mode === 'dark';
+
+  const [maximized, setMaximized] = useState<boolean>(false);
+  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'provisioning' | 'connected' | 'closed' | 'error'>('connecting');
+  const [podName, setPodName] = useState<string | null>(null);
 
   const terminalRef = useRef<HTMLDivElement>(null);
+  const termInstanceRef = useRef<Terminal | null>(null);
+  const fitAddonRef = useRef<FitAddon | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const resizeHandlerRef = useRef<() => void>(() => {});
 
+  // Keyboard shortcut listener (Ctrl+\ or Ctrl+`) to toggle KubeConsole
   useEffect(() => {
-    if (!open || minimized) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return;
+      }
 
-    let termInstance: Terminal | null = null;
-    let fitAddonInstance: FitAddon | null = null;
+      if ((e.ctrlKey && e.key === '\\') || (e.ctrlKey && e.key === '`')) {
+        e.preventDefault();
+        if (open) {
+          onClose();
+        } else if (onOpen) {
+          onOpen();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [open, onClose, onOpen]);
+
+  // Main terminal initialization
+  useEffect(() => {
+    if (!open) return;
+
+    let term: Terminal | null = null;
+    let fitAddon: FitAddon | null = null;
     let ws: WebSocket;
+
+    setConnectionStatus('connecting');
 
     const initTerminal = async () => {
       const { Terminal } = await import('@xterm/xterm');
       const { FitAddon } = await import('@xterm/addon-fit');
 
-      termInstance = new Terminal({
+      term = new Terminal({
         cursorBlink: true,
-        fontFamily: 'monospace, "Fira Code", "Courier New"',
+        fontFamily: 'ui-monospace, "SF Mono", "Cascadia Code", "Fira Code", Menlo, Monaco, Consolas, monospace',
         fontSize: 13,
         lineHeight: 1.25,
-        theme: {
-          background: '#090d16',
-          foreground: '#e2e8f0',
-          cursor: '#38bdf8',
-          black: '#1e293b',
-          red: '#ef4444',
-          green: '#22c55e',
-          yellow: '#eab308',
-          blue: '#3b82f6',
-          magenta: '#a855f7',
-          cyan: '#06b6d4',
-          white: '#f8fafc',
-          brightBlack: '#64748b',
-          brightRed: '#f87171',
-          brightGreen: '#4ade80',
-          brightYellow: '#fde047',
-          brightBlue: '#60a5fa',
-          brightMagenta: '#c084fc',
-          brightCyan: '#22d3ee',
-          brightWhite: '#ffffff',
-        },
+        theme: isDark ? darkTerminalTheme : lightTerminalTheme,
+        allowTransparency: true,
       });
 
-      fitAddonInstance = new FitAddon();
-      termInstance.loadAddon(fitAddonInstance);
+      termInstanceRef.current = term;
+      fitAddon = new FitAddon();
+      fitAddonRef.current = fitAddon;
+      term.loadAddon(fitAddon);
 
       if (terminalRef.current) {
-        termInstance.open(terminalRef.current);
-        fitAddonInstance.fit();
+        terminalRef.current.innerHTML = '';
+        term.open(terminalRef.current);
+        fitAddon.fit();
       }
 
-      termInstance.writeln('\x1b[90mInitializing interactive kubectl environment...\x1b[0m');
+      term.writeln(`\x1b[90mConnecting to KubeConsole on cluster ${clusterId}...\x1b[0m`);
 
       let backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || '';
       if (
@@ -119,36 +193,47 @@ export function KubectlTerminalDrawer({
       wsRef.current = ws;
 
       ws.onopen = () => {
-        setConnected(true);
-        const dims = fitAddonInstance?.proposeDimensions();
+        setConnectionStatus('provisioning');
+        const dims = fitAddon?.proposeDimensions();
         if (dims) {
           ws.send(JSON.stringify({ resize: { cols: dims.cols, rows: dims.rows } }));
         }
       };
 
       ws.onmessage = (event) => {
-        termInstance?.write(event.data);
+        const text = event.data as string;
+        const podMatch = text.match(/nextkube-shell-[a-zA-Z0-9_-]+/);
+        if (podMatch && !podName) {
+          setPodName(podMatch[0]);
+        }
+        if (text.includes('nextkube') && (text.includes('$') || text.includes('#'))) {
+          setConnectionStatus('connected');
+        } else if (text.includes('[OK]') || text.includes('Running')) {
+          setConnectionStatus('connected');
+        }
+        term?.write(text);
       };
 
       ws.onerror = () => {
-        termInstance?.writeln('\n\x1b[31m[ERROR] Connection to cluster shell failed.\x1b[0m');
+        setConnectionStatus('error');
+        term?.writeln('\n\x1b[31m[ERROR] Connection to cluster shell failed.\x1b[0m');
       };
 
       ws.onclose = () => {
-        setConnected(false);
-        termInstance?.writeln('\n\x1b[90mSession closed.\x1b[0m');
+        setConnectionStatus('closed');
+        term?.writeln('\n\x1b[90mSession ended.\x1b[0m');
       };
 
-      termInstance?.onData((data: string) => {
+      term.onData((data: string) => {
         if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(data);
         }
       });
 
       const handleResize = () => {
-        if (fitAddonInstance && termInstance) {
-          fitAddonInstance.fit();
-          const dims = fitAddonInstance.proposeDimensions();
+        if (fitAddon && term) {
+          fitAddon.fit();
+          const dims = fitAddon.proposeDimensions();
           if (dims && ws && ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ resize: { cols: dims.cols, rows: dims.rows } }));
           }
@@ -157,24 +242,37 @@ export function KubectlTerminalDrawer({
 
       window.addEventListener('resize', handleResize);
       resizeHandlerRef.current = handleResize;
+
+      setTimeout(() => fitAddon?.fit(), 100);
+      setTimeout(() => fitAddon?.fit(), 350);
     };
 
     initTerminal();
 
     return () => {
       if (ws) ws.close();
-      if (termInstance) termInstance.dispose();
+      if (term) term.dispose();
+      termInstanceRef.current = null;
       window.removeEventListener('resize', resizeHandlerRef.current);
     };
-  }, [open, minimized, clusterId]);
+  }, [open, clusterId]);
 
+  // Dynamically update terminal theme if mode switches while open
   useEffect(() => {
-    if (open && !minimized) {
-      setTimeout(() => {
-        resizeHandlerRef.current();
-      }, 150);
+    if (termInstanceRef.current) {
+      termInstanceRef.current.options.theme = isDark ? darkTerminalTheme : lightTerminalTheme;
     }
-  }, [maximized, open, minimized]);
+  }, [isDark]);
+
+  // Re-fit terminal when size/state changes
+  useEffect(() => {
+    if (open) {
+      const timer = setTimeout(() => {
+        fitAddonRef.current?.fit();
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [maximized, open]);
 
   const sendQuickCommand = (cmd: string) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -183,226 +281,350 @@ export function KubectlTerminalDrawer({
   };
 
   const clearTerminal = () => {
+    if (termInstanceRef.current) {
+      termInstanceRef.current.clear();
+    }
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send('clear\r');
     }
   };
 
-  if (!open) return null;
-
-  // Minimized floating pill dock
-  if (minimized) {
-    return (
-      <Paper
-        elevation={8}
-        onClick={() => setMinimized(false)}
-        sx={{
-          position: 'fixed',
-          bottom: 24,
-          right: 24,
-          zIndex: 1400,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 2,
-          px: 2.5,
-          py: 1.5,
-          bgcolor: '#1e293b',
-          border: '1px solid rgba(255,255,255,0.1)',
-          borderRadius: 4,
-          cursor: 'pointer',
-          boxShadow: '0 12px 24px -10px rgba(0,0,0,0.6)',
-          transition: 'all 0.2s',
-          '&:hover': {
-            borderColor: 'primary.main',
-            transform: 'translateY(-2px)',
-          },
-        }}
-      >
-        <TerminalIcon sx={{ color: '#38bdf8' }} />
-        <Box>
-          <Typography variant="subtitle2" sx={{ color: '#f8fafc', fontWeight: 700, fontSize: '0.8rem', lineHeight: 1.2 }}>
-            Kubectl Shell: {clusterId}
-          </Typography>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.2 }}>
-            <FiberManualRecordIcon sx={{ color: connected ? '#34d399' : '#94a3b8', fontSize: 10 }} />
-            <Typography variant="caption" sx={{ color: '#94a3b8', fontSize: '0.65rem', fontWeight: 600 }}>
-              {connected ? 'Active Session' : 'Disconnected'}
-            </Typography>
-          </Box>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 0.5, ml: 1 }} onClick={(e) => e.stopPropagation()}>
-          <Tooltip title="Expand Shell">
-            <IconButton onClick={() => setMinimized(false)} size="small" sx={{ color: '#94a3b8', p: 0.5 }}>
-              <OpenInFullIcon fontSize="inherit" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Close Shell">
-            <IconButton onClick={onClose} size="small" sx={{ color: '#94a3b8', p: 0.5 }}>
-              <CloseIcon fontSize="inherit" />
-            </IconButton>
-          </Tooltip>
-        </Box>
-      </Paper>
-    );
-  }
-
-  // Active bottom dock drawer
   return (
-    <Paper
-      elevation={12}
-      sx={{
-        position: 'fixed',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: maximized ? '100vh' : { xs: 380, sm: 420 },
-        zIndex: 1300,
-        bgcolor: '#090d16',
-        borderTop: '2px solid',
-        borderColor: 'primary.main',
-        boxShadow: '0 -10px 40px rgba(0,0,0,0.5)',
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-        transition: 'height 0.2s ease',
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth={maximized ? false : 'lg'}
+      fullWidth
+      fullScreen={maximized}
+      slotProps={{
+        paper: {
+          sx: {
+            bgcolor: isDark ? '#0a0e17' : '#ffffff',
+            backgroundImage: 'none',
+            borderRadius: maximized ? 0 : 3,
+            border: maximized ? 'none' : isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #e2e8f0',
+            overflow: 'hidden',
+            boxShadow: isDark
+              ? '0 25px 50px -12px rgba(0, 0, 0, 0.7)'
+              : '0 25px 50px -12px rgba(15, 23, 42, 0.16)',
+            display: 'flex',
+            flexDirection: 'column',
+          },
+        },
       }}
     >
-      {/* Top Header Bar */}
-      <Box
+      {/* Title Bar matching Create Resource Modal Layout */}
+      <DialogTitle
         sx={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          px: 2.5,
-          py: 1,
-          bgcolor: '#0f172a',
-          borderBottom: '1px solid rgba(255,255,255,0.08)',
-          flexShrink: 0,
+          bgcolor: isDark ? '#0f1422' : '#f8fafc',
+          color: isDark ? '#f0f6fc' : '#0f172a',
+          px: 3,
+          py: 1.5,
+          borderBottom: isDark ? '1px solid rgba(255,255,255,0.06)' : '1px solid #e2e8f0',
+          gap: 2,
           flexWrap: 'wrap',
-          gap: 1.5,
         }}
       >
-        {/* Left: Terminal Info */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          <TerminalIcon sx={{ color: '#38bdf8', fontSize: 22 }} />
-          <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#f8fafc', fontSize: '0.9rem', letterSpacing: '-0.01em' }}>
-            Kubectl Shell
-          </Typography>
-          <Chip
-            label={clusterId}
-            size="small"
+        {/* Left: Icon, Title & Badges */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2, minWidth: 0 }}>
+          <Box
             sx={{
-              height: 22,
-              fontWeight: 750,
-              fontSize: '0.72rem',
-              bgcolor: 'rgba(56, 189, 248, 0.15)',
-              color: '#38bdf8',
-              border: '1px solid rgba(56, 189, 248, 0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 32,
+              height: 32,
+              borderRadius: 2,
+              bgcolor: isDark ? 'rgba(56,189,248,0.15)' : 'rgba(2,132,199,0.1)',
+              color: isDark ? '#38bdf8' : '#0284c7',
             }}
-          />
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <FiberManualRecordIcon sx={{ color: connected ? '#22c55e' : '#ef4444', fontSize: 10 }} />
-            <Typography variant="caption" sx={{ color: '#94a3b8', fontSize: '0.7rem', fontWeight: 600 }}>
-              {connected ? 'Connected' : 'Connecting...'}
+          >
+            <CodeIcon sx={{ fontSize: 18 }} />
+          </Box>
+
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight: 800,
+                color: isDark ? '#f8fafc' : '#0f172a',
+                fontSize: '0.98rem',
+                letterSpacing: '-0.02em',
+              }}
+            >
+              KubeConsole
             </Typography>
+
+            <Chip
+              label={clusterId}
+              size="small"
+              sx={{
+                height: 22,
+                fontWeight: 700,
+                fontSize: '0.72rem',
+                bgcolor: isDark ? 'rgba(255,255,255,0.06)' : '#e2e8f0',
+                color: isDark ? '#cbd5e1' : '#334155',
+                borderRadius: 1.5,
+              }}
+            />
+
+            <Chip
+              icon={<CloudQueueIcon sx={{ fontSize: '13px !important', color: 'inherit !important' }} />}
+              label={podName ? `pod: ${podName}` : 'ephemeral pod'}
+              size="small"
+              sx={{
+                height: 22,
+                fontWeight: 650,
+                fontSize: '0.7rem',
+                bgcolor: isDark ? 'rgba(56, 189, 248, 0.12)' : 'rgba(2, 132, 199, 0.08)',
+                color: isDark ? '#38bdf8' : '#0284c7',
+                border: '1px solid',
+                borderColor: isDark ? 'rgba(56, 189, 248, 0.25)' : 'rgba(2, 132, 199, 0.2)',
+                borderRadius: 1.5,
+                display: { xs: 'none', sm: 'inline-flex' },
+              }}
+            />
+
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6, ml: 0.5 }}>
+              <Box
+                sx={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: '50%',
+                  bgcolor:
+                    connectionStatus === 'connected'
+                      ? '#22c55e'
+                      : connectionStatus === 'provisioning'
+                      ? '#eab308'
+                      : '#ef4444',
+                  animation: connectionStatus === 'provisioning' ? 'pulse 1.5s infinite' : 'none',
+                  '@keyframes pulse': {
+                    '0%': { opacity: 0.4 },
+                    '50%': { opacity: 1 },
+                    '100%': { opacity: 0.4 },
+                  },
+                }}
+              />
+              <Typography
+                variant="caption"
+                sx={{
+                  color: isDark ? '#94a3b8' : '#64748b',
+                  fontSize: '0.72rem',
+                  fontWeight: 600,
+                }}
+              >
+                {connectionStatus === 'connected'
+                  ? 'Ready'
+                  : connectionStatus === 'provisioning'
+                  ? 'Starting Pod...'
+                  : connectionStatus === 'connecting'
+                  ? 'Connecting...'
+                  : 'Disconnected'}
+              </Typography>
+            </Box>
           </Box>
         </Box>
 
-        {/* Middle: Quick Command Chips */}
-        <Box sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', gap: 0.8 }}>
-          <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.7rem', fontWeight: 700, mr: 0.5, textTransform: 'uppercase' }}>
-            Quick:
-          </Typography>
+        {/* Center: Command Snippets */}
+        <Box sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', gap: 0.6 }}>
           {[
-            { label: 'k get pods -A', cmd: 'k get pods -A' },
-            { label: 'k get nodes -o wide', cmd: 'k get nodes -o wide' },
-            { label: 'k get events', cmd: 'k get events --sort-by=.metadata.creationTimestamp | tail -n 15' },
-            { label: 'k cluster-info', cmd: 'k cluster-info' },
+            { label: 'Pods', cmd: 'k get pods -A', icon: <ViewAgendaOutlinedIcon sx={{ fontSize: 13 }} /> },
+            { label: 'Nodes', cmd: 'k get nodes -o wide', icon: <DnsIcon sx={{ fontSize: 13 }} /> },
+            { label: 'Deployments', cmd: 'k get deploy -A', icon: <LayersOutlinedIcon sx={{ fontSize: 13 }} /> },
+            { label: 'Services', cmd: 'k get svc,ing -A', icon: <LanOutlinedIcon sx={{ fontSize: 13 }} /> },
+            { label: 'Events', cmd: 'k get events -A --sort-by=.metadata.creationTimestamp | tail -n 15', icon: <EventNoteOutlinedIcon sx={{ fontSize: 13 }} /> },
           ].map((item) => (
-            <Chip
+            <Button
               key={item.label}
-              icon={<PlayArrowIcon sx={{ fontSize: '12px !important', color: '#38bdf8 !important' }} />}
-              label={item.label}
               size="small"
               onClick={() => sendQuickCommand(item.cmd)}
+              startIcon={item.icon}
               sx={{
-                height: 22,
-                fontSize: '0.68rem',
-                fontFamily: 'monospace',
-                bgcolor: 'rgba(255,255,255,0.06)',
-                color: '#cbd5e1',
-                border: '1px solid rgba(255,255,255,0.08)',
-                cursor: 'pointer',
+                height: 24,
+                px: 1.1,
+                fontSize: '0.7rem',
+                fontWeight: 600,
+                textTransform: 'none',
+                borderRadius: 1.5,
+                color: isDark ? '#cbd5e1' : '#475569',
+                bgcolor: isDark ? 'rgba(255,255,255,0.04)' : '#ffffff',
+                border: '1px solid',
+                borderColor: isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0',
                 '&:hover': {
-                  bgcolor: 'rgba(56, 189, 248, 0.15)',
-                  borderColor: 'rgba(56, 189, 248, 0.4)',
-                  color: '#38bdf8',
+                  bgcolor: isDark ? 'rgba(56,189,248,0.1)' : 'rgba(2,132,199,0.08)',
+                  borderColor: isDark ? 'rgba(56,189,248,0.3)' : 'rgba(2,132,199,0.3)',
+                  color: isDark ? '#38bdf8' : '#0284c7',
                 },
               }}
-            />
+            >
+              {item.label}
+            </Button>
           ))}
         </Box>
 
         {/* Right: Window Controls */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
-          <Tooltip title="Clear Screen">
-            <IconButton
-              onClick={clearTerminal}
+          <Tooltip title="Clear Screen (Ctrl+L)">
+            <Button
               size="small"
-              sx={{ color: '#94a3b8', p: 0.6, '&:hover': { color: '#f8fafc' } }}
+              onClick={clearTerminal}
+              startIcon={<DeleteSweepIcon sx={{ fontSize: 16 }} />}
+              sx={{
+                color: isDark ? '#cbd5e1' : '#475569',
+                border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #cbd5e1',
+                borderRadius: 1.5,
+                px: 1.2,
+                py: 0.3,
+                fontSize: '0.75rem',
+                fontWeight: 650,
+                textTransform: 'none',
+                '&:hover': {
+                  bgcolor: isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9',
+                },
+              }}
             >
-              <DeleteSweepIcon fontSize="small" />
-            </IconButton>
+              Clear
+            </Button>
           </Tooltip>
 
-          <Tooltip title={maximized ? 'Restore Height' : 'Maximize Terminal'}>
+          <Tooltip title={maximized ? 'Restore Window' : 'Maximize Window'}>
             <IconButton
-              onClick={() => setMaximized(!maximized)}
               size="small"
-              sx={{ color: '#94a3b8', p: 0.6, '&:hover': { color: '#f8fafc' } }}
+              onClick={() => setMaximized(!maximized)}
+              sx={{
+                color: isDark ? '#cbd5e1' : '#475569',
+                border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #cbd5e1',
+                borderRadius: 1.5,
+                p: 0.6,
+                '&:hover': {
+                  bgcolor: isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9',
+                },
+              }}
             >
               {maximized ? <FullscreenExitIcon fontSize="small" /> : <FullscreenIcon fontSize="small" />}
             </IconButton>
           </Tooltip>
 
-          <Tooltip title="Minimize to Pill">
+          <Tooltip title="Close Window">
             <IconButton
-              onClick={() => setMinimized(true)}
               size="small"
-              sx={{ color: '#94a3b8', p: 0.6, '&:hover': { color: '#f8fafc' } }}
-            >
-              <RemoveIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-
-          <Tooltip title="Close Shell">
-            <IconButton
               onClick={onClose}
-              size="small"
-              sx={{ color: '#94a3b8', p: 0.6, '&:hover': { color: '#ef4444' } }}
+              sx={{
+                color: isDark ? '#cbd5e1' : '#64748b',
+                border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #cbd5e1',
+                borderRadius: 1.5,
+                p: 0.6,
+                '&:hover': {
+                  bgcolor: 'rgba(239, 68, 68, 0.15)',
+                  borderColor: 'rgba(239, 68, 68, 0.4)',
+                  color: '#f87171',
+                },
+              }}
             >
               <CloseIcon fontSize="small" />
             </IconButton>
           </Tooltip>
         </Box>
+      </DialogTitle>
+
+      {/* Subtitle Info Strip */}
+      <Box
+        sx={{
+          px: 3,
+          py: 0.9,
+          bgcolor: isDark ? '#0c101c' : '#f1f5f9',
+          borderBottom: isDark ? '1px solid rgba(255,255,255,0.06)' : '1px solid #e2e8f0',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <Typography variant="caption" sx={{ color: isDark ? '#8b949e' : '#64748b', fontSize: '0.75rem' }}>
+          Isolated in-cluster container environment • Full kubectl CLI access • Tab autocompletion pre-loaded
+        </Typography>
+        <Typography variant="caption" sx={{ color: isDark ? '#64748b' : '#94a3b8', fontSize: '0.72rem' }}>
+          Shortcut: Ctrl+\ to toggle
+        </Typography>
       </Box>
 
-      {/* Terminal Canvas Area */}
-      <Box
-        ref={terminalRef}
+      {/* Terminal Canvas */}
+      <DialogContent sx={{ p: 0, bgcolor: isDark ? '#090d16' : '#ffffff', overflow: 'hidden', flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+        <Box
+          ref={terminalRef}
+          sx={{
+            flexGrow: 1,
+            height: maximized ? 'calc(100vh - 180px)' : '480px',
+            px: 2,
+            py: 1.5,
+            bgcolor: isDark ? '#090d16' : '#ffffff',
+            overflow: 'hidden',
+            '& .xterm': {
+              height: '100%',
+            },
+            '& .xterm-viewport': {
+              backgroundColor: 'transparent !important',
+            },
+            '& .xterm-screen': {
+              backgroundColor: 'transparent !important',
+            },
+          }}
+        />
+      </DialogContent>
+
+      {/* Action / Telemetry Footer matching DialogActions */}
+      <DialogActions
         sx={{
-          flexGrow: 1,
-          p: 1.5,
-          bgcolor: '#090d16',
-          overflow: 'hidden',
-          '& .xterm': {
-            height: '100%',
-          },
-          '& .xterm-viewport': {
-            backgroundColor: 'transparent !important',
-          },
+          px: 3,
+          py: 1.5,
+          bgcolor: isDark ? '#0f1422' : '#f8fafc',
+          borderTop: isDark ? '1px solid rgba(255,255,255,0.06)' : '1px solid #e2e8f0',
+          justifyContent: 'space-between',
+          alignItems: 'center',
         }}
-      />
-    </Paper>
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, fontSize: '0.72rem', color: isDark ? '#64748b' : '#94a3b8' }}>
+          <Typography variant="caption" sx={{ fontSize: 'inherit', fontWeight: 650 }}>
+            pod: {podName || 'initializing'}
+          </Typography>
+          <Typography variant="caption" sx={{ fontSize: 'inherit' }}>•</Typography>
+          <Typography variant="caption" sx={{ fontSize: 'inherit' }}>
+            100% in-cluster container
+          </Typography>
+          <Typography variant="caption" sx={{ fontSize: 'inherit' }}>•</Typography>
+          <Typography variant="caption" sx={{ fontSize: 'inherit' }}>
+            ns: default
+          </Typography>
+          <Typography variant="caption" sx={{ fontSize: 'inherit' }}>•</Typography>
+          <Typography variant="caption" sx={{ fontSize: 'inherit' }}>
+            limits: 512Mi / 1000m
+          </Typography>
+        </Box>
+
+        <Box sx={{ display: 'flex', gap: 1.5 }}>
+          <Button
+            onClick={onClose}
+            size="small"
+            sx={{
+              fontWeight: 700,
+              color: isDark ? '#94a3b8' : '#64748b',
+              textTransform: 'none',
+              px: 2,
+              '&:hover': {
+                color: '#ef4444',
+                bgcolor: 'rgba(239, 68, 68, 0.08)',
+              },
+            }}
+          >
+            Close Session
+          </Button>
+        </Box>
+      </DialogActions>
+    </Dialog>
   );
 }
+
+// Export both names for maximum compatibility
+export { KubectlTerminalDrawer as KubeConsoleDrawer };

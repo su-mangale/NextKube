@@ -335,140 +335,294 @@ async function handleClusterShellSession(clientWs: WebSocket, clusterId: string)
     return;
   }
 
-  const pty = require('node-pty');
-  const tempDir = os.tmpdir();
-  const sessionId = crypto.randomBytes(8).toString('hex');
-  const tempKubeconfigPath = path.join(tempDir, `nextkube-${clusterId}-${sessionId}.yaml`);
-  const tempRcPath = path.join(tempDir, `nextkube-rc-${sessionId}.sh`);
-  const tempWorkspaceDir = path.join(tempDir, `nextkube-workspace-${sessionId}`);
-  fs.mkdirSync(tempWorkspaceDir, { recursive: true });
-
-  fs.writeFileSync(tempKubeconfigPath, rawKubeconfig, { mode: 0o600 });
-
-  const isDarwin = process.platform === 'darwin';
-  const shellBinary = isDarwin ? '/bin/zsh' : (fs.existsSync('/bin/bash') ? '/bin/bash' : '/bin/sh');
-
-  // Prepare environment RC script with autocomplete and alias
-  const rcScript = isDarwin
-    ? `export KUBECONFIG="${tempKubeconfigPath}"
-export CLUSTER="${clusterId}"
-export HOME="${tempWorkspaceDir}"
-export TERM=xterm-256color
-export COLORTERM=truecolor
-cd "${tempWorkspaceDir}"
-autoload -Uz compinit && compinit -C 2>/dev/null || true
-if command -v kubectl >/dev/null 2>&1; then
-  source <(kubectl completion zsh 2>/dev/null) 2>/dev/null || true
-  alias k=kubectl
-  compdef __start_kubectl k 2>/dev/null || true
-fi
-export PS1="%F{cyan}nextkube%f [%F{green}${clusterId}%f] %F{blue}workspace%f $ "
-clear
-echo -e "\\033[1;36m========================================================================\\033[0m"
-echo -e "\\033[1;32m  NextKube Interactive Kubectl Shell\\033[0m"
-echo -e "  Cluster: \\033[1;33m${clusterId}\\033[0m"
-echo -e "  Sandbox: \\033[1;35mIsolated Workspace\\033[0m"
-echo -e "  Pre-loaded: \\033[1;35mkubectl\\033[0m, \\033[1;35malias k=kubectl\\033[0m, \\033[1;32mTab Autocompletion\\033[0m"
-echo -e "\\033[1;36m========================================================================\\033[0m"
-echo ""
-`
-    : `export KUBECONFIG="${tempKubeconfigPath}"
-export CLUSTER="${clusterId}"
-export HOME="${tempWorkspaceDir}"
-export TERM=xterm-256color
-export COLORTERM=truecolor
-cd "${tempWorkspaceDir}"
-if [ -f /usr/share/bash-completion/bash_completion ]; then
-  . /usr/share/bash-completion/bash_completion 2>/dev/null || true
-elif [ -f /etc/bash_completion ]; then
-  . /etc/bash_completion 2>/dev/null || true
-fi
-if command -v kubectl >/dev/null 2>&1; then
-  source <(kubectl completion bash 2>/dev/null) 2>/dev/null || true
-  alias k=kubectl
-  complete -o default -F __start_kubectl k 2>/dev/null || true
-fi
-export PS1="\\[\\033[1;36m\\]nextkube\\[\\033[0m\\] [\\[\\033[1;32m\\]${clusterId}\\[\\033[0m\\]] \\[\\033[1;34m\\]workspace\\[\\033[0m\\] $ "
-clear
-echo -e "\\033[1;36m========================================================================\\033[0m"
-echo -e "\\033[1;32m  NextKube Interactive Kubectl Shell\\033[0m"
-echo -e "  Cluster: \\033[1;33m${clusterId}\\033[0m"
-echo -e "  Sandbox: \\033[1;35mIsolated Workspace\\033[0m"
-echo -e "  Pre-loaded: \\033[1;35mkubectl\\033[0m, \\033[1;35malias k=kubectl\\033[0m, \\033[1;32mTab Autocompletion\\033[0m"
-echo -e "\\033[1;36m========================================================================\\033[0m"
-echo ""
-`;
-
-  fs.writeFileSync(tempRcPath, rcScript, { mode: 0o600 });
-
-  let ptyProcess: any = null;
+  const kc = new k8s.KubeConfig();
   try {
-    ptyProcess = pty.spawn(shellBinary, ['-i'], {
-      name: 'xterm-256color',
-      cols: 80,
-      rows: 24,
-      cwd: tempWorkspaceDir,
-      env: {
-        PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
-        TERM: 'xterm-256color',
-        COLORTERM: 'truecolor',
-        USER: 'operator',
-        HOME: tempWorkspaceDir,
-        KUBECONFIG: tempKubeconfigPath,
-      },
-    });
-  } catch (spawnErr: any) {
-    clientWs.send(`\r\n\x1b[31m[ERROR] Failed to spawn pseudo-terminal: ${spawnErr.message}\x1b[0m\r\n`);
+    kc.loadFromString(rawKubeconfig);
+  } catch (err: any) {
+    clientWs.send(`\r\n\x1b[31m[ERROR] Invalid kubeconfig for cluster "${clusterId}": ${err.message}\x1b[0m\r\n`);
     clientWs.close();
-    try { fs.unlinkSync(tempKubeconfigPath); } catch {}
-    try { fs.unlinkSync(tempRcPath); } catch {}
-    try { fs.rmSync(tempWorkspaceDir, { recursive: true, force: true }); } catch {}
     return;
   }
 
-  ptyProcess.onData((data: string) => {
+  const coreV1 = kc.makeApiClient(k8s.CoreV1Api);
+  const rbacV1 = kc.makeApiClient(k8s.RbacAuthorizationV1Api);
+
+  const sessionId = crypto.randomBytes(4).toString('hex');
+  const podName = `nextkube-shell-${sessionId}`;
+  const namespace = 'default';
+  const saName = 'nextkube-shell-sa';
+  const roleBindingName = 'nextkube-shell-admin';
+
+  clientWs.send(`\r\n\x1b[1;36m[NextKube]\x1b[0m Initializing isolated in-cluster pod environment...\r\n`);
+  clientWs.send(`\x1b[90mCluster: ${clusterId} | Namespace: ${namespace} | Architecture: Ephemeral Container\x1b[0m\r\n\r\n`);
+
+  // 1. Ensure ServiceAccount & ClusterRoleBinding
+  try {
+    await coreV1.createNamespacedServiceAccount({
+      namespace,
+      body: { metadata: { name: saName, namespace } },
+    });
+  } catch (err: any) {
+    // Ignore if already exists (409)
+  }
+
+  try {
+    await rbacV1.createClusterRoleBinding({
+      body: {
+        metadata: { name: roleBindingName },
+        subjects: [{ kind: 'ServiceAccount', name: saName, namespace }],
+        roleRef: { kind: 'ClusterRole', name: 'cluster-admin', apiGroup: 'rbac.authorization.k8s.io' },
+      },
+    });
+  } catch (err: any) {
+    // Ignore if already exists (409)
+  }
+
+  clientWs.send(`\x1b[33m⏳ [1/2] Provisioning ephemeral pod "${podName}"...\x1b[0m\r\n`);
+
+  const shellImage = process.env.NEXTKUBE_SHELL_IMAGE || 'bitnami/kubectl:latest';
+
+  let podCreated = false;
+  try {
+    await coreV1.createNamespacedPod({
+      namespace,
+      body: {
+        metadata: {
+          name: podName,
+          namespace,
+          labels: {
+            app: 'nextkube-shell',
+            'nextkube.io/ephemeral': 'true',
+            'nextkube.io/session': sessionId,
+          },
+        },
+        spec: {
+          serviceAccountName: saName,
+          restartPolicy: 'Never',
+          containers: [
+            {
+              name: 'shell',
+              image: shellImage,
+              command: ['/bin/sh', '-c', 'sleep 7200'],
+              securityContext: {
+                runAsUser: 0,
+              },
+              resources: {
+                requests: { cpu: '20m', memory: '32Mi' },
+                limits: { cpu: '1000m', memory: '512Mi' },
+              },
+            },
+          ],
+        },
+      },
+    });
+    podCreated = true;
+  } catch (err: any) {
+    clientWs.send(`\r\n\x1b[31m[ERROR] Failed to create shell pod: ${err.message}\x1b[0m\r\n`);
+    clientWs.close();
+    return;
+  }
+
+  let isCleanedUp = false;
+  const deletePod = async () => {
+    if (!podCreated || isCleanedUp) return;
+    isCleanedUp = true;
+    try {
+      await coreV1.deleteNamespacedPod({
+        name: podName,
+        namespace,
+        gracePeriodSeconds: 0,
+      });
+    } catch {}
+  };
+
+  // Wait for pod to be Running (polling with timeout)
+  let isRunning = false;
+  const maxAttempts = 60; // ~30 seconds
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    if (clientWs.readyState !== WebSocket.OPEN) {
+      await deletePod();
+      return;
+    }
+
+    try {
+      const pod = await coreV1.readNamespacedPod({ name: podName, namespace });
+      const phase = pod.status?.phase;
+      if (phase === 'Running') {
+        isRunning = true;
+        break;
+      } else if (phase === 'Failed' || phase === 'Error') {
+        clientWs.send(`\r\n\x1b[31m[ERROR] Ephemeral pod failed with phase: ${phase}\x1b[0m\r\n`);
+        await deletePod();
+        clientWs.close();
+        return;
+      }
+    } catch (err: any) {
+      // Pod might still be registering in API
+    }
+
+    if (attempt % 6 === 0) {
+      clientWs.send(`\x1b[90mWaiting for container to start (${attempt * 500}ms)...\x1b[0m\r\n`);
+    }
+
+    await new Promise((r) => setTimeout(r, 500));
+  }
+
+  if (!isRunning) {
+    clientWs.send(`\r\n\x1b[31m[ERROR] Timed out waiting for pod "${podName}" to start.\x1b[0m\r\n`);
+    await deletePod();
+    clientWs.close();
+    return;
+  }
+
+  clientWs.send(`\x1b[32m✔ [2/2] Ephemeral pod "${podName}" is Running! Attaching interactive shell...\x1b[0m\r\n\r\n`);
+
+  // Exec into pod
+  const exec = new k8s.Exec(kc);
+  const stdin = new stream.PassThrough();
+  const stdout = new stream.PassThrough() as any;
+  stdout.columns = 80;
+  stdout.rows = 24;
+
+  stdout.on('data', (chunk: Buffer) => {
     if (clientWs.readyState === WebSocket.OPEN) {
-      clientWs.send(data);
+      clientWs.send(chunk.toString('utf8'));
     }
   });
-
-  // Execute RC script on start
-  ptyProcess.write(`. "${tempRcPath}"\r`);
 
   clientWs.on('message', (msg: WebSocket.RawData) => {
     const str = msg.toString();
     if (str.startsWith('{') && str.includes('"resize"')) {
       try {
         const parsed = JSON.parse(str);
-        if (parsed.resize && ptyProcess) {
+        if (parsed.resize) {
           const { cols, rows } = parsed.resize;
           if (cols && rows) {
-            ptyProcess.resize(cols, rows);
+            stdout.columns = cols;
+            stdout.rows = rows;
+            stdout.emit('resize');
           }
           return;
         }
       } catch {}
     }
 
-    if (ptyProcess) {
-      ptyProcess.write(msg.toString());
+    if (stdin && !stdin.destroyed) {
+      stdin.write(msg);
     }
   });
 
-  const cleanup = () => {
-    try { ptyProcess?.kill(); } catch {}
-    try { fs.unlinkSync(tempKubeconfigPath); } catch {}
-    try { fs.unlinkSync(tempRcPath); } catch {}
-    try { fs.rmSync(tempWorkspaceDir, { recursive: true, force: true }); } catch {}
+  let k8sSocket: any = null;
+
+  const cleanup = async () => {
+    try { stdin.end(); } catch {}
+    try {
+      if (k8sSocket && typeof k8sSocket.close === 'function') {
+        k8sSocket.close();
+      }
+    } catch {}
+    await deletePod();
   };
 
-  ptyProcess.onExit(() => {
+  clientWs.on('close', cleanup);
+
+  const initCmd = [
+    '/bin/sh',
+    '-c',
+    `mkdir -p /usr/share/terminfo/x /usr/share/terminfo/a 2>/dev/null || true; ` +
+    `ln -sf /usr/share/terminfo/l/linux /usr/share/terminfo/x/xterm 2>/dev/null || true; ` +
+    `ln -sf /usr/share/terminfo/l/linux /usr/share/terminfo/x/xterm-256color 2>/dev/null || true; ` +
+    `ln -sf /usr/share/terminfo/l/linux /usr/share/terminfo/a/ansi 2>/dev/null || true; ` +
+    `cat << 'EOF' > /root/.bashrc
+export TERM=xterm-256color
+export COLORTERM=truecolor
+alias k=kubectl
+alias l='ls -la'
+alias ll='ls -l'
+
+# Self-contained shim for bash-completion helper functions
+_get_comp_words_by_ref() {
+  cur="\${COMP_WORDS[COMP_CWORD]}"
+  prev="\${COMP_WORDS[COMP_CWORD-1]}"
+  words=("\${COMP_WORDS[@]}")
+  cword=\$COMP_CWORD
+}
+
+__kubectl_init_completion() {
+  COMPREPLY=()
+  cur="\${COMP_WORDS[COMP_CWORD]}"
+  prev="\${COMP_WORDS[COMP_CWORD-1]}"
+  words=("\${COMP_WORDS[@]}")
+  cword=\$COMP_CWORD
+}
+
+# Source kubectl completion and bind to both k and kubectl
+if command -v kubectl >/dev/null 2>&1; then
+  source <(kubectl completion bash 2>/dev/null) 2>/dev/null || true
+
+  # Re-assert shims after source in case raw script redefined them
+  _get_comp_words_by_ref() {
+    cur="\${COMP_WORDS[COMP_CWORD]}"
+    prev="\${COMP_WORDS[COMP_CWORD-1]}"
+    words=("\${COMP_WORDS[@]}")
+    cword=\$COMP_CWORD
+  }
+
+  __kubectl_init_completion() {
+    COMPREPLY=()
+    cur="\${COMP_WORDS[COMP_CWORD]}"
+    prev="\${COMP_WORDS[COMP_CWORD-1]}"
+    words=("\${COMP_WORDS[@]}")
+    cword=\$COMP_CWORD
+  }
+
+  complete -o default -F __start_kubectl k 2>/dev/null || true
+  complete -o default -F __start_kubectl kubectl 2>/dev/null || true
+fi
+
+export PS1="\\[\\033[1;36m\\]nextkube\\[\\033[0m\\] [\\[\\033[1;32m\\]${clusterId}\\[\\033[0m\\]] \\[\\033[1;34m\\]\\w\\[\\033[0m\\] # "
+EOF
+cd /root;
+echo -e "\\033[1;36m========================================================================\\033[0m";
+echo -e "\\033[1;32m  ⚡ KubeConsole • Ephemeral Cluster Terminal\\033[0m";
+echo -e "  Cluster:   \\033[1;33m${clusterId}\\033[0m";
+echo -e "  Pod:       \\033[1;35m${podName}\\033[0m";
+echo -e "  Isolation: \\033[1;32m100% In-Cluster Pod (Containerized)\\033[0m";
+echo -e "  Pre-loaded:\\033[1;33m kubectl\\033[0m, \\033[1;33malias k=kubectl\\033[0m, \\033[1;32mTab Autocompletion enabled\\033[0m";
+echo -e "\\033[1;36m========================================================================\\033[0m";
+echo "";
+if [ -x /bin/bash ]; then
+  exec /bin/bash --rcfile /root/.bashrc -i;
+else
+  export PS1="nextkube [${clusterId}] \\w # ";
+  alias k=kubectl;
+  exec /bin/sh -i;
+fi`,
+  ];
+
+  try {
+    k8sSocket = await exec.exec(
+      namespace,
+      podName,
+      'shell',
+      initCmd,
+      stdout,
+      stdout,
+      stdin,
+      true,
+      async (status: any) => {
+        if (clientWs.readyState === WebSocket.OPEN) {
+          clientWs.send('\r\n\x1b[90mSession closed by remote container.\x1b[0m\r\n');
+          clientWs.close();
+        }
+        await cleanup();
+      }
+    );
+  } catch (err: any) {
     if (clientWs.readyState === WebSocket.OPEN) {
-      clientWs.send('\r\n\x1b[90mSession closed.\x1b[0m\r\n');
+      clientWs.send(`\r\n\x1b[31m[ERROR] Failed to attach exec to pod: ${err.message}\x1b[0m\r\n`);
       clientWs.close();
     }
-    cleanup();
-  });
-
-  clientWs.on('close', cleanup);
+    await cleanup();
+  }
 }

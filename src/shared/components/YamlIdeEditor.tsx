@@ -8,6 +8,7 @@ import {
   Tooltip,
   Chip,
   Button,
+  useTheme,
 } from '@mui/material';
 import CodeIcon from '@mui/icons-material/Code';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
@@ -40,23 +41,31 @@ function escapeHtml(str: string): string {
 }
 
 /**
- * VS Code Dark+ YAML Syntax Tokenizer & Highlighter
+ * VS Code Theme YAML Syntax Tokenizer & Highlighter
  */
-function highlightYamlLine(line: string): string {
+function highlightYamlLine(line: string, isDark: boolean = true): string {
   const escaped = escapeHtml(line);
   if (!escaped) return '';
+
+  const commentColor = isDark ? '#6a9955' : '#64748b';
+  const boolColor = isDark ? '#569cd6' : '#2563eb';
+  const numColor = isDark ? '#b5cea8' : '#059669';
+  const strColor = isDark ? '#ce9178' : '#b91c1c';
+  const hyphenColor = isDark ? '#c586c0' : '#7c3aed';
+  const keyColor = isDark ? '#9cdcfe' : '#0369a1';
+  const colonColor = isDark ? '#d4d4d4' : '#475569';
 
   // 1. Full comment line or trailing comment
   const commentIdx = escaped.indexOf('#');
   if (commentIdx === 0) {
-    return `<span style="color: #6a9955; font-style: italic;">${escaped}</span>`;
+    return `<span style="color: ${commentColor}; font-style: italic;">${escaped}</span>`;
   }
 
   let mainPart = escaped;
   let commentPart = '';
   if (commentIdx > 0) {
     mainPart = escaped.slice(0, commentIdx);
-    commentPart = `<span style="color: #6a9955; font-style: italic;">${escaped.slice(commentIdx)}</span>`;
+    commentPart = `<span style="color: ${commentColor}; font-style: italic;">${escaped.slice(commentIdx)}</span>`;
   }
 
   // 2. Key-value pattern:  key: value  or  - key: value
@@ -72,29 +81,29 @@ function highlightYamlLine(line: string): string {
       if (trimmedVal === 'true' || trimmedVal === 'false' || trimmedVal === 'null') {
         highlightedVal = value.replace(
           trimmedVal,
-          `<span style="color: #569cd6; font-weight: 600;">${trimmedVal}</span>`
+          `<span style="color: ${boolColor}; font-weight: 600;">${trimmedVal}</span>`
         );
       } else if (!isNaN(Number(trimmedVal)) && trimmedVal !== '') {
         highlightedVal = value.replace(
           trimmedVal,
-          `<span style="color: #b5cea8;">${trimmedVal}</span>`
+          `<span style="color: ${numColor}; font-weight: 600;">${trimmedVal}</span>`
         );
       } else if (trimmedVal.startsWith('"') || trimmedVal.startsWith("'")) {
         highlightedVal = value.replace(
           trimmedVal,
-          `<span style="color: #ce9178;">${trimmedVal}</span>`
+          `<span style="color: ${strColor};">${trimmedVal}</span>`
         );
       } else {
         // Default scalar strings or units
-        highlightedVal = `<span style="color: #ce9178;">${value}</span>`;
+        highlightedVal = `<span style="color: ${strColor};">${value}</span>`;
       }
     }
 
     const prefix = `${indent}${
-      listHyphen ? `<span style="color: #c586c0; font-weight: bold;">- </span>` : ''
+      listHyphen ? `<span style="color: ${hyphenColor}; font-weight: bold;">- </span>` : ''
     }`;
-    const keySpan = `<span style="color: #9cdcfe; font-weight: 500;">${key}</span>`;
-    const colonSpan = `<span style="color: #d4d4d4;">${colon}</span>`;
+    const keySpan = `<span style="color: ${keyColor}; font-weight: 600;">${key}</span>`;
+    const colonSpan = `<span style="color: ${colonColor};">${colon}</span>`;
 
     return `${prefix}${keySpan}${colonSpan}${highlightedVal}${commentPart}`;
   }
@@ -109,17 +118,17 @@ function highlightYamlLine(line: string): string {
     if (trimmedVal === 'true' || trimmedVal === 'false') {
       highlightedVal = itemVal.replace(
         trimmedVal,
-        `<span style="color: #569cd6; font-weight: 600;">${trimmedVal}</span>`
+        `<span style="color: ${boolColor}; font-weight: 600;">${trimmedVal}</span>`
       );
     } else if (!isNaN(Number(trimmedVal))) {
       highlightedVal = itemVal.replace(
         trimmedVal,
-        `<span style="color: #b5cea8;">${trimmedVal}</span>`
+        `<span style="color: ${numColor}; font-weight: 600;">${trimmedVal}</span>`
       );
     } else {
-      highlightedVal = `<span style="color: #ce9178;">${itemVal}</span>`;
+      highlightedVal = `<span style="color: ${strColor};">${itemVal}</span>`;
     }
-    return `<span style="color: #c586c0; font-weight: bold;">${hyphen}</span>${highlightedVal}${commentPart}`;
+    return `<span style="color: ${hyphenColor}; font-weight: bold;">${hyphen}</span>${highlightedVal}${commentPart}`;
   }
 
   return `${mainPart}${commentPart}`;
@@ -137,6 +146,9 @@ export default function YamlIdeEditor({
   hideHeader = false,
   error = null,
 }: YamlIdeEditorProps) {
+  const muiTheme = useTheme();
+  const isDark = muiTheme.palette.mode === 'dark';
+
   const [copied, setCopied] = useState(false);
   const [cursorPos, setCursorPos] = useState({ line: 1, col: 1 });
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -147,8 +159,8 @@ export default function YamlIdeEditor({
   const lineCount = lines.length;
 
   const highlightedCode = useMemo(() => {
-    return lines.map((line) => highlightYamlLine(line)).join('\n');
-  }, [lines]);
+    return lines.map((line) => highlightYamlLine(line, isDark)).join('\n');
+  }, [lines, isDark]);
 
   const updateCursorPosition = () => {
     const textarea = textareaRef.current;
@@ -303,10 +315,10 @@ export default function YamlIdeEditor({
         flexDirection: 'column',
         height: height,
         minHeight: embedded ? 0 : 380,
-        bgcolor: '#0d1117',
+        bgcolor: isDark ? '#0d1117' : '#ffffff',
         borderRadius: embedded ? 0 : 2.5,
-        border: embedded ? 'none' : '1px solid rgba(255, 255, 255, 0.1)',
-        boxShadow: embedded ? 'none' : '0 20px 40px -15px rgba(0, 0, 0, 0.7)',
+        border: embedded ? 'none' : isDark ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid #e2e8f0',
+        boxShadow: embedded ? 'none' : isDark ? '0 20px 40px -15px rgba(0, 0, 0, 0.7)' : '0 12px 32px -10px rgba(15, 23, 42, 0.08)',
         overflow: 'hidden',
         fontFamily: 'Consolas, Monaco, "Courier New", monospace',
         flexGrow: 1,
@@ -321,8 +333,8 @@ export default function YamlIdeEditor({
             justifyContent: 'space-between',
             px: 2,
             py: 1,
-            bgcolor: '#161b22',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+            bgcolor: isDark ? '#161b22' : '#f8fafc',
+            borderBottom: isDark ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid #e2e8f0',
             userSelect: 'none',
           }}
         >
@@ -341,20 +353,20 @@ export default function YamlIdeEditor({
                 display: 'flex',
                 alignItems: 'center',
                 gap: 0.8,
-                bgcolor: '#0d1117',
+                bgcolor: isDark ? '#0d1117' : '#ffffff',
                 px: 1.5,
                 py: 0.5,
                 borderRadius: '6px 6px 0 0',
-                borderTop: '2px solid #38bdf8',
-                borderLeft: '1px solid rgba(255, 255, 255, 0.06)',
-                borderRight: '1px solid rgba(255, 255, 255, 0.06)',
+                borderTop: `2px solid ${ isDark ? '#38bdf8' : '#0284c7' } `,
+                borderLeft: isDark ? '1px solid rgba(255, 255, 255, 0.06)' : '1px solid #e2e8f0',
+                borderRight: isDark ? '1px solid rgba(255, 255, 255, 0.06)' : '1px solid #e2e8f0',
               }}
             >
-              <CodeIcon sx={{ color: '#38bdf8', fontSize: 16 }} />
+              <CodeIcon sx={{ color: isDark ? '#38bdf8' : '#0284c7', fontSize: 16 }} />
               <Typography
                 variant="caption"
                 sx={{
-                  color: '#e6edf3',
+                  color: isDark ? '#e6edf3' : '#0f172a',
                   fontWeight: 600,
                   fontSize: '0.78rem',
                   fontFamily: 'Consolas, Monaco, monospace',
@@ -385,22 +397,23 @@ export default function YamlIdeEditor({
                 height: 20,
                 fontSize: '0.65rem',
                 fontWeight: 700,
-                bgcolor: 'rgba(56, 189, 248, 0.15)',
-                color: '#38bdf8',
-                border: '1px solid rgba(56, 189, 248, 0.3)',
+                bgcolor: isDark ? 'rgba(56, 189, 248, 0.15)' : 'rgba(2, 132, 199, 0.1)',
+                color: isDark ? '#38bdf8' : '#0284c7',
+                border: '1px solid',
+                borderColor: isDark ? 'rgba(56, 189, 248, 0.3)' : 'rgba(2, 132, 199, 0.25)',
                 fontFamily: 'Consolas, monospace',
               }}
             />
 
             <Chip
-              label={`${lineCount} lines`}
+              label={`${ lineCount } lines`}
               size="small"
               sx={{
                 height: 20,
                 fontSize: '0.65rem',
                 fontWeight: 600,
-                bgcolor: 'rgba(255, 255, 255, 0.05)',
-                color: '#8b949e',
+                bgcolor: isDark ? 'rgba(255, 255, 255, 0.05)' : '#f1f5f9',
+                color: isDark ? '#8b949e' : '#64748b',
                 fontFamily: 'Consolas, monospace',
               }}
             />
@@ -410,7 +423,7 @@ export default function YamlIdeEditor({
                 <IconButton
                   size="small"
                   onClick={handleFormatYaml}
-                  sx={{ color: '#8b949e', p: 0.5, '&:hover': { color: '#f0f6fc', bgcolor: 'rgba(255,255,255,0.08)' } }}
+                  sx={{ color: isDark ? '#8b949e' : '#64748b', p: 0.5, '&:hover': { color: isDark ? '#f0f6fc' : '#0f172a', bgcolor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' } }}
                 >
                   <AutoFixHighIcon fontSize="small" />
                 </IconButton>
@@ -446,9 +459,9 @@ export default function YamlIdeEditor({
                 size="small"
                 onClick={handleCopy}
                 sx={{
-                  color: copied ? '#34d399' : '#8b949e',
+                  color: copied ? '#34d399' : (isDark ? '#8b949e' : '#64748b'),
                   p: 0.5,
-                  '&:hover': { color: '#f0f6fc', bgcolor: 'rgba(255,255,255,0.08)' },
+                  '&:hover': { color: isDark ? '#f0f6fc' : '#0f172a', bgcolor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' },
                 }}
               >
                 {copied ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}
@@ -495,7 +508,7 @@ export default function YamlIdeEditor({
           flexGrow: 1,
           position: 'relative',
           overflow: 'hidden',
-          bgcolor: '#0d1117',
+          bgcolor: isDark ? '#0d1117' : '#ffffff',
         }}
       >
         {/* Line Numbers Gutter */}
@@ -505,8 +518,8 @@ export default function YamlIdeEditor({
             py: 1.5,
             px: 1.5,
             minWidth: 44,
-            bgcolor: '#0d1117',
-            borderRight: '1px solid rgba(255, 255, 255, 0.06)',
+            bgcolor: isDark ? '#0d1117' : '#f8fafc',
+            borderRight: isDark ? '1px solid rgba(255, 255, 255, 0.06)' : '1px solid #e2e8f0',
             userSelect: 'none',
             overflow: 'hidden',
             textAlign: 'right',
@@ -521,7 +534,7 @@ export default function YamlIdeEditor({
                 fontFamily: 'Consolas, Monaco, "Courier New", monospace',
                 fontSize: '0.8rem',
                 lineHeight: 1.6,
-                color: i + 1 === cursorPos.line ? '#58a6ff' : '#484f58',
+                color: i + 1 === cursorPos.line ? (isDark ? '#58a6ff' : '#0284c7') : (isDark ? '#484f58' : '#94a3b8'),
                 fontWeight: i + 1 === cursorPos.line ? 700 : 400,
               }}
             >
@@ -537,6 +550,7 @@ export default function YamlIdeEditor({
             flexGrow: 1,
             height: '100%',
             overflow: 'hidden',
+            bgcolor: isDark ? '#0d1117' : '#ffffff',
           }}
         >
           {/* Syntax Highlighted Underlay */}
@@ -557,7 +571,7 @@ export default function YamlIdeEditor({
               fontSize: '0.8rem',
               lineHeight: 1.6,
               whiteSpace: 'pre',
-              color: '#c9d1d9',
+              color: isDark ? '#c9d1d9' : '#0f172a',
               tabSize: 2,
             }}
             dangerouslySetInnerHTML={{ __html: highlightedCode }}
@@ -591,7 +605,7 @@ export default function YamlIdeEditor({
               resize: 'none',
               bgcolor: 'transparent',
               color: 'transparent',
-              caretColor: '#58a6ff',
+              caretColor: isDark ? '#58a6ff' : '#0284c7',
               fontFamily: 'Consolas, Monaco, "Courier New", monospace',
               fontSize: '0.8rem',
               lineHeight: 1.6,
@@ -600,7 +614,7 @@ export default function YamlIdeEditor({
               overflow: 'auto',
               WebkitTextFillColor: 'transparent',
               '&::selection': {
-                bgcolor: 'rgba(56, 189, 248, 0.25)',
+                bgcolor: isDark ? 'rgba(56, 189, 248, 0.25)' : 'rgba(2, 132, 199, 0.2)',
                 WebkitTextFillColor: 'transparent',
               },
             }}

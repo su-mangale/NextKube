@@ -3,20 +3,19 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
-  Paper,
   Typography,
   IconButton,
   Tooltip,
   Dialog,
   DialogTitle,
   DialogContent,
+  useTheme,
 } from '@mui/material';
 import TerminalIcon from '@mui/icons-material/Terminal';
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
 import CloseIcon from '@mui/icons-material/Close';
 import RemoveIcon from '@mui/icons-material/Remove';
-import OpenInFullIcon from '@mui/icons-material/OpenInFull';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 
 // Import Xterm.js styles globally in the client bundle
@@ -32,6 +31,9 @@ export interface TerminalWindowProps {
   clusterId: string;
   namespace?: string;
   container?: string;
+  minimized?: boolean;
+  onMinimize?: () => void;
+  onRestore?: () => void;
 }
 
 export function TerminalWindow({
@@ -42,48 +44,75 @@ export function TerminalWindow({
   clusterId,
   namespace = 'default',
   container,
+  minimized: controlledMinimized,
+  onMinimize,
+  onRestore,
 }: TerminalWindowProps) {
+  const muiTheme = useTheme();
+  const isDark = muiTheme.palette.mode === 'dark';
+
   const [maximized, setMaximized] = useState(false);
-  const [minimized, setMinimized] = useState(false);
+  const [internalMinimized, setInternalMinimized] = useState(false);
   const [connected, setConnected] = useState(false);
 
+  const isMinimized = controlledMinimized !== undefined ? controlledMinimized : internalMinimized;
+
+  const handleMinimize = () => {
+    if (onMinimize) {
+      onMinimize();
+    } else {
+      setInternalMinimized(true);
+    }
+  };
+
   const terminalRef = useRef<HTMLDivElement>(null);
+  const termInstanceRef = useRef<Terminal | null>(null);
+  const fitAddonRef = useRef<FitAddon | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
   const resizeHandlerRef = useRef<() => void>(() => {});
 
   useEffect(() => {
-    if (!open || minimized) return;
+    if (!open) return;
 
     let termInstance: Terminal | null = null;
     let fitAddonInstance: FitAddon | null = null;
     let ws: WebSocket;
 
     const initTerminal = async () => {
-      // Dynamically load browser-only Xterm module to prevent Next.js SSR document reference errors
       const { Terminal } = await import('@xterm/xterm');
       const { FitAddon } = await import('@xterm/addon-fit');
 
       termInstance = new Terminal({
         cursorBlink: true,
-        fontFamily: 'monospace',
+        fontFamily: 'ui-monospace, "SF Mono", "Cascadia Code", "Fira Code", monospace',
         fontSize: 13,
-        theme: {
-          background: '#0a0e17', // premium deep dark blue-black
-          foreground: '#e2e8f0', // slate-200
-          cursor: '#38bdf8',     // sky-400
-        },
+        lineHeight: 1.25,
+        theme: isDark
+          ? {
+              background: '#0a0e17',
+              foreground: '#e2e8f0',
+              cursor: '#38bdf8',
+            }
+          : {
+              background: '#ffffff',
+              foreground: '#0f172a',
+              cursor: '#0284c7',
+            },
       });
 
+      termInstanceRef.current = termInstance;
       fitAddonInstance = new FitAddon();
+      fitAddonRef.current = fitAddonInstance;
       termInstance.loadAddon(fitAddonInstance);
 
       if (terminalRef.current) {
+        terminalRef.current.innerHTML = '';
         termInstance.open(terminalRef.current);
         fitAddonInstance.fit();
       }
 
-      termInstance.writeln('\x1b[90mConnecting to live shell container...\x1b[0m');
+      termInstance.writeln('\x1b[90mConnecting to live container shell...\x1b[0m');
 
-      // Resolve WebSocket host: use NEXT_PUBLIC_BACKEND_URL if configured, otherwise fall back to browser origin host
       let backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || '';
       if (
         !backendUrl ||
@@ -97,7 +126,10 @@ export function TerminalWindow({
       }
 
       const wsHost = backendUrl ? backendUrl.replace(/^https?:\/\//, '').replace(/\/$/, '') : window.location.host;
-      const protocol = backendUrl ? (backendUrl.startsWith('https') ? 'wss:' : 'ws:') : (window.location.protocol === 'https:' ? 'wss:' : 'ws:');
+      const protocol = backendUrl
+        ? (backendUrl.startsWith('https') ? 'wss:' : 'ws:')
+        : (window.location.protocol === 'https:' ? 'wss:' : 'ws:');
+
       let wsUrl = `${protocol}//${wsHost}/api/clusters/${clusterId}`;
       if (resourceType === 'pod') {
         const queryParams = container ? `?container=${encodeURIComponent(container)}` : '';
@@ -107,12 +139,12 @@ export function TerminalWindow({
       }
 
       ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
 
       ws.onopen = () => {
         setConnected(true);
         termInstance?.writeln('\x1b[32m[OK] WebSocket link connected.\x1b[0m');
         
-        // Trigger initial proposal size to backend to fit PTY to parent width
         const dims = fitAddonInstance?.proposeDimensions();
         if (dims) {
           ws.send(JSON.stringify({ resize: { cols: dims.cols, rows: dims.rows } }));
@@ -150,6 +182,8 @@ export function TerminalWindow({
 
       window.addEventListener('resize', handleResize);
       resizeHandlerRef.current = handleResize;
+
+      setTimeout(() => fitAddonInstance?.fit(), 100);
     };
 
     initTerminal();
@@ -157,91 +191,87 @@ export function TerminalWindow({
     return () => {
       if (ws) ws.close();
       if (termInstance) termInstance.dispose();
+      termInstanceRef.current = null;
       window.removeEventListener('resize', resizeHandlerRef.current);
     };
-  }, [open, minimized, resourceName, resourceType, clusterId, namespace, container]);
+  }, [open, resourceName, resourceType, clusterId, namespace, container]);
 
-  // Re-fit the canvas layout when maximize mode shifts
+  // Dynamically update terminal theme on dark/light mode toggle
   useEffect(() => {
-    if (open && !minimized) {
-      setTimeout(() => {
-        resizeHandlerRef.current();
-      }, 150);
+    if (termInstanceRef.current) {
+      termInstanceRef.current.options.theme = isDark
+        ? { background: '#0a0e17', foreground: '#e2e8f0', cursor: '#38bdf8' }
+        : { background: '#ffffff', foreground: '#0f172a', cursor: '#0284c7' };
     }
-  }, [maximized, open, minimized]);
+  }, [isDark]);
 
+  // Re-fit canvas layout and re-attach DOM if needed when restored or maximized
+  useEffect(() => {
+    if (open && !isMinimized) {
+      if (terminalRef.current && termInstanceRef.current?.element) {
+        if (!terminalRef.current.contains(termInstanceRef.current.element)) {
+          terminalRef.current.innerHTML = '';
+          terminalRef.current.appendChild(termInstanceRef.current.element);
+        }
+      }
+
+      const timer1 = setTimeout(() => {
+        fitAddonRef.current?.fit();
+      }, 50);
+
+      const timer2 = setTimeout(() => {
+        fitAddonRef.current?.fit();
+        termInstanceRef.current?.focus();
+        const dims = fitAddonRef.current?.proposeDimensions();
+        if (dims && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({ resize: { cols: dims.cols, rows: dims.rows } }));
+        }
+      }, 180);
+
+      return () => {
+        clearTimeout(timer1);
+        clearTimeout(timer2);
+      };
+    }
+  }, [maximized, open, isMinimized]);
+
+  // Only unmount when session is closed
   if (!open) return null;
-
-  // ── Minimized floating badge pill ────────────────────────────────────────
-  if (minimized) {
-    return (
-      <Paper
-        elevation={8}
-        onClick={() => setMinimized(false)}
-        sx={{
-          position: 'fixed',
-          bottom: 24,
-          right: 24,
-          zIndex: 1400,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 2,
-          px: 2.5,
-          py: 1.5,
-          bgcolor: '#1e293b',
-          border: '1px solid rgba(255,255,255,0.1)',
-          borderRadius: 4,
-          cursor: 'pointer',
-          boxShadow: '0 12px 24px -10px rgba(0,0,0,0.6)',
-          transition: 'all 0.2s',
-          '&:hover': {
-            borderColor: 'primary.main',
-            transform: 'translateY(-2px)',
-          },
-        }}
-      >
-        <TerminalIcon sx={{ color: '#38bdf8' }} />
-        <Box>
-          <Typography variant="subtitle2" sx={{ color: '#f8fafc', fontWeight: 700, fontSize: '0.8rem', lineHeight: 1.2 }}>
-            Terminal: {resourceName}
-          </Typography>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.2 }}>
-            <FiberManualRecordIcon sx={{ color: '#34d399', fontSize: 10 }} />
-            <Typography variant="caption" sx={{ color: '#94a3b8', fontSize: '0.65rem', fontWeight: 600 }}>
-              Session Active
-            </Typography>
-          </Box>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 0.5, ml: 1 }} onClick={(e) => e.stopPropagation()}>
-          <Tooltip title="Expand Shell">
-            <IconButton onClick={() => setMinimized(false)} size="small" sx={{ color: '#94a3b8', p: 0.5 }}>
-              <OpenInFullIcon fontSize="inherit" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Close Shell">
-            <IconButton onClick={onClose} size="small" sx={{ color: '#94a3b8', p: 0.5 }}>
-              <CloseIcon fontSize="inherit" />
-            </IconButton>
-          </Tooltip>
-        </Box>
-      </Paper>
-    );
-  }
 
   return (
     <Dialog
-      open={open && !minimized}
+      open={open}
       onClose={onClose}
       maxWidth={maximized ? false : 'md'}
       fullWidth
       fullScreen={maximized}
+      hideBackdrop={isMinimized}
+      disableEnforceFocus={isMinimized}
+      sx={
+        isMinimized
+          ? {
+              pointerEvents: 'none !important',
+              visibility: 'hidden !important',
+              zIndex: -1,
+            }
+          : {}
+      }
       slotProps={{
+        backdrop: {
+          sx: isMinimized ? { display: 'none !important' } : {},
+        },
         paper: {
           sx: {
-            bgcolor: '#0a0e17',
+            bgcolor: isDark ? '#0a0e17' : '#ffffff',
             backgroundImage: 'none',
             borderRadius: maximized ? 0 : 3,
-            border: maximized ? 'none' : '1px solid rgba(255,255,255,0.08)',
+            border: maximized ? 'none' : isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #e2e8f0',
+            boxShadow: isDark
+              ? '0 25px 50px -12px rgba(0, 0, 0, 0.7)'
+              : '0 25px 50px -12px rgba(15, 23, 42, 0.16)',
+            overflow: 'hidden',
+            visibility: isMinimized ? 'hidden !important' : 'visible !important',
+            pointerEvents: isMinimized ? 'none !important' : 'auto !important',
           },
         },
       }}
@@ -253,22 +283,22 @@ export function TerminalWindow({
           justifyContent: 'space-between',
           alignItems: 'center',
           px: 3,
-          py: 2,
-          bgcolor: '#0f1422',
-          borderBottom: '1px solid rgba(255,255,255,0.06)',
+          py: 1.75,
+          bgcolor: isDark ? '#0f1422' : '#f8fafc',
+          borderBottom: isDark ? '1px solid rgba(255,255,255,0.06)' : '1px solid #e2e8f0',
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          <TerminalIcon sx={{ color: '#38bdf8', fontSize: 22 }} />
+          <TerminalIcon sx={{ color: isDark ? '#38bdf8' : '#0284c7', fontSize: 22 }} />
           <Box>
-            <Typography variant="h6" sx={{ color: '#f8fafc', fontWeight: 800, fontSize: '1rem', lineHeight: 1.2 }}>
-              {resourceType === 'pod' ? 'Exec Shell' : 'Node SSH Shell'}: {resourceName}
+            <Typography variant="h6" sx={{ color: isDark ? '#f8fafc' : '#0f172a', fontWeight: 800, fontSize: '0.98rem', lineHeight: 1.2 }}>
+              {resourceType === 'pod' ? 'Pod Exec Shell' : 'Node SSH Shell'}: {resourceName}
             </Typography>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6, mt: 0.3 }}>
               <FiberManualRecordIcon
-                sx={{ color: connected ? '#34d399' : '#94a3b8', fontSize: 10 }}
+                sx={{ color: connected ? '#22c55e' : '#eab308', fontSize: 9 }}
               />
-              <Typography variant="caption" sx={{ color: '#94a3b8', fontSize: '0.7rem', fontWeight: 600 }}>
+              <Typography variant="caption" sx={{ color: isDark ? '#94a3b8' : '#64748b', fontSize: '0.72rem', fontWeight: 600 }}>
                 {connected
                   ? `Connected  ·  ${resourceType}  ·  ${namespace}${container ? `  ·  container: ${container}` : ''}`
                   : `Connecting…${container ? ` [${container}]` : ''}`}
@@ -277,12 +307,20 @@ export function TerminalWindow({
           </Box>
         </Box>
 
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
           <Tooltip title="Minimize to Dock">
             <IconButton
-              onClick={() => setMinimized(true)}
+              onClick={handleMinimize}
               size="small"
-              sx={{ color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 1.5, p: 0.6 }}
+              sx={{
+                color: isDark ? '#cbd5e1' : '#475569',
+                border: isDark ? '1px solid rgba(255,255,255,0.1)' : '1px solid #cbd5e1',
+                borderRadius: 1.5,
+                p: 0.6,
+                '&:hover': {
+                  bgcolor: isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9',
+                },
+              }}
             >
               <RemoveIcon fontSize="small" />
             </IconButton>
@@ -291,7 +329,15 @@ export function TerminalWindow({
             <IconButton
               onClick={() => setMaximized((v) => !v)}
               size="small"
-              sx={{ color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 1.5, p: 0.6 }}
+              sx={{
+                color: isDark ? '#cbd5e1' : '#475569',
+                border: isDark ? '1px solid rgba(255,255,255,0.1)' : '1px solid #cbd5e1',
+                borderRadius: 1.5,
+                p: 0.6,
+                '&:hover': {
+                  bgcolor: isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9',
+                },
+              }}
             >
               {maximized ? <FullscreenExitIcon fontSize="small" /> : <FullscreenIcon fontSize="small" />}
             </IconButton>
@@ -300,7 +346,17 @@ export function TerminalWindow({
             <IconButton
               onClick={onClose}
               size="small"
-              sx={{ color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 1.5, p: 0.6 }}
+              sx={{
+                color: isDark ? '#cbd5e1' : '#64748b',
+                border: isDark ? '1px solid rgba(255,255,255,0.1)' : '1px solid #cbd5e1',
+                borderRadius: 1.5,
+                p: 0.6,
+                '&:hover': {
+                  bgcolor: 'rgba(239, 68, 68, 0.15)',
+                  borderColor: 'rgba(239, 68, 68, 0.4)',
+                  color: '#f87171',
+                },
+              }}
             >
               <CloseIcon fontSize="small" />
             </IconButton>
@@ -313,7 +369,7 @@ export function TerminalWindow({
         dividers
         sx={{
           p: 0,
-          bgcolor: '#0a0e17',
+          bgcolor: isDark ? '#0a0e17' : '#ffffff',
           borderBottom: 'none',
           borderTop: 'none',
           overflow: 'hidden',
@@ -326,18 +382,18 @@ export function TerminalWindow({
           sx={{
             flexGrow: 1,
             p: 0,
-            minHeight: 320,
-            maxHeight: maximized ? 'calc(100vh - 76px)' : 480,
-            bgcolor: '#0a0e17',
+            minHeight: 340,
+            maxHeight: maximized ? 'calc(100vh - 76px)' : 500,
+            bgcolor: isDark ? '#0a0e17' : '#ffffff',
             overflow: 'hidden',
             '& .xterm': {
               padding: '16px',
             },
             '& .xterm-viewport': {
-              bgcolor: '#0a0e17 !important',
+              bgcolor: isDark ? '#0a0e17 !important' : '#ffffff !important',
             },
             '& .xterm-screen': {
-              bgcolor: '#0a0e17 !important',
+              bgcolor: isDark ? '#0a0e17 !important' : '#ffffff !important',
             },
           }}
         />
