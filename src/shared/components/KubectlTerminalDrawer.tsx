@@ -113,7 +113,7 @@ export function KubectlTerminalDrawer({
   const termInstanceRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
-  const resizeHandlerRef = useRef<() => void>(() => {});
+  const resizeHandlerRef = useRef<() => void>(() => { });
 
   // Keyboard shortcut listener (Ctrl+\ or Ctrl+`) to toggle KubeConsole
   useEffect(() => {
@@ -200,8 +200,8 @@ export function KubectlTerminalDrawer({
           ? 'wss:'
           : 'ws:'
         : window.location.protocol === 'https:'
-        ? 'wss:'
-        : 'ws:';
+          ? 'wss:'
+          : 'ws:';
 
       const wsUrl = `${protocol}//${wsHost}/api/clusters/${clusterId}/shell`;
 
@@ -481,8 +481,8 @@ export function KubectlTerminalDrawer({
                     connectionStatus === 'connected'
                       ? '#22c55e'
                       : connectionStatus === 'provisioning'
-                      ? '#eab308'
-                      : '#ef4444',
+                        ? '#eab308'
+                        : '#ef4444',
                   animation: connectionStatus === 'provisioning' ? 'pulse 1.5s infinite' : 'none',
                   '@keyframes pulse': {
                     '0%': { opacity: 0.4 },
@@ -502,10 +502,10 @@ export function KubectlTerminalDrawer({
                 {connectionStatus === 'connected'
                   ? 'Ready'
                   : connectionStatus === 'provisioning'
-                  ? 'Starting Pod...'
-                  : connectionStatus === 'connecting'
-                  ? 'Connecting...'
-                  : 'Disconnected'}
+                    ? 'Starting Pod...'
+                    : connectionStatus === 'connecting'
+                      ? 'Connecting...'
+                      : 'Disconnected'}
               </Typography>
             </Box>
           </Box>
