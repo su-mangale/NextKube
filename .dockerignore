@@ -1,0 +1,8 @@
+node_modules
+.next
+.git
+.github
+.nextkube
+*.log
+.env*
+!.env.example

@@ -1,0 +1,54 @@
+name: Build Kubernetes Dashboard App
+
+on:
+  push:
+    branches:
+      - production
+    tags:
+      - 'v*'
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'next.config.ts'
+      - 'tsconfig.json'
+      - 'Dockerfile'
+      - '.dockerignore'
+      - '.github/workflows/build-k8s-dashboard.yml'
+      - '.github/workflows/_reusable-build.yml'
+      - '!**/*.md'
+      - '!docs/**'
+      - '!**/.gitignore'
+      - '!**/.prettierrc'
+      - '!**/.eslintrc*'
+  pull_request:
+    branches:
+      - production
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'next.config.ts'
+      - 'tsconfig.json'
+      - 'Dockerfile'
+      - '.dockerignore'
+      - '.github/workflows/build-k8s-dashboard.yml'
+      - '.github/workflows/_reusable-build.yml'
+      - '!**/*.md'
+      - '!docs/**'
+      - '!**/.gitignore'
+      - '!**/.prettierrc'
+      - '!**/.eslintrc*'
+  workflow_dispatch:
+
+jobs:
+  build-and-push:
+    uses: ./.github/workflows/_reusable-build.yml
+    with:
+      app_name: k8s-dashboard
+      dockerfile_path: Dockerfile
+      image_name: ykp-k8s-dashboard
+      platforms: "linux/arm64"
+    secrets: inherit

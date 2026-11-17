@@ -1,0 +1,107 @@
+name: Reusable Build & Push
+
+on:
+  workflow_call:
+    inputs:
+      app_name:
+        required: true
+        type: string
+        description: "The name of the application (e.g. k8s-dashboard)"
+      dockerfile_path:
+        required: true
+        type: string
+        description: "Path to the Dockerfile"
+      image_name:
+        required: true
+        type: string
+        description: "Name of the target Docker image (e.g. ykp-k8s-dashboard)"
+      platforms:
+        required: false
+        type: string
+        default: "linux/arm64"
+        description: "Target architecture platforms (e.g. linux/arm64 or linux/amd64,linux/arm64)"
+      runner:
+        required: false
+        type: string
+        default: "ubuntu-24.04-arm"
+        description: "GitHub Actions runner environment (e.g. ubuntu-24.04-arm or ubuntu-latest)"
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build:
+    runs-on: ${{ inputs.runner || 'ubuntu-24.04-arm' }}
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run ESLint Quality Gate
+        run: npm run lint
+
+      - name: Run TypeScript Verification
+        run: npx tsc --noEmit
+
+      - name: Run Unit Tests
+        run: npm test --if-present
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to the Container registry
+        # We only log in if we are planning to push (i.e. not on a PR build, or we log in anyway just in case)
+        # Logging in with GITHUB_TOKEN is safe and does not expose secrets.
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate custom FluxCD image tag
+        id: prep
+        run: |
+          TIMESTAMP=$(date -u +'%Y%m%dT%H%M%SZ')
+          SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "tag=${TIMESTAMP}-sha-${SHA}" >> $GITHUB_OUTPUT
+
+      - name: Extract Metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ inputs.image_name }}
+          tags: |
+            type=raw,value=${{ steps.prep.outputs.tag }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/production' || github.ref == 'refs/heads/main' }}
+            type=ref,event=branch
+            type=ref,event=tag
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ inputs.dockerfile_path }}
+          platforms: ${{ inputs.platforms }}
+          provenance: false
+          sbom: false
+          # Only push on branch push events (like production, main) or version tags, NOT on PRs
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

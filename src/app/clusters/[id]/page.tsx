@@ -2117,7 +2117,7 @@ users:
                 size="small"
                 onClick={(e) => handleOpenRowMenu(e, resource, tab)}
                 sx={{
-                  color: Boolean(rowMenuAnchorEl && rowMenuResource === resource) ? 'primary.main' : 'text.secondary',
+                  color: (rowMenuAnchorEl && rowMenuResource === resource) ? 'primary.main' : 'text.secondary',
                   '&:hover': { color: 'primary.main', bgcolor: 'action.hover' },
                 }}
               >
