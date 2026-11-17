@@ -158,6 +158,15 @@ export function KubectlTerminalDrawer({
       fitAddonRef.current = fitAddon;
       term.loadAddon(fitAddon);
 
+      // Handle Escape key inside Xterm to close the window
+      term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
+        if (event.key === 'Escape' && event.type === 'keydown') {
+          onClose();
+          return false;
+        }
+        return true;
+      });
+
       if (terminalRef.current) {
         terminalRef.current.innerHTML = '';
         term.open(terminalRef.current);
@@ -508,15 +517,20 @@ export function KubectlTerminalDrawer({
             </IconButton>
           </Tooltip>
 
-          <Tooltip title="Close Window">
+          <Tooltip title="Close Window (Esc)">
             <IconButton
               size="small"
-              onClick={onClose}
+              onClick={(e) => {
+                e.stopPropagation();
+                onClose();
+              }}
               sx={{
                 color: isDark ? '#cbd5e1' : '#64748b',
                 border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #cbd5e1',
                 borderRadius: 1.5,
                 p: 0.6,
+                zIndex: 2,
+                cursor: 'pointer',
                 '&:hover': {
                   bgcolor: 'rgba(239, 68, 68, 0.15)',
                   borderColor: 'rgba(239, 68, 68, 0.4)',
