@@ -18,8 +18,8 @@ on:
       platforms:
         required: false
         type: string
-        default: "linux/amd64,linux/arm64"
-        description: "Target architecture platforms (e.g. linux/amd64,linux/arm64)"
+        default: "linux/amd64"
+        description: "Target architecture platforms (e.g. linux/amd64)"
       runner:
         required: false
         type: string
@@ -59,6 +59,7 @@ jobs:
         run: npm test --if-present
 
       - name: Set up QEMU
+        if: contains(inputs.platforms, 'arm') || contains(inputs.platforms, ',')
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx

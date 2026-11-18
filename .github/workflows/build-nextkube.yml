@@ -50,6 +50,6 @@ jobs:
       app_name: nextkube
       dockerfile_path: Dockerfile
       image_name: nextkube
-      platforms: "linux/amd64,linux/arm64"
+      platforms: "linux/amd64"
       runner: "ubuntu-latest"
     secrets: inherit
