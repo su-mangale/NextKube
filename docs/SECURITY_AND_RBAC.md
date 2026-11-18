@@ -16,18 +16,23 @@ flowchart TD
     Bcrypt -->|Invalid| Deny["401 Unauthorized Response"]
 ```
 
-### 1. HTTP-Only Encrypted Sessions
-- Authentication cookies (`nextkube_session`) are marked `HttpOnly` and `SameSite=Lax`, preventing client-side JavaScript access and cross-site scripting (XSS) session theft.
-- Tokens expire automatically after 12 hours.
+### 1. HTTP-Only Encrypted Sessions & JWT Secret
+- **Cryptographic Signing Key (`NEXTKUBE_AUTH_SECRET`)**: Session tokens are signed using HMAC-SHA256 (`HS256`) via the `jose` library in [src/server/jwt.ts](file:///Users/mangale/Downloads/github/NextKube/src/server/jwt.ts).
+- **Tamper Resistance**: Stores operator username and role (`admin`, `operator`, `viewer`). Tampering with the payload invalidates the signature immediately.
+- **Client Protection**: Authentication cookies (`nextkube_session`) are marked `HttpOnly` and `SameSite=Lax`, preventing client-side JavaScript access and cross-site scripting (XSS) session theft.
+- **Lifespan**: Tokens expire automatically after 12 hours.
+- **Production Requirement**: Always supply a custom, cryptographically secure 32+ character key (`NEXTKUBE_AUTH_SECRET`) in Docker and production to prevent attackers from forging administrative JWTs using the open-source repository defaults.
 
 ---
 
-## 🛡️ Cluster Vault & Credential Encryption
+## 🛡️ Cluster Vault & Credential Encryption (`NEXTKUBE_ENCRYPTION_KEY`)
 
-Kubernetes `kubeconfig` payloads and service account tokens stored in `.nextkube/clusters.json` are encrypted using **AES-256-GCM** (Galois/Counter Mode):
-- **Authenticated Encryption**: Ensures confidentiality and cryptographic integrity verification via authentication tags (`authTag`).
+Kubernetes `kubeconfig` payloads, private keys, and service account Bearer tokens stored in `.nextkube/clusters.json` are encrypted using **AES-256-GCM** (Galois/Counter Mode) in [src/server/cluster-vault.ts](file:///Users/mangale/Downloads/github/NextKube/src/server/cluster-vault.ts):
+- **Master Encryption Key (`NEXTKUBE_ENCRYPTION_KEY`)**: Vault encryption keys are derived using SHA-256 digests over `NEXTKUBE_ENCRYPTION_KEY`.
+- **Authenticated Encryption**: Ensures confidentiality and cryptographic integrity verification via 16-byte authentication tags (`authTag`).
 - **Initialization Vectors (IV)**: A distinct cryptographically random 12-byte IV is generated per cluster encryption.
-- **Key Derivation**: Vault encryption keys are derived using SHA-256 digests over `NEXTKUBE_ENCRYPTION_KEY`.
+- **Zero Plaintext Storage**: Even with physical or volume snapshot access to the `.nextkube/` directory, cluster tokens and certificates cannot be decrypted without the master key.
+- **Container Decryption Requirement**: In Docker / Kubernetes environments with persistent volume mounts, the container must be supplied with the exact same `NEXTKUBE_ENCRYPTION_KEY` across restarts and upgrades to read previously attached cluster credentials.
 
 ---
 

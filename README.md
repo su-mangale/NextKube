@@ -136,8 +136,17 @@ npm run dev
 # Run latest pre-built container from GitHub Container Registry
 docker run -d --name nextkube \
   -p 3000:3000 \
+  -v nextkube-vault:/app/.nextkube \
+  -e NEXTKUBE_AUTH_SECRET="$(openssl rand -hex 16)" \
+  -e NEXTKUBE_ENCRYPTION_KEY="$(openssl rand -hex 16)" \
   ghcr.io/su-mangale/nextkube:latest
 ```
+
+> [!IMPORTANT]
+> **Why are `NEXTKUBE_AUTH_SECRET` and `NEXTKUBE_ENCRYPTION_KEY` needed on Docker?**
+> - **`NEXTKUBE_AUTH_SECRET`**: Signs and verifies HMAC-SHA256 operator JWT session cookies (`nextkube_session`). Setting a unique key prevents forged session tokens and keeps operators logged in across container restarts.
+> - **`NEXTKUBE_ENCRYPTION_KEY`**: Master key for AES-256-GCM encryption of attached cluster credentials (kubeconfigs and bearer tokens) stored in `.nextkube/clusters.json`. A persistent key ensures the container can decrypt your saved cluster credentials across updates and volume mounts.
+> - **Production Hardening**: Overriding the development fallback secrets ensures that no public default keys from the open-source repository can decrypt your vault or forge admin sessions.
 
 Open [http://localhost:3000](http://localhost:3000) and log in with operator username `admin`.
 

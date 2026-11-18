@@ -37,14 +37,21 @@ Example `.env.local`:
 # Port on which NextKube serves traffic
 PORT=3000
 
-# NextKube Vault & Authentication Secrets (at least 32 characters)
+# NextKube JWT Session Signing Secret (at least 32 characters)
 NEXTKUBE_AUTH_SECRET="nextkube-super-secure-jwt-auth-secret-32chars!"
+
+# NextKube Cluster Vault AES-256-GCM Master Key (at least 32 characters)
 NEXTKUBE_ENCRYPTION_KEY="nextkube-default-cluster-vault-secret-key-32chars!"
 
 # Optional backend proxy URL (defaults to standalone server if omitted)
 NEXT_PUBLIC_BACKEND_URL="http://localhost:3000"
 BACKEND_URL="http://localhost:3000"
 ```
+
+> [!TIP]
+> **Key Security Notes**:
+> - **`NEXTKUBE_AUTH_SECRET`**: Signs and verifies operator session JWT cookies (`nextkube_session`). In production and Docker, always generate a random 32-character key to prevent session forgery.
+> - **`NEXTKUBE_ENCRYPTION_KEY`**: Master key for AES-256-GCM encryption of cluster credentials stored in `.nextkube/clusters.json`. For Docker deployments with volume mounts, keep this key stable across container updates so existing cluster credentials can be decrypted.
 
 ### 3. Run Development Server
 

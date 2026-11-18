@@ -24,9 +24,60 @@ docker build -t nextkube:latest .
 ```bash
 docker run -d --name nextkube \
   -p 3000:3000 \
-  -e NEXTKUBE_AUTH_SECRET="your-32-char-random-secret-key-here!" \
-  -e NEXTKUBE_ENCRYPTION_KEY="your-32-char-random-vault-key-here!" \
+  -v nextkube-vault:/app/.nextkube \
+  -e NEXTKUBE_AUTH_SECRET="$(openssl rand -hex 16)" \
+  -e NEXTKUBE_ENCRYPTION_KEY="$(openssl rand -hex 16)" \
   nextkube:latest
+```
+
+---
+
+## 🔐 Environment Security Variables (Why They Are Needed on Docker)
+
+When running NextKube in Docker, two environment variables are essential for security and state persistence:
+
+| Variable | Cryptographic Purpose | Minimum Length | Default / Fallback |
+|---|---|---|---|
+| **`NEXTKUBE_AUTH_SECRET`** | Signs & verifies HMAC-SHA256 (`HS256`) operator session cookies (`nextkube_session`). | 32 characters | Hardcoded repo fallback string |
+| **`NEXTKUBE_ENCRYPTION_KEY`** | Master key for **AES-256-GCM** encryption of cluster credentials (kubeconfig/tokens) in `.nextkube/clusters.json`. | 32 characters | Falls back to `NEXTKUBE_AUTH_SECRET` or repo default |
+
+### Why They Are Critical on Docker
+
+1. **State Persistence Across Container Lifecycles & Restarts**:
+   - NextKube stores connected Kubernetes cluster credentials (raw kubeconfigs, Bearer tokens, CA certs) inside `.nextkube/clusters.json` on a persistent volume (`-v nextkube-vault:/app/.nextkube`).
+   - Every credential is encrypted with **AES-256-GCM**.
+   - If a container is recreated, restarted, or upgraded to a new image version, it **must be provided with the exact same `NEXTKUBE_ENCRYPTION_KEY`** to decrypt and connect to your attached clusters. If this key is missing or changes, the vault cannot decrypt your saved clusters (`Failed to decrypt cluster payload`).
+
+2. **Preventing Exploitation of Public Open-Source Defaults**:
+   - In local development, NextKube falls back to built-in development keys.
+   - Because NextKube is open source, anyone on the network can see the repository's fallback strings. If you deploy a Docker container without overriding these variables:
+     - An attacker could forge a JWT session cookie with `role: "admin"` and gain full control of your clusters.
+     - An attacker with access to a backup or volume snapshot of `.nextkube/clusters.json` could decrypt all sensitive kubeconfigs and cluster tokens.
+
+3. **Session Continuity Across Deployments**:
+   - A consistent `NEXTKUBE_AUTH_SECRET` prevents active operators from having their session cookies invalidated and getting unexpectedly logged out every time the container restarts or scales.
+
+### Docker Compose Example
+
+```yaml
+services:
+  nextkube:
+    image: ghcr.io/su-mangale/nextkube:latest
+    container_name: nextkube
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - nextkube-vault:/app/.nextkube
+    environment:
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+      - NEXTKUBE_AUTH_SECRET=${NEXTKUBE_AUTH_SECRET}
+      - NEXTKUBE_ENCRYPTION_KEY=${NEXTKUBE_ENCRYPTION_KEY}
+
+volumes:
+  nextkube-vault:
+    driver: local
 ```
 
 ---
