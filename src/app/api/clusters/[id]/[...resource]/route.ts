@@ -44,6 +44,12 @@ import {
   fetchHelmCatalog,
   installHelmChart,
 } from '@/server/k8s-client';
+import {
+  startPortForwardSession,
+  stopPortForwardSession,
+  listPortForwardSessions,
+  fetchPortForwardTargets,
+} from '@/server/port-forward-manager';
 import { recordAuditEvent, getAuditLogs } from '@/server/audit';
 import { AUTH_COOKIE_NAME, verifySessionToken } from '@/server/jwt';
 
@@ -330,6 +336,16 @@ export async function GET(
       return NextResponse.json(data);
     }
 
+    // 27. Port-Forwards & Targets: /port-forwards, /port-forwards/targets
+    if (segment0 === 'port-forwards' || segment0 === 'portforwards') {
+      if (resource.length >= 2 && resource[1] === 'targets') {
+        const targets = await fetchPortForwardTargets(clusterId, namespace || 'default');
+        return NextResponse.json(targets);
+      }
+      const forwards = listPortForwardSessions(clusterId);
+      return NextResponse.json(forwards);
+    }
+
     return NextResponse.json({ error: `Unhandled resource path: ${resource.join('/')}` }, { status: 404 });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
@@ -463,6 +479,22 @@ export async function POST(
       return NextResponse.json(res);
     }
 
+    // 6. Start Port-Forward: /port-forwards
+    if (segment0 === 'port-forwards' || segment0 === 'portforwards') {
+      const session = await startPortForwardSession(clusterId, body);
+      await recordAuditEvent({
+        clusterId,
+        user,
+        action: 'CUSTOM_OPERATION',
+        resourceType: 'PortForward',
+        resourceName: `${session.targetType}/${session.targetName}`,
+        namespace: session.namespace,
+        details: `Started port-forward :${session.localPort} -> :${session.targetPort}`,
+        status: 'SUCCESS',
+      });
+      return NextResponse.json(session);
+    }
+
     return NextResponse.json({ error: `Unhandled operation for: ${resource.join('/')}` }, { status: 404 });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
@@ -553,6 +585,23 @@ export async function DELETE(
         status: res.success ? 'SUCCESS' : 'FAILED',
       });
       return NextResponse.json(res);
+    }
+
+    // 3. Stop Port-Forward Session: /port-forwards/[sessionId]
+    if ((segment0 === 'port-forwards' || segment0 === 'portforwards') && resource.length >= 2) {
+      const sessionId = resource[1];
+      const ok = await stopPortForwardSession(sessionId);
+      await recordAuditEvent({
+        clusterId,
+        user,
+        action: 'DELETE_RESOURCE',
+        resourceType: 'PortForward',
+        resourceName: sessionId,
+        namespace,
+        details: `Stopped port-forward session ${sessionId}`,
+        status: ok ? 'SUCCESS' : 'FAILED',
+      });
+      return NextResponse.json({ success: ok });
     }
 
     return NextResponse.json({ error: `Unhandled DELETE path: ${resource.join('/')}` }, { status: 404 });

@@ -89,6 +89,13 @@ Comprehensive cloud-native app catalog (Ingress NGINX, Cert-Manager, Prometheus 
 - Revision histories, atomic upgrades, and 1-click rollbacks.
 - Instant 1-click deployment with namespace selection and real-time validation.
 
+### 15. In-Browser Port-Forwarding Manager & Microservice Tunnel
+Direct TCP & HTTP forwarding into private pods and services without local CLI setup:
+- Expose internal Redis caches, PostgreSQL databases, and microservices directly onto host ports (`localhost:<port>`).
+- Live telemetry for active connections, bytes transferred, and tunnel state.
+- 1-click **"Open Browser"** to launch internal web dashboards in new tabs, copy local URLs, or copy native `kubectl` commands.
+- Accessible via shortcut (`Alt+P`), Pod/Service row actions, Command Palette, and ActionDock.
+
 ---
 
 ## 🏗️ How NextKube Works

@@ -117,6 +117,9 @@ import {
   ClusterTopology,
   PodDiagnosticReport,
   HelmCatalogItem,
+  PortForwardSession,
+  CreatePortForwardRequest,
+  PortForwardTargetOption,
 } from '../types/dashboard.types';
 
 // Fetch Namespaces
@@ -1625,6 +1628,77 @@ export const installHelmRelease = async (
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.message || 'Failed to install Helm release');
+  }
+  return res.json();
+};
+
+// ==========================================
+// In-Browser Port-Forwarding Hooks & APIs
+// ==========================================
+
+export const fetchPortForwards = async (clusterId: string): Promise<PortForwardSession[]> => {
+  const baseUrl = getBackendUrl();
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/port-forwards`);
+  if (!res.ok) throw new Error('Failed to retrieve active port-forward sessions');
+  return res.json();
+};
+
+export const usePortForwards = (clusterId: string) => {
+  return useQuery<PortForwardSession[]>({
+    queryKey: ['portForwards', clusterId],
+    queryFn: () => fetchPortForwards(clusterId),
+    enabled: !!clusterId,
+    refetchInterval: 3000,
+  });
+};
+
+export const fetchPortForwardTargets = async (
+  clusterId: string,
+  namespace: string = 'default'
+): Promise<PortForwardTargetOption[]> => {
+  const baseUrl = getBackendUrl();
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/port-forwards/targets?namespace=${encodeURIComponent(namespace)}`);
+  if (!res.ok) throw new Error('Failed to fetch port-forward targets');
+  return res.json();
+};
+
+export const usePortForwardTargets = (clusterId: string, namespace: string = 'default') => {
+  return useQuery<PortForwardTargetOption[]>({
+    queryKey: ['portForwardTargets', clusterId, namespace],
+    queryFn: () => fetchPortForwardTargets(clusterId, namespace),
+    enabled: !!clusterId,
+    staleTime: 10000,
+  });
+};
+
+export const startPortForward = async (
+  clusterId: string,
+  req: CreatePortForwardRequest
+): Promise<PortForwardSession> => {
+  const baseUrl = getBackendUrl();
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/port-forwards`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Failed to start port-forward session');
+  }
+  return res.json();
+};
+
+export const stopPortForward = async (
+  clusterId: string,
+  sessionId: string
+): Promise<{ success: boolean }> => {
+  const baseUrl = getBackendUrl();
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/port-forwards/${sessionId}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Failed to stop port-forward session');
   }
   return res.json();
 };

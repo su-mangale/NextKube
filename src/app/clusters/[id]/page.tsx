@@ -63,6 +63,7 @@ import SwapVertIcon from '@mui/icons-material/SwapVert';
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import StorefrontIcon from '@mui/icons-material/Storefront';
+import AltRouteIcon from '@mui/icons-material/AltRouteRounded';
 import { useQueryClient } from '@tanstack/react-query';
 
 import {
@@ -127,6 +128,8 @@ import {
   PodDiagnosticDialog,
   CommandPalette,
   HelmAppStore,
+  PortForwardDrawer,
+  usePortForwards,
   useShortcuts,
   matchesShortcut,
   DraggablePaper,
@@ -230,6 +233,15 @@ spec:
 
   // Helm Hub sub-tab state ('releases' | 'catalog')
   const [helmSubTab, setHelmSubTab] = useState<'releases' | 'catalog'>('releases');
+
+  // In-Browser Port-Forward Drawer state
+  const [portForwardOpen, setPortForwardOpen] = useState<boolean>(false);
+  const [portForwardInitialTarget, setPortForwardInitialTarget] = useState<{
+    targetType: 'pod' | 'service';
+    targetName: string;
+    namespace: string;
+    ports?: number[];
+  } | null>(null);
 
   // Logs states
   const [logsDialogOpen, setLogsDialogOpen] = useState<boolean>(false);
@@ -366,6 +378,7 @@ spec:
   const { data: healthData, refetch: refetchHealth } = useClusterHealth(effectiveClusterId);
   const { data: auditLogs = [], isLoading: auditLoading, refetch: refetchAuditLogs } = useAuditLogs(effectiveClusterId);
   const { data: helmReleases = [], isLoading: helmLoading, refetch: refetchHelmReleases } = useHelmReleases(effectiveClusterId, selectedNamespace);
+  const { data: activePortForwards = [] } = usePortForwards(effectiveClusterId);
 
   const queryClient = useQueryClient();
   const [_liveWatchConnected, setLiveWatchConnected] = useState<boolean>(false);
@@ -542,6 +555,13 @@ spec:
       const refreshSc = shortcuts.find((s) => s.id === 'refresh')?.key;
       const toggleDockSc = shortcuts.find((s) => s.id === 'toggleDock')?.key;
       const topologySc = shortcuts.find((s) => s.id === 'topology')?.key;
+      const portForwardSc = shortcuts.find((s) => s.id === 'portForward')?.key;
+
+      if (portForwardSc && matchesShortcut(e, portForwardSc)) {
+        e.preventDefault();
+        setPortForwardOpen((prev) => !prev);
+        return;
+      }
 
       if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
         e.preventDefault();
@@ -2018,6 +2038,24 @@ spec:
                   <AutoAwesomeIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
+              <Tooltip title="Port-Forward Pod">
+                <IconButton
+                  size="small"
+                  onClick={() => {
+                    const ports = (resource.containers || []).flatMap((c: any) => (c.ports || []).map((p: any) => p.containerPort || p)).filter(Boolean);
+                    setPortForwardInitialTarget({
+                      targetType: 'pod',
+                      targetName: resource.name,
+                      namespace: resource.namespace || selectedNamespace || 'default',
+                      ports: ports.length > 0 ? ports : [80, 8080],
+                    });
+                    setPortForwardOpen(true);
+                  }}
+                  sx={{ color: 'text.secondary', '&:hover': { color: 'info.main', bgcolor: 'action.hover' } }}
+                >
+                  <AltRouteIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
               <Tooltip title="View Logs">
                 <IconButton
                   size="small"
@@ -2209,6 +2247,28 @@ spec:
                 sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main', bgcolor: 'action.hover' } }}
               >
                 <CodeIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
+
+          {/* Tab 8: Services -> 1-click Port Forward */}
+          {tab === 8 && (
+            <Tooltip title="Port-Forward Service">
+              <IconButton
+                size="small"
+                onClick={() => {
+                  const ports = (resource.ports || []).map((p: any) => (typeof p === 'object' ? p.port : p)).filter(Boolean);
+                  setPortForwardInitialTarget({
+                    targetType: 'service',
+                    targetName: resource.name,
+                    namespace: resource.namespace || selectedNamespace || 'default',
+                    ports: ports.length > 0 ? ports : [80],
+                  });
+                  setPortForwardOpen(true);
+                }}
+                sx={{ color: 'text.secondary', '&:hover': { color: 'info.main', bgcolor: 'action.hover' } }}
+              >
+                <AltRouteIcon fontSize="small" />
               </IconButton>
             </Tooltip>
           )}
@@ -3832,6 +3892,34 @@ spec:
           </MenuItem>
         )}
 
+        {/* Port-Forward Action for Pods and Services */}
+        {(rowMenuTab === 1 || rowMenuTab === 8) && (
+          <MenuItem
+            dense
+            onClick={() => {
+              const res = rowMenuResource;
+              const type = rowMenuTab === 1 ? 'pod' : 'service';
+              const ports =
+                type === 'pod'
+                  ? (res.containers || []).flatMap((c: any) => (c.ports || []).map((p: any) => p.containerPort || p)).filter(Boolean)
+                  : (res.ports || []).map((p: any) => (typeof p === 'object' ? p.port : p)).filter(Boolean);
+              handleCloseRowMenu();
+              setPortForwardInitialTarget({
+                targetType: type,
+                targetName: res.name,
+                namespace: res.namespace || selectedNamespace || 'default',
+                ports: ports.length > 0 ? ports : [80],
+              });
+              setPortForwardOpen(true);
+            }}
+          >
+            <ListItemIcon>
+              <AltRouteIcon fontSize="small" sx={{ color: '#38bdf8' }} />
+            </ListItemIcon>
+            <ListItemText primary="Port-Forward Tunnel" secondary="Direct TCP / HTTP tunnel" />
+          </MenuItem>
+        )}
+
         {/* Pod Specific: AI Root-Cause Diagnosis */}
         {rowMenuTab === 1 && (
           <MenuItem
@@ -5274,6 +5362,8 @@ spec:
         onOpenCommandPalette={() => setCommandPaletteOpen((prev) => !prev)}
         onToggleTopology={() => setActiveTab((prev) => (prev === 26 ? 0 : 26))}
         isTopologyActive={activeTab === 26}
+        onTogglePortForward={() => setPortForwardOpen((prev) => !prev)}
+        activePortForwardsCount={activePortForwards.length}
         onCreateResource={() => {
           setCreateDialogOpen(true);
           setTopWindow('yamlCreate');
@@ -5327,11 +5417,24 @@ spec:
           setCreateDialogOpen(true);
           setTopWindow('yamlCreate');
         }}
+        onOpenPortForward={() => setPortForwardOpen(true)}
         onOpenSettings={() => {
           setSettingsDialogOpen(true);
           setTopWindow('settings');
         }}
         onRefresh={handleRefreshAll}
+      />
+
+      {/* In-Browser Port-Forwarding Drawer */}
+      <PortForwardDrawer
+        open={portForwardOpen}
+        onClose={() => {
+          setPortForwardOpen(false);
+          setPortForwardInitialTarget(null);
+        }}
+        clusterId={effectiveClusterId}
+        namespaces={namespaces}
+        initialTarget={portForwardInitialTarget}
       />
 
       {/* AI Root-Cause Diagnostic Dialog */}

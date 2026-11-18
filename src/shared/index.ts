@@ -28,6 +28,7 @@ export { AddClusterDialog, type AddClusterDialogProps } from './components/AddCl
 export { PodDiagnosticDialog, type PodDiagnosticDialogProps } from './components/PodDiagnosticDialog';
 export { CommandPalette, type CommandPaletteProps } from './components/CommandPalette';
 export { HelmAppStore, type HelmAppStoreProps } from './components/HelmAppStore';
+export { PortForwardDrawer, type PortForwardDrawerProps } from './components/PortForwardDrawer';
 export { DraggablePaper, type DraggablePaperProps } from './components/DraggablePaper';
 export { NoClusterView } from './components/NoClusterView';
 export * from './components/QueryProvider';

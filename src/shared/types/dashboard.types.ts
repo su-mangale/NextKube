@@ -745,6 +745,45 @@ export interface HelmCatalogItem {
   schemaFields: HelmCatalogField[];
 }
 
+// ==========================================
+// In-Browser Port-Forwarding Types
+// ==========================================
+
+export interface PortForwardSession {
+  id: string;
+  clusterId: string;
+  namespace: string;
+  targetType: 'pod' | 'service';
+  targetName: string;
+  targetPort: number;
+  localPort: number;
+  status: 'active' | 'connecting' | 'stopped' | 'error';
+  errorMessage?: string;
+  createdAt: string;
+  lastActive?: string;
+  connectionsCount: number;
+  bytesReceived: number;
+  bytesSent: number;
+  url: string;
+  proxyUrl: string;
+}
+
+export interface CreatePortForwardRequest {
+  namespace: string;
+  targetType: 'pod' | 'service';
+  targetName: string;
+  targetPort: number;
+  localPort?: number;
+}
+
+export interface PortForwardTargetOption {
+  name: string;
+  type: 'pod' | 'service';
+  namespace: string;
+  ports: number[];
+  status?: string;
+}
+
 
 
 

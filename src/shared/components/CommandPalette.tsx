@@ -26,6 +26,7 @@ import LightModeIcon from '@mui/icons-material/LightMode';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import FolderIcon from '@mui/icons-material/Folder';
 import StorageIcon from '@mui/icons-material/Storage';
+import AltRouteIcon from '@mui/icons-material/AltRouteRounded';
 import { useColorMode } from '../theme/theme-registry';
 
 export interface CommandPaletteProps {
@@ -39,6 +40,7 @@ export interface CommandPaletteProps {
   onNavigateTab?: (tabIndex: number) => void;
   onOpenConsole?: () => void;
   onOpenCreate?: () => void;
+  onOpenPortForward?: () => void;
   onOpenSettings?: () => void;
   onRefresh?: () => void;
   customItems?: Array<{
@@ -72,6 +74,7 @@ export function CommandPalette({
   onNavigateTab,
   onOpenConsole,
   onOpenCreate,
+  onOpenPortForward,
   onOpenSettings,
   onRefresh,
   customItems = [],
@@ -145,6 +148,19 @@ export function CommandPalette({
       action: () => {
         onClose();
         onOpenCreate?.();
+      },
+    });
+
+    list.push({
+      id: 'action-port-forward',
+      title: 'Open Port-Forward Manager',
+      subtitle: 'TCP/HTTP tunnels into private pods & services',
+      category: 'Actions',
+      shortcut: 'Alt+P',
+      icon: <AltRouteIcon fontSize="small" sx={{ color: '#38bdf8' }} />,
+      action: () => {
+        onClose();
+        onOpenPortForward?.();
       },
     });
 
@@ -245,6 +261,7 @@ export function CommandPalette({
     onNavigateTab,
     onOpenConsole,
     onOpenCreate,
+    onOpenPortForward,
     onOpenSettings,
     onRefresh,
     onSelectNamespace,

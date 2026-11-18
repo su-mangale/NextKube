@@ -149,3 +149,14 @@ Operator-first left sidebar replacing flat tabs with domain-driven collapsible g
 - **Live Counter Badges**: Real-time workload & object count pills alongside every resource.
 - **Auto-Expansion & Persistence**: Automatically expands the corresponding group when jumping to an object via Command Palette or URL, with group states remembered across browser sessions via `localStorage`.
 - **Pinned Sidebar Footer**: Pinned **Settings** (`Alt+,`) and **Command Palette** launcher (`⌘K`) right at the bottom of the navigation bar, removing clutter from floating tools.
+
+---
+
+### 19. In-Browser Port-Forwarding Manager & Microservice Tunnel
+Dedicated port-forwarding management engine for private cluster services and pods:
+- **Zero-Terminal Forwarding**: Expose internal databases (PostgreSQL, MySQL, Redis, MongoDB), message brokers (Kafka, RabbitMQ), or internal web apps to your host machine without running `kubectl port-forward` in local shells.
+- **Pod & Service Support**: Forward traffic directly to individual Pods or Services with automatic port detection and container port mapping.
+- **Dynamic Port Allocation**: Automatic free port negotiation or custom port selection with host binding (`0.0.0.0`).
+- **Live Connection Telemetry**: Tracks active TCP connection counts, transferred throughput/bytes, and tunnel health in real-time.
+- **1-Click Browser Launch**: Click **"Open Browser"** to launch internal web dashboards (`http://localhost:<port>`) in a new tab, copy direct URLs, or copy equivalent `kubectl` commands.
+- **Global Access Points**: Trigger port forwarding from the Pods table, Services table, row context menus, Command Palette (`Alt+P`), or the ActionDock.

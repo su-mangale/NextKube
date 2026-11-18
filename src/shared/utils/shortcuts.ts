@@ -84,6 +84,14 @@ export const DEFAULT_SHORTCUTS: ShortcutItem[] = [
     key: 'Alt+T',
     category: 'Navigation',
   },
+  {
+    id: 'portForward',
+    label: 'Port-Forward Manager',
+    description: 'Toggle in-browser Port-Forwarding manager drawer',
+    defaultKey: 'Alt+P',
+    key: 'Alt+P',
+    category: 'Dock & Shell',
+  },
 ];
 
 const STORAGE_KEY = 'nextkube-keyboard-shortcuts';
