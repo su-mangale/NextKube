@@ -29,6 +29,8 @@ export { PodDiagnosticDialog, type PodDiagnosticDialogProps } from './components
 export { CommandPalette, type CommandPaletteProps } from './components/CommandPalette';
 export { HelmAppStore, type HelmAppStoreProps } from './components/HelmAppStore';
 export { PortForwardDrawer, type PortForwardDrawerProps } from './components/PortForwardDrawer';
+export { default as YamlDiffViewerDialog, type YamlDiffViewerDialogProps } from './components/YamlDiffViewerDialog';
+export { default as ConfigDriftDrawer, type ConfigDriftDrawerProps } from './components/ConfigDriftDrawer';
 export { DraggablePaper, type DraggablePaperProps } from './components/DraggablePaper';
 export { NoClusterView } from './components/NoClusterView';
 export * from './components/QueryProvider';

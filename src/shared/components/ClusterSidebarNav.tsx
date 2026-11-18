@@ -40,14 +40,20 @@ import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import TerminalRoundedIcon from '@mui/icons-material/TerminalRounded';
+import AutoModeRoundedIcon from '@mui/icons-material/AutoModeRounded';
+import CompareArrowsRoundedIcon from '@mui/icons-material/CompareArrowsRounded';
 
 export interface ClusterSidebarNavProps {
   activeTab: number;
   onSelectTab: (tabIndex: number) => void;
   onOpenSettings: () => void;
   onOpenCommandPalette?: () => void;
+  onOpenPortForward?: () => void;
+  onOpenConfigDrift?: () => void;
+  onOpenDiff?: () => void;
   resourceCounts?: Partial<Record<number, number>>;
   shortcutSettingsKey?: string;
+  activePortForwardsCount?: number;
 }
 
 interface NavItemDef {
@@ -68,8 +74,12 @@ export function ClusterSidebarNav({
   onSelectTab,
   onOpenSettings,
   onOpenCommandPalette,
+  onOpenPortForward,
+  onOpenConfigDrift,
+  onOpenDiff,
   resourceCounts = {},
   shortcutSettingsKey = 'Alt+,',
+  activePortForwardsCount = 0,
 }: ClusterSidebarNavProps) {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
@@ -425,6 +435,105 @@ export function ClusterSidebarNav({
           label: 'Audit Trail',
           icon: <HistoryRoundedIcon sx={{ fontSize: 18 }} />,
         })}
+
+        {onOpenPortForward && (
+          <Box
+            onClick={onOpenPortForward}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              px: 1.5,
+              py: 0.7,
+              mx: 0.8,
+              borderRadius: 1.8,
+              cursor: 'pointer',
+              color: 'text.secondary',
+              transition: 'all 0.15s ease',
+              '&:hover': {
+                bgcolor: isDark ? 'rgba(56, 189, 248, 0.1)' : 'rgba(2, 132, 199, 0.08)',
+                color: isDark ? '#38bdf8' : '#0284c7',
+              },
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2 }}>
+              <AltRouteRoundedIcon sx={{ fontSize: 18, color: '#38bdf8' }} />
+              <Typography variant="body2" sx={{ fontSize: '0.81rem', fontWeight: 600 }}>
+                Port-Forward Manager
+              </Typography>
+            </Box>
+            {activePortForwardsCount > 0 ? (
+              <Chip
+                label={`${activePortForwardsCount} active`}
+                size="small"
+                color="success"
+                sx={{ height: 16, fontSize: '0.62rem', fontWeight: 700 }}
+              />
+            ) : (
+              <Chip label="Alt+P" size="small" sx={{ height: 16, fontSize: '0.62rem', fontWeight: 700 }} />
+            )}
+          </Box>
+        )}
+
+        {onOpenConfigDrift && (
+          <Box
+            onClick={onOpenConfigDrift}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              px: 1.5,
+              py: 0.7,
+              mx: 0.8,
+              borderRadius: 1.8,
+              cursor: 'pointer',
+              color: 'text.secondary',
+              transition: 'all 0.15s ease',
+              '&:hover': {
+                bgcolor: isDark ? 'rgba(245, 158, 11, 0.1)' : 'rgba(245, 158, 11, 0.08)',
+                color: isDark ? '#fbbf24' : '#d97706',
+              },
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2 }}>
+              <AutoModeRoundedIcon sx={{ fontSize: 18, color: '#f59e0b' }} />
+              <Typography variant="body2" sx={{ fontSize: '0.81rem', fontWeight: 600 }}>
+                Config Drift Detector
+              </Typography>
+            </Box>
+            <Chip label="Alt+C" size="small" sx={{ height: 16, fontSize: '0.62rem', fontWeight: 700 }} />
+          </Box>
+        )}
+
+        {onOpenDiff && (
+          <Box
+            onClick={onOpenDiff}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              px: 1.5,
+              py: 0.7,
+              mx: 0.8,
+              borderRadius: 1.8,
+              cursor: 'pointer',
+              color: 'text.secondary',
+              transition: 'all 0.15s ease',
+              '&:hover': {
+                bgcolor: isDark ? 'rgba(168, 85, 247, 0.1)' : 'rgba(168, 85, 247, 0.08)',
+                color: isDark ? '#c084fc' : '#9333ea',
+              },
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2 }}>
+              <CompareArrowsRoundedIcon sx={{ fontSize: 18, color: '#a855f7' }} />
+              <Typography variant="body2" sx={{ fontSize: '0.81rem', fontWeight: 600 }}>
+                GitOps Time Machine
+              </Typography>
+            </Box>
+            <Chip label="Diff" size="small" sx={{ height: 16, fontSize: '0.62rem', fontWeight: 700 }} />
+          </Box>
+        )}
       </Box>
 
       {/* Pinned Bottom Footer: Settings & Quick Omnibar Launcher */}

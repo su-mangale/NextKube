@@ -160,3 +160,24 @@ Dedicated port-forwarding management engine for private cluster services and pod
 - **Live Connection Telemetry**: Tracks active TCP connection counts, transferred throughput/bytes, and tunnel health in real-time.
 - **1-Click Browser Launch**: Click **"Open Browser"** to launch internal web dashboards (`http://localhost:<port>`) in a new tab, copy direct URLs, or copy equivalent `kubectl` commands.
 - **Global Access Points**: Trigger port forwarding from the Pods table, Services table, row context menus, Command Palette (`Alt+P`), or the ActionDock.
+
+---
+
+### 20. Visual YAML Diff & Historical Change Timeline ("GitOps Time Machine")
+Full visual diffing and historical version navigation for all Kubernetes workloads:
+- **Timeline & Revision Navigation**: Visual timeline nodes for each rollout revision (`Rev #1`, `Rev #2`, `Rev #3 (Current)`) with human-readable timestamps and change causes.
+- **Split Side-by-Side & Unified Diff Views**: Choose between a synchronized two-column split view or single-column unified diff view with red/green syntax highlighting.
+- **Sanitize K8s Metadata**: One-click toggle that strips transient Kubernetes bookkeeping noise (`metadata.managedFields`, `resourceVersion`, `uid`, `creationTimestamp`, and `status`) to reveal semantic configuration changes.
+- **Diff Statistics & Metrics**: Real-time summary chips displaying `+N additions`, `-M deletions`, modifications, or `✓ Identical / No Drift`.
+- **Patch Export & Clipboard Sync**: 1-click **"Copy Patch"** or **"Download .patch"** in standard Git-compatible unified diff format.
+- **1-Click Rollback**: Instantly revert any Deployment, StatefulSet, or DaemonSet to a selected historical revision with automated zero-downtime rolling restart.
+
+---
+
+### 21. ConfigMap & Secret Drift Detector
+Proactive detection of running pods executing with stale configurations:
+- **The Stale Config Problem**: When an operator edits a ConfigMap or rotates a Secret, Kubernetes pods do not automatically reload the new values; environment variables and in-memory application configs remain outdated indefinitely until a restart.
+- **Workload Drift Scanner**: Scans all Deployments, StatefulSets, and DaemonSets across namespaces, checking referenced ConfigMaps/Secrets from `env`, `envFrom`, and `volumes`.
+- **Stale Pod Telemetry**: Compares ConfigMap/Secret modification timestamps against running pod launch times and identifies exactly which pods are running outdated configurations (`e.g., 3/3 pods scheduled before update`).
+- **1-Click Zero-Downtime Sync**: Trigger a progressive rolling update directly from the drawer or row menu to recreate pods with the latest configuration without application downtime.
+- **Global Drawer & Omnibar Access**: Dedicated drawer accessible via `Alt+C`, Command Palette, Sidebar, or ActionDock with a live drift warning counter badge.

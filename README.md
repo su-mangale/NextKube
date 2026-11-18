@@ -96,6 +96,21 @@ Direct TCP & HTTP forwarding into private pods and services without local CLI se
 - 1-click **"Open Browser"** to launch internal web dashboards in new tabs, copy local URLs, or copy native `kubectl` commands.
 - Accessible via shortcut (`Alt+P`), Pod/Service row actions, Command Palette, and ActionDock.
 
+### 16. Visual YAML Diff & Historical Change Timeline ("GitOps Time Machine")
+Full visual diffing and revision timeline across workload rollouts:
+- **Interactive Revision Timeline**: Step backward and forward through Deployment, StatefulSet, and DaemonSet revisions with human-readable timestamps and change causes.
+- **Split Side-by-Side & Unified Views**: Color-coded red/green diff view with line numbers and syntax highlighting.
+- **Sanitize K8s Metadata**: 1-click toggle to strip transient metadata noise (`managedFields`, `resourceVersion`, timestamps) to reveal semantic configuration changes.
+- **1-Click Rollback**: Revert workloads to any historical revision with progressive zero-downtime rolling restart.
+- **Unified Patch Export**: Copy or download standard `.patch` files directly from the browser.
+
+### 17. ConfigMap & Secret Drift Detector
+Proactive discovery and remediation of pods running stale configuration:
+- Scans all workloads and compares ConfigMap/Secret update timestamps against running pod initialization times.
+- Identifies exact stale pods running outdated configurations after ConfigMaps or Secrets were updated.
+- 1-click **"Zero-Downtime Rolling Sync"** to restart pods and mount the latest configuration without downtime.
+- Accessible via shortcut (`Alt+C`), the left sidebar, Command Palette, and ActionDock with a live drift warning counter badge.
+
 ---
 
 ## 🏗️ How NextKube Works

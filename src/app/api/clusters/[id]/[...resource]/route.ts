@@ -43,6 +43,10 @@ import {
   diagnosePodResource,
   fetchHelmCatalog,
   installHelmChart,
+  fetchWorkloadRolloutHistory,
+  rollbackWorkloadRevision,
+  fetchConfigDriftAnalysis,
+  syncDriftedWorkload,
 } from '@/server/k8s-client';
 import {
   startPortForwardSession,
@@ -145,6 +149,17 @@ export async function GET(
         );
         return NextResponse.json({ logs });
       }
+      // Subpath: /deployments/[name]/rollouts
+      if (resource.length >= 3 && resource[2] === 'rollouts') {
+        const depName = resource[1];
+        const data = await fetchWorkloadRolloutHistory(
+          clusterId,
+          namespace || 'default',
+          'deployment',
+          depName
+        );
+        return NextResponse.json(data);
+      }
       const data = await fetchDeployments(clusterId, namespace);
       return NextResponse.json(data);
     }
@@ -229,6 +244,11 @@ export async function GET(
         );
         return NextResponse.json({ logs });
       }
+      if (resource.length >= 3 && resource[2] === 'rollouts') {
+        const dsName = resource[1];
+        const data = await fetchWorkloadRolloutHistory(clusterId, namespace || 'default', 'daemonset', dsName);
+        return NextResponse.json(data);
+      }
       const data = await fetchDaemonSets(clusterId, namespace);
       return NextResponse.json(data);
     }
@@ -247,6 +267,11 @@ export async function GET(
           sinceSeconds
         );
         return NextResponse.json({ logs });
+      }
+      if (resource.length >= 3 && resource[2] === 'rollouts') {
+        const stsName = resource[1];
+        const data = await fetchWorkloadRolloutHistory(clusterId, namespace || 'default', 'statefulset', stsName);
+        return NextResponse.json(data);
       }
       const data = await fetchStatefulSets(clusterId, namespace);
       return NextResponse.json(data);
@@ -346,6 +371,12 @@ export async function GET(
       return NextResponse.json(forwards);
     }
 
+    // 28. Configuration Drift Analysis: /drift
+    if (segment0 === 'drift') {
+      const data = await fetchConfigDriftAnalysis(clusterId, namespace);
+      return NextResponse.json(data);
+    }
+
     return NextResponse.json({ error: `Unhandled resource path: ${resource.join('/')}` }, { status: 404 });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
@@ -415,6 +446,43 @@ export async function POST(
         resourceName: name,
         namespace,
         details: 'Triggered rolling update restart',
+        status: res.success ? 'SUCCESS' : 'FAILED',
+        errorMessage: res.success ? undefined : res.message,
+      });
+      return NextResponse.json(res, { status: res.success ? 200 : 400 });
+    }
+
+    // 3b. Workload Rollback to Revision: /deployments/[name]/rollback
+    if (['deployments', 'statefulsets', 'daemonsets'].includes(segment0) && resource.length >= 3 && resource[2] === 'rollback') {
+      const name = resource[1];
+      const rev = typeof body.revision === 'number' ? body.revision : parseInt(body.revision || '1', 10);
+      const res = await rollbackWorkloadRevision(clusterId, namespace, segment0, name, rev);
+      await recordAuditEvent({
+        clusterId,
+        user,
+        action: 'CUSTOM_OPERATION',
+        resourceType: segment0 === 'statefulsets' ? 'StatefulSet' : segment0 === 'daemonsets' ? 'DaemonSet' : 'Deployment',
+        resourceName: name,
+        namespace,
+        details: `Rolled back to revision #${rev}`,
+        status: res.success ? 'SUCCESS' : 'FAILED',
+        errorMessage: res.success ? undefined : res.message,
+      });
+      return NextResponse.json(res, { status: res.success ? 200 : 400 });
+    }
+
+    // 3c. Configuration Drift 1-Click Sync: /drift/sync
+    if (segment0 === 'drift' && resource.length >= 2 && resource[1] === 'sync') {
+      const { workloadName, workloadKind, namespace: targetNs } = body;
+      const res = await syncDriftedWorkload(clusterId, targetNs || namespace, workloadKind || 'Deployment', workloadName);
+      await recordAuditEvent({
+        clusterId,
+        user,
+        action: 'ROLLOUT_RESTART',
+        resourceType: workloadKind || 'Deployment',
+        resourceName: workloadName,
+        namespace: targetNs || namespace,
+        details: 'Synchronized configuration drift via zero-downtime rolling restart',
         status: res.success ? 'SUCCESS' : 'FAILED',
         errorMessage: res.success ? undefined : res.message,
       });

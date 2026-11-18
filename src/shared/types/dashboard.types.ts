@@ -243,6 +243,50 @@ export interface K8sRolloutRevision {
   changeCause?: string;
   image?: string;
   timestamp: string;
+  rawTimestamp?: string;
+  replicas?: number;
+  readyReplicas?: number;
+  isCurrent?: boolean;
+  manifestYaml?: string;
+}
+
+export interface DiffLine {
+  type: 'added' | 'removed' | 'unchanged';
+  oldLineNumber?: number;
+  newLineNumber?: number;
+  content: string;
+}
+
+export interface DiffSummary {
+  additions: number;
+  deletions: number;
+  modifications: number;
+  identical: boolean;
+}
+
+export interface ConfigDriftItem {
+  id: string;
+  workloadName: string;
+  workloadKind: 'Deployment' | 'StatefulSet' | 'DaemonSet';
+  namespace: string;
+  configType: 'ConfigMap' | 'Secret';
+  configName: string;
+  configUpdated: string;
+  configRawTimestamp?: string;
+  driftStatus: 'DRIFTED' | 'SYNCHRONIZED';
+  stalePodCount: number;
+  totalPodCount: number;
+  stalePods: string[];
+  explanation: string;
+  referencedKeys: string[];
+  latestConfigYaml?: string;
+}
+
+export interface ConfigDriftSummary {
+  totalWorkloads: number;
+  driftedWorkloads: number;
+  synchronizedWorkloads: number;
+  items: ConfigDriftItem[];
 }
 
 export interface K8sPodLogs {

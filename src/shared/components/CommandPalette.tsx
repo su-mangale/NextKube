@@ -27,6 +27,8 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import FolderIcon from '@mui/icons-material/Folder';
 import StorageIcon from '@mui/icons-material/Storage';
 import AltRouteIcon from '@mui/icons-material/AltRouteRounded';
+import CompareArrowsIcon from '@mui/icons-material/CompareArrowsRounded';
+import AutoModeIcon from '@mui/icons-material/AutoModeRounded';
 import { useColorMode } from '../theme/theme-registry';
 
 export interface CommandPaletteProps {
@@ -41,6 +43,8 @@ export interface CommandPaletteProps {
   onOpenConsole?: () => void;
   onOpenCreate?: () => void;
   onOpenPortForward?: () => void;
+  onOpenDiff?: () => void;
+  onOpenConfigDrift?: () => void;
   onOpenSettings?: () => void;
   onRefresh?: () => void;
   customItems?: Array<{
@@ -75,6 +79,8 @@ export function CommandPalette({
   onOpenConsole,
   onOpenCreate,
   onOpenPortForward,
+  onOpenDiff,
+  onOpenConfigDrift,
   onOpenSettings,
   onRefresh,
   customItems = [],
@@ -161,6 +167,32 @@ export function CommandPalette({
       action: () => {
         onClose();
         onOpenPortForward?.();
+      },
+    });
+
+    list.push({
+      id: 'action-diff',
+      title: 'GitOps Time Machine: Visual YAML Diff',
+      subtitle: 'Compare rollout revisions, live vs applied manifests & environments',
+      category: 'Actions',
+      shortcut: 'Alt+G',
+      icon: <CompareArrowsIcon fontSize="small" sx={{ color: '#a855f7' }} />,
+      action: () => {
+        onClose();
+        onOpenDiff?.();
+      },
+    });
+
+    list.push({
+      id: 'action-config-drift',
+      title: 'ConfigMap & Secret Drift Detector',
+      subtitle: 'Detect pods running outdated configurations after ConfigMap/Secret updates',
+      category: 'Actions',
+      shortcut: 'Alt+C',
+      icon: <AutoModeIcon fontSize="small" sx={{ color: '#f59e0b' }} />,
+      action: () => {
+        onClose();
+        onOpenConfigDrift?.();
       },
     });
 
@@ -262,6 +294,8 @@ export function CommandPalette({
     onOpenConsole,
     onOpenCreate,
     onOpenPortForward,
+    onOpenDiff,
+    onOpenConfigDrift,
     onOpenSettings,
     onRefresh,
     onSelectNamespace,

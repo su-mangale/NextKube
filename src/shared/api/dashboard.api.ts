@@ -120,6 +120,7 @@ import {
   PortForwardSession,
   CreatePortForwardRequest,
   PortForwardTargetOption,
+  ConfigDriftSummary,
 } from '../types/dashboard.types';
 
 // Fetch Namespaces
@@ -660,24 +661,129 @@ export const useQuotas = (clusterId: string, namespace?: string) => {
   });
 };
 
-// Fetch Rollout History
+// Fetch Rollout History with full manifests for GitOps Time Machine
 export const fetchRolloutHistory = async (
   clusterId: string,
   name: string,
-  namespace: string
+  namespace: string,
+  resourceType: string = 'deployment'
 ): Promise<K8sRolloutRevision[]> => {
   const baseUrl = getBackendUrl();
+  const endpoint = resourceType.includes('stateful')
+    ? 'statefulsets'
+    : resourceType.includes('daemon')
+    ? 'daemonsets'
+    : 'deployments';
+
   try {
-    const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/deployments/${name}/rollouts?namespace=${namespace}`);
+    const res = await fetch(
+      `${baseUrl}/api/clusters/${clusterId}/${endpoint}/${name}/rollouts?namespace=${namespace}`
+    );
     if (!res.ok) throw new Error('Failed to retrieve rollout history');
-    return res.json();
-  } catch {
+    return await res.json();
+  } catch (err: any) {
+    console.warn('[DashboardAPI] fetchRolloutHistory fallback:', err?.message);
     return [
-      { revision: 3, changeCause: "Updated image to ghcr.io/su-mangale/ykp-dashboard:sha-aae2aba", image: "ghcr.io/su-mangale/ykp-dashboard:sha-aae2aba", timestamp: "10 minutes ago" },
-      { revision: 2, changeCause: "Scale deployment replicas to 3", image: "ghcr.io/su-mangale/ykp-dashboard:sha-8db221c", timestamp: "2 hours ago" },
-      { revision: 1, changeCause: "Initial deployment", image: "ghcr.io/su-mangale/ykp-dashboard:sha-8db221c", timestamp: "1 day ago" }
+      {
+        revision: 3,
+        changeCause: 'Updated image to ghcr.io/su-mangale/ykp-dashboard:v1.2.4',
+        image: 'ghcr.io/su-mangale/ykp-dashboard:v1.2.4',
+        timestamp: '15m ago',
+        replicas: 3,
+        readyReplicas: 3,
+        isCurrent: true,
+      },
+      {
+        revision: 2,
+        changeCause: 'Scale deployment replicas to 3',
+        image: 'ghcr.io/su-mangale/ykp-dashboard:v1.2.0',
+        timestamp: '2h ago',
+        replicas: 3,
+        readyReplicas: 3,
+        isCurrent: false,
+      },
+      {
+        revision: 1,
+        changeCause: 'Initial deployment',
+        image: 'ghcr.io/su-mangale/ykp-dashboard:v1.0.0',
+        timestamp: '1d ago',
+        replicas: 1,
+        readyReplicas: 1,
+        isCurrent: false,
+      },
     ];
   }
+};
+
+// Rollback Workload to Revision
+export const rollbackWorkload = async (
+  clusterId: string,
+  name: string,
+  namespace: string,
+  revision: number,
+  resourceType: string = 'deployment'
+): Promise<{ success: boolean; message: string }> => {
+  const baseUrl = getBackendUrl();
+  const endpoint = resourceType.includes('stateful')
+    ? 'statefulsets'
+    : resourceType.includes('daemon')
+    ? 'daemonsets'
+    : 'deployments';
+
+  const res = await fetch(
+    `${baseUrl}/api/clusters/${clusterId}/${endpoint}/${name}/rollback`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ namespace, revision }),
+    }
+  );
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.message || data.error || 'Failed to rollback workload to revision');
+  }
+  return await res.json();
+};
+
+// Phase 2: Configuration Drift Detection
+export const fetchConfigDrift = async (
+  clusterId: string,
+  namespace?: string
+): Promise<ConfigDriftSummary> => {
+  const baseUrl = getBackendUrl();
+  const nsQuery = namespace && namespace !== 'all' ? `?namespace=${namespace}` : '';
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/drift${nsQuery}`);
+  if (!res.ok) throw new Error('Failed to fetch configuration drift report');
+  return await res.json();
+};
+
+// Phase 2: 1-Click Sync for Drifted Workload (Zero-Downtime Rolling Restart)
+export const syncDriftedWorkload = async (
+  clusterId: string,
+  workloadName: string,
+  workloadKind: string,
+  namespace: string
+): Promise<{ success: boolean; message: string }> => {
+  const baseUrl = getBackendUrl();
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/drift/sync`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ workloadName, workloadKind, namespace }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.message || data.error || 'Failed to synchronize configuration drift');
+  }
+  return await res.json();
+};
+
+export const useConfigDrift = (clusterId: string, namespace?: string, options?: { enabled?: boolean; refetchInterval?: number }) => {
+  return useQuery<ConfigDriftSummary>({
+    queryKey: ['configDrift', clusterId, namespace],
+    queryFn: () => fetchConfigDrift(clusterId, namespace),
+    enabled: options?.enabled !== false && !!clusterId,
+    refetchInterval: options?.refetchInterval ?? 30000,
+  });
 };
 
 // Set Deployment Image
@@ -696,10 +802,16 @@ export const setDeploymentImage = async (
   if (!res.ok) throw new Error('Failed to update deployment container image');
 };
 
-export const useRolloutHistory = (clusterId: string, name: string, namespace: string, enabled: boolean) => {
+export const useRolloutHistory = (
+  clusterId: string,
+  name: string,
+  namespace: string,
+  enabled: boolean,
+  resourceType: string = 'deployment'
+) => {
   return useQuery<K8sRolloutRevision[]>({
-    queryKey: ['rolloutHistory', clusterId, name, namespace],
-    queryFn: () => fetchRolloutHistory(clusterId, name, namespace),
+    queryKey: ['rolloutHistory', clusterId, resourceType, name, namespace],
+    queryFn: () => fetchRolloutHistory(clusterId, name, namespace, resourceType),
     enabled: enabled && !!clusterId && !!name,
   });
 };

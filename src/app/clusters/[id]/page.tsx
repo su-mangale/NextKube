@@ -64,6 +64,8 @@ import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import AltRouteIcon from '@mui/icons-material/AltRouteRounded';
+import CompareArrowsIcon from '@mui/icons-material/CompareArrowsRounded';
+import AutoModeIcon from '@mui/icons-material/AutoModeRounded';
 import { useQueryClient } from '@tanstack/react-query';
 
 import {
@@ -130,6 +132,13 @@ import {
   HelmAppStore,
   PortForwardDrawer,
   usePortForwards,
+  YamlDiffViewerDialog,
+  ConfigDriftDrawer,
+  useConfigDrift,
+  rollbackWorkload,
+  fetchRolloutHistory,
+  K8sRolloutRevision,
+  ConfigDriftItem,
   useShortcuts,
   matchesShortcut,
   DraggablePaper,
@@ -242,6 +251,21 @@ spec:
     namespace: string;
     ports?: number[];
   } | null>(null);
+
+  // Phase 2: GitOps Time Machine & Visual YAML Diff state
+  const [diffViewerOpen, setDiffViewerOpen] = useState<boolean>(false);
+  const [diffResource, setDiffResource] = useState<{
+    name: string;
+    namespace: string;
+    resourceType?: string;
+    revisions?: K8sRolloutRevision[];
+    currentYaml?: string;
+    previousYaml?: string;
+  } | null>(null);
+  const [diffRollbackLoading, setDiffRollbackLoading] = useState<boolean>(false);
+
+  // Phase 2: Configuration Drift Inspector state
+  const [configDriftOpen, setConfigDriftOpen] = useState<boolean>(false);
 
   // Logs states
   const [logsDialogOpen, setLogsDialogOpen] = useState<boolean>(false);
@@ -446,8 +470,14 @@ spec:
     id,
     selectedResource?.name || '',
     selectedResource?.namespace || '',
-    Boolean(selectedResource) && (rolloutDialogOpen || activeTab === 2)
+    Boolean(selectedResource) && (rolloutDialogOpen || activeTab === 2 || diffViewerOpen)
   );
+
+  const { data: configDriftData, refetch: refetchConfigDrift } = useConfigDrift(id, selectedNamespace || 'default', {
+    enabled: !!id,
+    refetchInterval: 30000,
+  });
+  const driftedCount = configDriftData?.driftedWorkloads ?? 0;
 
   const isDataLoading =
     metricsLoading ||
@@ -506,6 +536,7 @@ spec:
     refetchHealth();
     refetchAuditLogs();
     refetchHelmReleases();
+    refetchConfigDrift();
     setToastSeverity('success');
     setToastMessage('Reloading cluster resources from API...');
   }, [
@@ -538,6 +569,7 @@ spec:
     refetchHealth,
     refetchAuditLogs,
     refetchHelmReleases,
+    refetchConfigDrift,
   ]);
 
   // Global customizable keyboard shortcuts handling
@@ -556,6 +588,13 @@ spec:
       const toggleDockSc = shortcuts.find((s) => s.id === 'toggleDock')?.key;
       const topologySc = shortcuts.find((s) => s.id === 'topology')?.key;
       const portForwardSc = shortcuts.find((s) => s.id === 'portForward')?.key;
+      const configDriftSc = shortcuts.find((s) => s.id === 'configDrift')?.key;
+
+      if (configDriftSc && matchesShortcut(e, configDriftSc)) {
+        e.preventDefault();
+        setConfigDriftOpen((prev) => !prev);
+        return;
+      }
 
       if (portForwardSc && matchesShortcut(e, portForwardSc)) {
         e.preventDefault();
@@ -1405,11 +1444,14 @@ spec:
     setRolloutLoading(true);
     const namespace = selectedResource.namespace || selectedNamespace || 'default';
     try {
-      await rolloutDeployment(id, selectedResource.name, namespace);
-      setToastSeverity('success');
       if (rolloutMode === 'rollback' && selectedRolloutRevision) {
+        const workloadKind = selectedResource.kind || (activeTab === 4 ? 'statefulset' : activeTab === 3 ? 'daemonset' : 'deployment');
+        await rollbackWorkload(id, selectedResource.name, namespace, selectedRolloutRevision, workloadKind);
+        setToastSeverity('success');
         setToastMessage(`Rollback to revision #${selectedRolloutRevision} triggered for ${selectedResource.name}.`);
       } else {
+        await rolloutDeployment(id, selectedResource.name, namespace);
+        setToastSeverity('success');
         setToastMessage(`Rollout restart triggered for ${selectedResource.name}.`);
       }
       setRolloutDialogOpen(false);
@@ -1423,6 +1465,63 @@ spec:
     } finally {
       setRolloutLoading(false);
     }
+  };
+
+  const handleOpenDiff = async (resourceOverride?: any, typeOverride?: string) => {
+    const resource = resourceOverride || selectedResource;
+    if (!resource) return;
+    const resType = typeOverride || resource.kind || (activeTab === 4 ? 'StatefulSet' : activeTab === 3 ? 'DaemonSet' : 'Deployment');
+    const ns = resource.namespace || selectedNamespace || 'default';
+    try {
+      const revs = await fetchRolloutHistory(id, resource.name, ns, resType.toLowerCase());
+      setDiffResource({
+        name: resource.name,
+        namespace: ns,
+        resourceType: resType,
+        revisions: revs,
+      });
+      setDiffViewerOpen(true);
+    } catch (err: any) {
+      setToastSeverity('error');
+      setToastMessage(`Failed to load revisions for diff: ${err?.message}`);
+    }
+  };
+
+  const handleRollbackFromDiff = async (targetRevision: number) => {
+    if (!diffResource) return;
+    setDiffRollbackLoading(true);
+    try {
+      const res = await rollbackWorkload(
+        id,
+        diffResource.name,
+        diffResource.namespace,
+        targetRevision,
+        diffResource.resourceType?.toLowerCase() || 'deployment'
+      );
+      setToastSeverity('success');
+      setToastMessage(res.message || `Successfully rolled back to revision #${targetRevision}.`);
+      setDiffViewerOpen(false);
+      refetchDeployments();
+      refetchDaemonSets();
+      refetchStatefulSets();
+      refetchRolloutHistory();
+    } catch (err: any) {
+      setToastSeverity('error');
+      setToastMessage(err?.message || `Failed to rollback to revision #${targetRevision}.`);
+    } finally {
+      setDiffRollbackLoading(false);
+    }
+  };
+
+  const handleOpenDriftManifest = (driftItem: ConfigDriftItem) => {
+    setDiffResource({
+      name: `${driftItem.workloadName} (${driftItem.configName})`,
+      namespace: driftItem.namespace,
+      resourceType: driftItem.configType,
+      currentYaml: driftItem.latestConfigYaml || '',
+      previousYaml: driftItem.latestConfigYaml || '',
+    });
+    setDiffViewerOpen(true);
   };
 
   const handleOpenImageDialog = (resourceOverride?: any) => {
@@ -2458,8 +2557,12 @@ spec:
             setTopWindow('settings');
           }}
           onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+          onOpenPortForward={() => setPortForwardOpen(true)}
+          onOpenConfigDrift={() => setConfigDriftOpen(true)}
+          onOpenDiff={() => handleOpenDiff(selectedResource || (deployments.length > 0 ? deployments[0] : null))}
           resourceCounts={resourceCounts}
           shortcutSettingsKey={shortcuts.find((s) => s.id === 'settings')?.key || 'Alt+,'}
+          activePortForwardsCount={activePortForwards.length}
         />
 
         {/* Right Main Resource Content Panel */}
@@ -3996,6 +4099,31 @@ spec:
               </ListItemIcon>
               <ListItemText primary="Rollout & Rollback" />
             </MenuItem>
+            <MenuItem
+              dense
+              onClick={() => {
+                const res = rowMenuResource;
+                handleCloseRowMenu();
+                handleOpenDiff(res, 'Deployment');
+              }}
+            >
+              <ListItemIcon>
+                <CompareArrowsIcon fontSize="small" sx={{ color: '#a855f7' }} />
+              </ListItemIcon>
+              <ListItemText primary="GitOps Time Machine (YAML Diff)" />
+            </MenuItem>
+            <MenuItem
+              dense
+              onClick={() => {
+                handleCloseRowMenu();
+                setConfigDriftOpen(true);
+              }}
+            >
+              <ListItemIcon>
+                <AutoModeIcon fontSize="small" sx={{ color: '#f59e0b' }} />
+              </ListItemIcon>
+              <ListItemText primary="Check Config Drift" />
+            </MenuItem>
           </>
         )}
 
@@ -4027,6 +4155,19 @@ spec:
                 <SwapVertIcon fontSize="small" color="warning" />
               </ListItemIcon>
               <ListItemText primary="Rollout Restart" />
+            </MenuItem>
+            <MenuItem
+              dense
+              onClick={() => {
+                const res = rowMenuResource;
+                handleCloseRowMenu();
+                handleOpenDiff(res, 'DaemonSet');
+              }}
+            >
+              <ListItemIcon>
+                <CompareArrowsIcon fontSize="small" sx={{ color: '#a855f7' }} />
+              </ListItemIcon>
+              <ListItemText primary="GitOps Time Machine (YAML Diff)" />
             </MenuItem>
           </>
         )}
@@ -4060,7 +4201,36 @@ spec:
               </ListItemIcon>
               <ListItemText primary="Rollout Restart" />
             </MenuItem>
+            <MenuItem
+              dense
+              onClick={() => {
+                const res = rowMenuResource;
+                handleCloseRowMenu();
+                handleOpenDiff(res, 'StatefulSet');
+              }}
+            >
+              <ListItemIcon>
+                <CompareArrowsIcon fontSize="small" sx={{ color: '#a855f7' }} />
+              </ListItemIcon>
+              <ListItemText primary="GitOps Time Machine (YAML Diff)" />
+            </MenuItem>
           </>
+        )}
+
+        {/* ConfigMap & Secret Specific: Check Drift */}
+        {(rowMenuTab === 11 || rowMenuTab === 12) && (
+          <MenuItem
+            dense
+            onClick={() => {
+              handleCloseRowMenu();
+              setConfigDriftOpen(true);
+            }}
+          >
+            <ListItemIcon>
+              <AutoModeIcon fontSize="small" sx={{ color: '#f59e0b' }} />
+            </ListItemIcon>
+            <ListItemText primary="Inspect Pod Configuration Drift" />
+          </MenuItem>
         )}
 
         {/* CronJob Specific: Terminal Exec */}
@@ -5032,6 +5202,23 @@ spec:
             >
               Rollback to Revision
             </Button>
+            <Button
+              variant="outlined"
+              onClick={() => {
+                setRolloutDialogOpen(false);
+                handleOpenDiff(selectedResource);
+              }}
+              startIcon={<CompareArrowsIcon sx={{ color: '#c084fc' }} />}
+              sx={{
+                fontWeight: 700,
+                textTransform: 'none',
+                borderColor: 'rgba(168, 85, 247, 0.4)',
+                color: '#c084fc',
+                '&:hover': { borderColor: '#c084fc', bgcolor: 'rgba(168, 85, 247, 0.1)' },
+              }}
+            >
+              Visual YAML Diff
+            </Button>
           </Box>
 
           {rolloutMode === 'restart' ? (
@@ -5364,6 +5551,8 @@ spec:
         isTopologyActive={activeTab === 26}
         onTogglePortForward={() => setPortForwardOpen((prev) => !prev)}
         activePortForwardsCount={activePortForwards.length}
+        onToggleConfigDrift={() => setConfigDriftOpen((prev) => !prev)}
+        driftedCount={driftedCount}
         onCreateResource={() => {
           setCreateDialogOpen(true);
           setTopWindow('yamlCreate');
@@ -5418,6 +5607,14 @@ spec:
           setTopWindow('yamlCreate');
         }}
         onOpenPortForward={() => setPortForwardOpen(true)}
+        onOpenDiff={() => {
+          if (deployments.length > 0) {
+            handleOpenDiff(deployments[0], 'Deployment');
+          } else {
+            setDiffViewerOpen(true);
+          }
+        }}
+        onOpenConfigDrift={() => setConfigDriftOpen(true)}
         onOpenSettings={() => {
           setSettingsDialogOpen(true);
           setTopWindow('settings');
@@ -5435,6 +5632,29 @@ spec:
         clusterId={effectiveClusterId}
         namespaces={namespaces}
         initialTarget={portForwardInitialTarget}
+      />
+
+      {/* Phase 2: GitOps Time Machine & Visual YAML Diff Dialog */}
+      <YamlDiffViewerDialog
+        open={diffViewerOpen}
+        onClose={() => setDiffViewerOpen(false)}
+        resourceName={diffResource?.name || selectedResource?.name || 'workload'}
+        resourceType={diffResource?.resourceType || selectedResource?.kind || 'Deployment'}
+        namespace={diffResource?.namespace || selectedResource?.namespace || selectedNamespace || 'default'}
+        revisions={diffResource?.revisions || rolloutRevisions}
+        currentYaml={diffResource?.currentYaml}
+        previousYaml={diffResource?.previousYaml}
+        onRollback={handleRollbackFromDiff}
+        rollbackLoading={diffRollbackLoading}
+      />
+
+      {/* Phase 2: Configuration Drift Inspector Drawer */}
+      <ConfigDriftDrawer
+        open={configDriftOpen}
+        onClose={() => setConfigDriftOpen(false)}
+        clusterId={effectiveClusterId}
+        namespace={selectedNamespace || 'default'}
+        onOpenDiff={handleOpenDriftManifest}
       />
 
       {/* AI Root-Cause Diagnostic Dialog */}
