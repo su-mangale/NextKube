@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",
-    "postbuild": "cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/ && cp -r node_modules/node-pty/build .next/standalone/node_modules/node-pty/ && (cp -r node_modules/node-pty/prebuilds .next/standalone/node_modules/node-pty/ 2>/dev/null || true)",
+    "postbuild": "mkdir -p .next/standalone/.next && cp -r .next/static .next/standalone/.next/ && ( [ -d public ] && cp -r public .next/standalone/ || mkdir -p .next/standalone/public ) && mkdir -p .next/standalone/node_modules/node-pty && ( [ -d node_modules/node-pty/build ] && cp -r node_modules/node-pty/build .next/standalone/node_modules/node-pty/ || true ) && ( [ -d node_modules/node-pty/prebuilds ] && cp -r node_modules/node-pty/prebuilds .next/standalone/node_modules/node-pty/ || true )",
     "start": "next start -p 3000",
     "lint": "eslint ."
   },
