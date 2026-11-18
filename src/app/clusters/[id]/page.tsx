@@ -249,6 +249,33 @@ spec:
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [topWindow, setTopWindow] = useState<string | null>('console');
   const [kubectlShellOpen, setKubectlShellOpen] = useState<boolean>(false);
+  const [kubectlShellMinimized, setKubectlShellMinimized] = useState<boolean>(false);
+
+  const handleToggleConsole = useCallback(() => {
+    if (!kubectlShellOpen) {
+      setKubectlShellOpen(true);
+      setKubectlShellMinimized(false);
+      setTopWindow('console');
+    } else if (kubectlShellMinimized) {
+      setKubectlShellMinimized(false);
+      setTopWindow('console');
+    } else {
+      if (topWindow === 'console') {
+        setKubectlShellMinimized(true);
+      } else {
+        setTopWindow('console');
+      }
+    }
+  }, [kubectlShellOpen, kubectlShellMinimized, topWindow]);
+
+  const handleMinimizeConsole = useCallback(() => {
+    setKubectlShellMinimized(true);
+  }, []);
+
+  const handleCloseConsoleSession = useCallback(() => {
+    setKubectlShellOpen(false);
+    setKubectlShellMinimized(false);
+  }, []);
 
   const [imageDialogOpen, setImageDialogOpen] = useState<boolean>(false);
   const [imageInputVal, setImageInputVal] = useState<string>('');
@@ -502,10 +529,7 @@ spec:
 
       if (consoleSc && matchesShortcut(e, consoleSc)) {
         e.preventDefault();
-        setKubectlShellOpen((prev) => {
-          if (!prev) setTopWindow('console');
-          return !prev;
-        });
+        handleToggleConsole();
         return;
       }
 
@@ -558,7 +582,7 @@ spec:
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [shortcuts, handleRefreshAll]);
+  }, [shortcuts, handleRefreshAll, handleToggleConsole]);
 
   const handleOpenRowMenu = (event: React.MouseEvent<HTMLElement>, resource: any, tab: number) => {
     event.stopPropagation();
@@ -2544,10 +2568,7 @@ spec:
                   services={services}
                   ingresses={ingresses}
                   onNavigateTab={(tab) => setActiveTab(tab)}
-                  onOpenConsole={() => {
-                    setKubectlShellOpen(true);
-                    setTopWindow('console');
-                  }}
+                  onOpenConsole={handleToggleConsole}
                   onRefresh={handleRefreshAll}
                 />
               )}
@@ -5104,19 +5125,10 @@ spec:
 
       {/* Quick Action Dock */}
       <ActionDock
-        isConsoleOpen={kubectlShellOpen}
-        onToggleConsole={() => {
-          if (!kubectlShellOpen) {
-            setKubectlShellOpen(true);
-            setTopWindow('console');
-          } else {
-            if (topWindow !== 'console') {
-              setTopWindow('console');
-            } else {
-              setKubectlShellOpen(false);
-            }
-          }
-        }}
+        isConsoleOpen={kubectlShellOpen && !kubectlShellMinimized}
+        isConsoleConnected={kubectlShellOpen}
+        isConsoleMinimized={kubectlShellOpen && kubectlShellMinimized}
+        onToggleConsole={handleToggleConsole}
         onCreateResource={() => {
           setCreateDialogOpen(true);
           setTopWindow('yamlCreate');
@@ -5147,7 +5159,13 @@ spec:
       {/* Modal Dialog KubeConsole Window */}
       <KubectlTerminalDrawer
         open={kubectlShellOpen}
-        onClose={() => setKubectlShellOpen(false)}
+        minimized={kubectlShellMinimized}
+        onMinimize={handleMinimizeConsole}
+        onRestore={() => {
+          setKubectlShellMinimized(false);
+          setTopWindow('console');
+        }}
+        onClose={handleCloseConsoleSession}
         clusterId={id}
         zIndex={topWindow === 'console' ? 1330 : 1315}
         onFocus={() => setTopWindow('console')}

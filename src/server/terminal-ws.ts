@@ -1,7 +1,6 @@
 import http from 'http';
 import net from 'net';
 import stream from 'stream';
-import crypto from 'crypto';
 import { WebSocketServer, WebSocket } from 'ws';
 import * as k8s from '@kubernetes/client-node';
 import { getDecryptedKubeConfig, getDecryptedKubeConfigRaw } from './cluster-vault';
@@ -354,14 +353,13 @@ async function handleClusterShellSession(clientWs: WebSocket, clusterId: string)
   const coreV1 = kc.makeApiClient(k8s.CoreV1Api);
   const rbacV1 = kc.makeApiClient(k8s.RbacAuthorizationV1Api);
 
-  const sessionId = crypto.randomBytes(4).toString('hex');
-  const podName = `nextkube-shell-${sessionId}`;
+  const podName = 'nextkube-shell';
   const namespace = 'default';
   const saName = 'nextkube-shell-sa';
   const roleBindingName = 'nextkube-shell-admin';
 
-  clientWs.send(`\r\n\x1b[1;36m[NextKube]\x1b[0m Initializing isolated in-cluster pod environment...\r\n`);
-  clientWs.send(`\x1b[90mCluster: ${clusterId} | Namespace: ${namespace} | Architecture: Ephemeral Container\x1b[0m\r\n\r\n`);
+  clientWs.send(`\r\n\x1b[1;36m[NextKube]\x1b[0m Connecting to persistent in-cluster KubeConsole...\r\n`);
+  clientWs.send(`\x1b[90mCluster: ${clusterId} | Namespace: ${namespace} | Pod: ${podName}\x1b[0m\r\n\r\n`);
 
   // 1. Ensure ServiceAccount & ClusterRoleBinding
   try {
@@ -385,106 +383,107 @@ async function handleClusterShellSession(clientWs: WebSocket, clusterId: string)
     // Ignore if already exists (409)
   }
 
-  clientWs.send(`\x1b[33m⏳ [1/2] Provisioning ephemeral pod "${podName}"...\x1b[0m\r\n`);
-
-  const shellImage = process.env.NEXTKUBE_SHELL_IMAGE || 'bitnami/kubectl:latest';
-
-  let podCreated = false;
+  // 2. Check if persistent pod already exists and is Running
+  let podExistsAndRunning = false;
   try {
-    await coreV1.createNamespacedPod({
-      namespace,
-      body: {
-        metadata: {
-          name: podName,
-          namespace,
-          labels: {
-            app: 'nextkube-shell',
-            'nextkube.io/ephemeral': 'true',
-            'nextkube.io/session': sessionId,
-          },
-        },
-        spec: {
-          serviceAccountName: saName,
-          restartPolicy: 'Never',
-          containers: [
-            {
-              name: 'shell',
-              image: shellImage,
-              command: ['/bin/sh', '-c', 'sleep 7200'],
-              securityContext: {
-                runAsUser: 0,
-              },
-              resources: {
-                requests: { cpu: '20m', memory: '32Mi' },
-                limits: { cpu: '1000m', memory: '512Mi' },
-              },
-            },
-          ],
-        },
-      },
-    });
-    podCreated = true;
-  } catch (err: any) {
-    clientWs.send(`\r\n\x1b[31m[ERROR] Failed to create shell pod: ${err.message}\x1b[0m\r\n`);
-    clientWs.close();
-    return;
+    const existing = await coreV1.readNamespacedPod({ name: podName, namespace });
+    const phase = existing.status?.phase;
+    if (phase === 'Running') {
+      podExistsAndRunning = true;
+    } else if (phase === 'Failed' || phase === 'Succeeded' || phase === 'Error') {
+      try {
+        await coreV1.deleteNamespacedPod({ name: podName, namespace, gracePeriodSeconds: 0 });
+        await new Promise((r) => setTimeout(r, 1000));
+      } catch {
+        // ignore
+      }
+    }
+  } catch {
+    // Pod does not exist yet (404)
   }
 
-  let isCleanedUp = false;
-  const deletePod = async () => {
-    if (!podCreated || isCleanedUp) return;
-    isCleanedUp = true;
+  if (!podExistsAndRunning) {
+    clientWs.send(`\x1b[33m⏳ Provisioning persistent KubeConsole pod "${podName}"...\x1b[0m\r\n`);
+    const shellImage = process.env.NEXTKUBE_SHELL_IMAGE || 'bitnami/kubectl:latest';
+
     try {
-      await coreV1.deleteNamespacedPod({
-        name: podName,
+      await coreV1.createNamespacedPod({
         namespace,
-        gracePeriodSeconds: 0,
+        body: {
+          metadata: {
+            name: podName,
+            namespace,
+            labels: {
+              app: 'nextkube-shell',
+              'nextkube.io/persistent': 'true',
+            },
+          },
+          spec: {
+            serviceAccountName: saName,
+            restartPolicy: 'Always',
+            containers: [
+              {
+                name: 'shell',
+                image: shellImage,
+                command: ['/bin/sh', '-c', 'while true; do sleep 3600; done'],
+                securityContext: {
+                  runAsUser: 0,
+                },
+                resources: {
+                  requests: { cpu: '20m', memory: '32Mi' },
+                  limits: { cpu: '1000m', memory: '512Mi' },
+                },
+              },
+            ],
+          },
+        },
       });
-    } catch {
-      // ignore pod delete error
-    }
-  };
-
-  // Wait for pod to be Running (polling with timeout)
-  let isRunning = false;
-  const maxAttempts = 60; // ~30 seconds
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    if (clientWs.readyState !== WebSocket.OPEN) {
-      await deletePod();
-      return;
-    }
-
-    try {
-      const pod = await coreV1.readNamespacedPod({ name: podName, namespace });
-      const phase = pod.status?.phase;
-      if (phase === 'Running') {
-        isRunning = true;
-        break;
-      } else if (phase === 'Failed' || phase === 'Error') {
-        clientWs.send(`\r\n\x1b[31m[ERROR] Ephemeral pod failed with phase: ${phase}\x1b[0m\r\n`);
-        await deletePod();
+    } catch (err: any) {
+      if (err.statusCode !== 409) {
+        clientWs.send(`\r\n\x1b[31m[ERROR] Failed to create shell pod: ${err.message}\x1b[0m\r\n`);
         clientWs.close();
         return;
       }
-    } catch {
-      // Pod might still be registering in API
     }
 
-    if (attempt % 6 === 0) {
-      clientWs.send(`\x1b[90mWaiting for container to start (${attempt * 500}ms)...\x1b[0m\r\n`);
+    // Wait for pod to be Running (polling with timeout)
+    let isRunning = false;
+    const maxAttempts = 60; // ~30 seconds
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      if (clientWs.readyState !== WebSocket.OPEN) {
+        return;
+      }
+
+      try {
+        const pod = await coreV1.readNamespacedPod({ name: podName, namespace });
+        const phase = pod.status?.phase;
+        if (phase === 'Running') {
+          isRunning = true;
+          break;
+        } else if (phase === 'Failed' || phase === 'Error') {
+          clientWs.send(`\r\n\x1b[31m[ERROR] Shell pod failed with phase: ${phase}\x1b[0m\r\n`);
+          clientWs.close();
+          return;
+        }
+      } catch {
+        // Pod might still be registering in API
+      }
+
+      if (attempt % 6 === 0) {
+        clientWs.send(`\x1b[90mWaiting for container to start (${attempt * 500}ms)...\x1b[0m\r\n`);
+      }
+
+      await new Promise((r) => setTimeout(r, 500));
     }
 
-    await new Promise((r) => setTimeout(r, 500));
+    if (!isRunning) {
+      clientWs.send(`\r\n\x1b[31m[ERROR] Timed out waiting for pod "${podName}" to start.\x1b[0m\r\n`);
+      clientWs.close();
+      return;
+    }
   }
 
-  if (!isRunning) {
-    clientWs.send(`\r\n\x1b[31m[ERROR] Timed out waiting for pod "${podName}" to start.\x1b[0m\r\n`);
-    await deletePod();
-    clientWs.close();
-    return;
-  }
-
-  clientWs.send(`\x1b[32m✔ [2/2] Ephemeral pod "${podName}" is Running! Attaching interactive shell...\x1b[0m\r\n\r\n`);
+  clientWs.send(`\x1b[32m✔ Persistent KubeConsole is Ready! Attached to ${podName}.\x1b[0m\r\n\r\n`);
 
   // Exec into pod
   const exec = new k8s.Exec(kc);
@@ -518,6 +517,20 @@ async function handleClusterShellSession(clientWs: WebSocket, clusterId: string)
       }
     }
 
+    if (str.startsWith('{') && str.includes('"terminatePod"')) {
+      try {
+        const parsed = JSON.parse(str);
+        if (parsed.terminatePod) {
+          coreV1.deleteNamespacedPod({ name: podName, namespace, gracePeriodSeconds: 0 }).catch(() => {});
+          clientWs.send('\r\n\x1b[33m[NextKube] Shell pod terminated.\x1b[0m\r\n');
+          clientWs.close();
+          return;
+        }
+      } catch {
+        // ignore
+      }
+    }
+
     if (stdin && !stdin.destroyed) {
       stdin.write(msg);
     }
@@ -538,7 +551,8 @@ async function handleClusterShellSession(clientWs: WebSocket, clusterId: string)
     } catch {
       // ignore
     }
-    await deletePod();
+    // We intentionally do NOT delete the pod.
+    // The persistent pod remains running in the cluster so future launches connect instantly.
   };
 
   clientWs.on('close', cleanup);
@@ -601,10 +615,10 @@ export PS1="\\[\\033[1;36m\\]nextkube\\[\\033[0m\\] [\\[\\033[1;32m\\]${clusterI
 EOF
 cd /root;
 echo -e "\\033[1;36m========================================================================\\033[0m";
-echo -e "\\033[1;32m  ⚡ KubeConsole • Ephemeral Cluster Terminal\\033[0m";
+echo -e "\\033[1;32m  ⚡ KubeConsole • Persistent In-Cluster Terminal\\033[0m";
 echo -e "  Cluster:   \\033[1;33m${clusterId}\\033[0m";
 echo -e "  Pod:       \\033[1;35m${podName}\\033[0m";
-echo -e "  Isolation: \\033[1;32m100% In-Cluster Pod (Containerized)\\033[0m";
+echo -e "  Isolation: \\033[1;32m100% In-Cluster Pod (Persistent Architecture)\\033[0m";
 echo -e "  Pre-loaded:\\033[1;33m kubectl\\033[0m, \\033[1;33malias k=kubectl\\033[0m, \\033[1;32mTab Autocompletion enabled\\033[0m";
 echo -e "\\033[1;36m========================================================================\\033[0m";
 echo "";

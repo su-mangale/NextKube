@@ -26,8 +26,6 @@ import MemoryIcon from '@mui/icons-material/Memory';
 import DnsIcon from '@mui/icons-material/Dns';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
-import TerminalIcon from '@mui/icons-material/Terminal';
-import RefreshIcon from '@mui/icons-material/Refresh';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
 import {
@@ -58,27 +56,27 @@ export interface ClusterOverviewObservabilityProps {
   services: K8sService[];
   ingresses: K8sIngress[];
   onNavigateTab: (tabIndex: number) => void;
-  onOpenConsole: () => void;
-  onRefresh: () => void;
+  onOpenConsole?: () => void;
+  onRefresh?: () => void;
 }
 
 export function ClusterOverviewObservability({
-  clusterMeta,
+  clusterMeta: _clusterMeta,
   dashboardInfo,
-  healthData,
+  healthData: _healthData,
   pods = [],
   deployments = [],
   daemonSets = [],
   statefulSets = [],
   nodes = [],
   events = [],
-  namespaces = [],
+  namespaces: _namespaces = [],
   pvcs = [],
   services = [],
   ingresses = [],
   onNavigateTab,
-  onOpenConsole,
-  onRefresh,
+  onOpenConsole: _onOpenConsole,
+  onRefresh: _onRefresh,
 }: ClusterOverviewObservabilityProps) {
   const muiTheme = useTheme();
   const isDark = muiTheme.palette.mode === 'dark';
@@ -110,18 +108,7 @@ export function ClusterOverviewObservability({
   const readyNodes = nodes.filter((n) => n && n.status === 'Ready');
   const boundPvcs = pvcs.filter((p) => p && p.status === 'Bound');
 
-  // 3. Cluster Health Score Calculation
-  const totalWorkloadUnits = pods.length + deployments.length + nodes.length;
-  const healthyWorkloadUnits =
-    runningPods.length + healthyDeployments.length + readyNodes.length;
-  const computedHealthScore =
-    totalWorkloadUnits > 0
-      ? Math.round((healthyWorkloadUnits / totalWorkloadUnits) * 100)
-      : 100;
-  const healthScore = healthData?.score ?? computedHealthScore;
-  const clusterStatus = clusterMeta?.status || (healthScore > 85 ? 'Healthy' : 'Degraded');
-
-  // 4. Resource Allocation Telemetry (CPU & Memory)
+  // 3. Resource Allocation Telemetry (CPU & Memory)
   const metrics = dashboardInfo?.metrics || {};
   const cpuPercent =
     metrics.cpuUsagePercent ??
@@ -139,96 +126,12 @@ export function ClusterOverviewObservability({
   const memGibUsed = metrics.memoryGibUsed ?? (nodes.length * 4.2).toFixed(1);
   const memGibTotal = metrics.memoryGibTotal ?? (nodes.length * 16 || 32);
 
-  // 5. Warning Events (Alert stream)
+  // 4. Warning Events (Alert stream)
   const warningEvents = events.filter((e) => e && e.type === 'Warning');
 
   return (
     <Box sx={{ p: { xs: 1.5, sm: 2.5 }, display: 'flex', flexDirection: 'column', gap: 3 }}>
-      {/* 1. Header Overview & Health Banner */}
-      <Paper
-        elevation={0}
-        sx={{
-          p: { xs: 2, sm: 3 },
-          borderRadius: 3,
-          border: '1px solid',
-          borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)',
-          background: isDark
-            ? 'linear-gradient(135deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0.8) 100%)'
-            : 'linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(240, 246, 255, 0.6) 100%)',
-          backdropFilter: 'blur(20px)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: 2.5,
-        }}
-      >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Box
-            sx={{
-              width: 52,
-              height: 52,
-              borderRadius: 3,
-              bgcolor: isDark ? 'rgba(56, 189, 248, 0.15)' : 'rgba(2, 132, 199, 0.12)',
-              color: isDark ? '#38bdf8' : '#0284c7',
-              border: '1px solid',
-              borderColor: isDark ? 'rgba(56, 189, 248, 0.3)' : 'rgba(2, 132, 199, 0.25)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <DnsIcon sx={{ fontSize: 28 }} />
-          </Box>
-          <Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-              <Typography variant="h5" sx={{ fontWeight: 800, color: 'text.primary' }}>
-                {clusterMeta?.name || 'Kubernetes Cluster'}
-              </Typography>
-              <Chip
-                label={clusterStatus}
-                size="small"
-                color={clusterStatus === 'Healthy' ? 'success' : 'warning'}
-                sx={{ fontWeight: 750, height: 22, fontSize: '0.7rem', borderRadius: 1.5 }}
-              />
-              <Chip
-                label={`${healthScore}% Health Score`}
-                size="small"
-                variant="outlined"
-                color={healthScore >= 90 ? 'success' : 'warning'}
-                sx={{ fontWeight: 750, height: 22, fontSize: '0.7rem', borderRadius: 1.5 }}
-              />
-            </Box>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, fontFamily: 'monospace', fontSize: '0.8rem' }}>
-              Provider: <b>{clusterMeta?.provider || 'Kubernetes'}</b> • Nodes: <b>{nodes.length}</b> • Namespaces: <b>{namespaces.length}</b> • Pods: <b>{pods.length}</b>
-            </Typography>
-          </Box>
-        </Box>
-
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<RefreshIcon />}
-            onClick={onRefresh}
-            sx={{ fontWeight: 700, textTransform: 'none', borderRadius: 2 }}
-          >
-            Live Refresh
-          </Button>
-          <Button
-            variant="contained"
-            color="primary"
-            size="small"
-            startIcon={<TerminalIcon />}
-            onClick={onOpenConsole}
-            sx={{ fontWeight: 750, textTransform: 'none', borderRadius: 2, boxShadow: 'none' }}
-          >
-            Launch KubeConsole
-          </Button>
-        </Box>
-      </Paper>
-
-      {/* 2. Key Observability Resource Allocation & Capacity Telemetry */}
+      {/* 1. Key Observability Resource Allocation & Capacity Telemetry */}
       <Grid container spacing={2}>
         {/* CPU Utilization */}
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>

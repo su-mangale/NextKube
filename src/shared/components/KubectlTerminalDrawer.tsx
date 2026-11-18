@@ -17,6 +17,7 @@ import {
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
 import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
+import RemoveIcon from '@mui/icons-material/Remove';
 import CloudQueueIcon from '@mui/icons-material/CloudQueue';
 import DnsIcon from '@mui/icons-material/Dns';
 import ViewAgendaOutlinedIcon from '@mui/icons-material/ViewAgendaOutlined';
@@ -36,6 +37,9 @@ import type { FitAddon } from '@xterm/addon-fit';
 
 export interface KubectlTerminalDrawerProps {
   open: boolean;
+  minimized?: boolean;
+  onMinimize?: () => void;
+  onRestore?: () => void;
   onClose: () => void;
   onOpen?: () => void;
   clusterId: string;
@@ -97,6 +101,9 @@ const darkTerminalTheme = {
 
 export function KubectlTerminalDrawer({
   open,
+  minimized = false,
+  onMinimize,
+  onRestore: _onRestore,
   onClose,
   onOpen,
   clusterId,
@@ -127,7 +134,13 @@ export function KubectlTerminalDrawer({
       if ((e.ctrlKey && e.key === '\\') || (e.ctrlKey && e.key === '`')) {
         e.preventDefault();
         if (open) {
-          onClose();
+          if (!minimized && onMinimize) {
+            onMinimize();
+          } else if (minimized && onOpen) {
+            onOpen();
+          } else {
+            onClose();
+          }
         } else if (onOpen) {
           onOpen();
         }
@@ -136,7 +149,7 @@ export function KubectlTerminalDrawer({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [open, onClose, onOpen]);
+  }, [open, minimized, onClose, onOpen, onMinimize]);
 
   // Main terminal initialization
   useEffect(() => {
@@ -166,10 +179,14 @@ export function KubectlTerminalDrawer({
       fitAddonRef.current = fitAddon;
       term.loadAddon(fitAddon);
 
-      // Handle Escape key inside Xterm to close the window
+      // Handle Escape key inside Xterm to minimize the window
       term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
         if (event.key === 'Escape' && event.type === 'keydown') {
-          onClose();
+          if (onMinimize) {
+            onMinimize();
+          } else {
+            onClose();
+          }
           return false;
         }
         return true;
@@ -310,6 +327,36 @@ export function KubectlTerminalDrawer({
     return () => clearTimeout(timer);
   }, [maximized, open]);
 
+  // Re-fit and focus terminal when restored from minimized
+  useEffect(() => {
+    if (open && !minimized) {
+      if (terminalRef.current && termInstanceRef.current?.element) {
+        if (!terminalRef.current.contains(termInstanceRef.current.element)) {
+          terminalRef.current.innerHTML = '';
+          terminalRef.current.appendChild(termInstanceRef.current.element);
+        }
+      }
+
+      const timer1 = setTimeout(() => {
+        fitAddonRef.current?.fit();
+      }, 50);
+
+      const timer2 = setTimeout(() => {
+        fitAddonRef.current?.fit();
+        termInstanceRef.current?.focus();
+        const dims = fitAddonRef.current?.proposeDimensions();
+        if (dims && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({ resize: { cols: dims.cols, rows: dims.rows } }));
+        }
+      }, 180);
+
+      return () => {
+        clearTimeout(timer1);
+        clearTimeout(timer2);
+      };
+    }
+  }, [open, minimized, maximized]);
+
   const sendQuickCommand = (cmd: string) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(cmd + '\r');
@@ -364,7 +411,8 @@ export function KubectlTerminalDrawer({
       open={open}
       onClose={(e, reason) => {
         if (reason === 'backdropClick') return;
-        onClose();
+        if (onMinimize) onMinimize();
+        else onClose();
       }}
       PaperComponent={DraggablePaper}
       maxWidth={maximized ? false : 'lg'}
@@ -372,16 +420,24 @@ export function KubectlTerminalDrawer({
       fullScreen={maximized}
       hideBackdrop={true}
       disableEnforceFocus={true}
-      sx={{
-        zIndex: zIndex || 1315,
-        pointerEvents: 'none',
-        '& .MuiDialog-container': {
-          pointerEvents: 'none',
-        },
-        '& .MuiPaper-root': {
-          pointerEvents: 'auto',
-        },
-      }}
+      sx={
+        minimized
+          ? {
+              pointerEvents: 'none !important',
+              visibility: 'hidden !important',
+              zIndex: -1,
+            }
+          : {
+              zIndex: zIndex || 1315,
+              pointerEvents: 'none',
+              '& .MuiDialog-container': {
+                pointerEvents: 'none',
+              },
+              '& .MuiPaper-root': {
+                pointerEvents: 'auto',
+              },
+            }
+      }
       slotProps={{
         paper: {
           onClick: onFocus,
@@ -460,7 +516,7 @@ export function KubectlTerminalDrawer({
 
             <Chip
               icon={<CloudQueueIcon sx={{ fontSize: '13px !important', color: 'inherit !important' }} />}
-              label={podName ? `pod: ${podName}` : 'ephemeral pod'}
+              label={podName ? `pod: ${podName}` : 'persistent pod'}
               size="small"
               sx={{
                 height: 22,
@@ -601,6 +657,30 @@ export function KubectlTerminalDrawer({
             </Button>
           </Tooltip>
 
+          {/* Minimize Window Button */}
+          <Tooltip title="Minimize Window (Keeps session running in background · Esc / Ctrl+\)">
+            <IconButton
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onMinimize) onMinimize();
+                else onClose();
+              }}
+              sx={{
+                color: isDark ? '#cbd5e1' : '#475569',
+                border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #cbd5e1',
+                borderRadius: 1.5,
+                p: 0.6,
+                '&:hover': {
+                  bgcolor: isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9',
+                },
+              }}
+            >
+              <RemoveIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+
+          {/* Maximize / Restore Window Button */}
           <Tooltip title={maximized ? 'Restore Window' : 'Maximize Window'}>
             <IconButton
               size="small"
@@ -619,29 +699,34 @@ export function KubectlTerminalDrawer({
             </IconButton>
           </Tooltip>
 
-          <Tooltip title="Close Window (Esc)">
-            <IconButton
+          {/* Close Session Button */}
+          <Tooltip title="Close Session (Terminates connection)">
+            <Button
               size="small"
+              variant="outlined"
+              color="error"
               onClick={(e) => {
                 e.stopPropagation();
                 onClose();
               }}
+              startIcon={<CloseIcon sx={{ fontSize: 14 }} />}
               sx={{
-                color: isDark ? '#cbd5e1' : '#64748b',
-                border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #cbd5e1',
+                height: 26,
+                px: 1,
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                textTransform: 'none',
                 borderRadius: 1.5,
-                p: 0.6,
-                zIndex: 2,
-                cursor: 'pointer',
+                borderColor: isDark ? 'rgba(239, 68, 68, 0.4)' : '#fca5a5',
+                color: isDark ? '#f87171' : '#dc2626',
                 '&:hover': {
-                  bgcolor: 'rgba(239, 68, 68, 0.15)',
-                  borderColor: 'rgba(239, 68, 68, 0.4)',
-                  color: '#f87171',
+                  bgcolor: 'rgba(239, 68, 68, 0.1)',
+                  borderColor: '#ef4444',
                 },
               }}
             >
-              <CloseIcon fontSize="small" />
-            </IconButton>
+              Close Session
+            </Button>
           </Tooltip>
         </Box>
       </DialogTitle>

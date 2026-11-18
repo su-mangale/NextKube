@@ -32,6 +32,7 @@ export interface ActionDockProps {
   onToggleConsole: () => void;
   isConsoleOpen: boolean;
   isConsoleConnected?: boolean;
+  isConsoleMinimized?: boolean;
   onCreateResource: () => void;
   onAddCluster?: () => void;
   onSwitchCluster?: () => void;
@@ -52,6 +53,7 @@ export function ActionDock({
   onToggleConsole,
   isConsoleOpen,
   isConsoleConnected = false,
+  isConsoleMinimized = false,
   onCreateResource,
   onAddCluster,
   onSwitchCluster,
@@ -209,7 +211,17 @@ export function ActionDock({
         }}
       >
         {/* 1. KubeConsole Interactive Shell */}
-        <Tooltip title={`KubeConsole • Interactive Cluster Shell (${getShortcutKey('console') || 'Ctrl+\\'})`} placement="left" arrow>
+        <Tooltip
+          title={
+            isConsoleConnected
+              ? isConsoleMinimized
+                ? `KubeConsole • Minimized · Click to restore (${getShortcutKey('console') || 'Ctrl+\\'})`
+                : `KubeConsole • Active · Click to minimize (${getShortcutKey('console') || 'Ctrl+\\'})`
+              : `KubeConsole • Interactive Cluster Shell (${getShortcutKey('console') || 'Ctrl+\\'})`
+          }
+          placement="left"
+          arrow
+        >
           <Box sx={{ position: 'relative' }}>
             <IconButton
               onClick={onToggleConsole}
@@ -217,10 +229,32 @@ export function ActionDock({
                 width: 42,
                 height: 42,
                 borderRadius: '50%',
-                bgcolor: isDark ? 'rgba(56, 189, 248, 0.15)' : 'rgba(2, 132, 199, 0.12)',
-                color: isDark ? '#38bdf8' : '#0284c7',
+                bgcolor: isDark
+                  ? isConsoleOpen
+                    ? 'rgba(56, 189, 248, 0.25)'
+                    : isConsoleConnected
+                      ? 'rgba(34, 197, 94, 0.18)'
+                      : 'rgba(56, 189, 248, 0.15)'
+                  : isConsoleOpen
+                    ? 'rgba(2, 132, 199, 0.2)'
+                    : isConsoleConnected
+                      ? 'rgba(22, 163, 74, 0.15)'
+                      : 'rgba(2, 132, 199, 0.12)',
+                color: isDark
+                  ? isConsoleConnected && isConsoleMinimized
+                    ? '#4ade80'
+                    : '#38bdf8'
+                  : isConsoleConnected && isConsoleMinimized
+                    ? '#16a34a'
+                    : '#0284c7',
                 border: '1px solid',
-                borderColor: isDark ? 'rgba(56, 189, 248, 0.28)' : 'rgba(2, 132, 199, 0.22)',
+                borderColor: isDark
+                  ? isConsoleConnected && isConsoleMinimized
+                    ? 'rgba(74, 222, 128, 0.4)'
+                    : 'rgba(56, 189, 248, 0.28)'
+                  : isConsoleConnected && isConsoleMinimized
+                    ? 'rgba(22, 163, 74, 0.35)'
+                    : 'rgba(2, 132, 199, 0.22)',
                 transition: 'all 0.24s cubic-bezier(0.34, 1.56, 0.64, 1)',
                 '&:hover': {
                   transform: 'scale(1.15)',
@@ -244,7 +278,7 @@ export function ActionDock({
                 top: '50%',
                 transform: 'translateY(-50%)',
                 width: 4,
-                height: isConsoleOpen ? 16 : 4,
+                height: isConsoleOpen ? 16 : isConsoleConnected ? 10 : 4,
                 borderRadius: 2,
                 bgcolor: isConsoleOpen
                   ? '#38bdf8'
