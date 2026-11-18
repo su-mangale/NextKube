@@ -23,8 +23,8 @@
 
 ## 📸 Visual Showcase
 
-### 1. Cluster Operations & Anomaly Detection Dashboard
-Real-time visibility into pod readiness, deployment states, node availability, and automated crash-loop anomaly detection:
+### 1. Cluster Observability & Workload Matrix Dashboard
+Real-time visibility into CPU and Memory capacity allocation, node fleet readiness, workload health breakdown across Deployments, DaemonSets, StatefulSets, Services, and live warning event streams:
 ![Cluster Overview](docs/images/01-cluster-overview.png)
 
 ### 2. Workload Management & Direct Row Actions
@@ -39,8 +39,8 @@ Multi-container log streaming with historical timeframe filters, local browser v
 Direct WebSocket terminal execution into any container with multi-session tabs, full-screen mode, and responsive cursor resizing:
 ![Pod Exec](docs/images/09-pod-exec.png)
 
-### 5. KubeConsole — Ephemeral In-Cluster Shell
-Isolated in-cluster `kubectl` environment with tab auto-completion, quick resource query presets (`Pods`, `Nodes`, `Deployments`, `Services`, `Events`), and pre-loaded cluster administration tools:
+### 5. KubeConsole — Persistent In-Cluster Terminal
+Dedicated, persistent in-cluster `kubectl` terminal with background session preservation (minimize & restore), tab auto-completion, quick resource query presets (`Pods`, `Nodes`, `Deployments`, `Services`, `Events`), and instant connection:
 ![KubeConsole](docs/images/10-kubeconsole.png)
 
 ### 6. Deployments & Workload Scaling
@@ -55,8 +55,8 @@ Scale Deployments, StatefulSets, and ReplicaSets with RFC 6902 JSON patch guaran
 Edit, validate, and apply Kubernetes YAML and JSON manifests directly from the floating dock:
 ![YAML Manifest Editor](docs/images/05-yaml-manifest-editor.png)
 
-### 9. Liquid Glassmorphic ActionDock & System Preferences
-Persistent theme toggling (Dark & Light modes) and multi-session window management:
+### 9. Liquid Glassmorphic ActionDock & Customizable Shortcuts
+Persistent theme toggling (Dark & Light modes), multi-session window management, cluster switching, and customizable keyboard shortcuts:
 ![System Settings](docs/images/06-system-settings.png)
 
 ### 10. Secure Operator Authentication Portal

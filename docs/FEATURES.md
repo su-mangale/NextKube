@@ -6,11 +6,12 @@ NextKube equips operators and platform teams with a modern dashboard that replac
 
 ## 🌟 Visual Feature Showcase
 
-### 1. Cluster Health & Workload Telemetry
+### 1. Cluster Observability & Workload Matrix
 ![Cluster Overview](images/01-cluster-overview.png)
-- **Real-Time Cluster Health Anomaly Engine**: Detects crash-looping pods, failed scheduling, high restart counts, and node memory/disk pressure.
-- **Top Metrics Strip**: Instant visibility into running vs. target pods, deployment readiness, node availability, and namespace distribution.
-- **Unified Vertical Navigation**: Switch between all core Kubernetes workload types, network policies, storage resources, and RBAC configs with one click.
+- **Resource Allocation Gauges**: Real-time CPU and Memory allocation cards with usage percentages and dynamic progress bars.
+- **Workload Fleet Health Matrix**: Interactive breakdown of Deployments, DaemonSets, StatefulSets, Services, Ingresses, and PVCs with healthy-versus-total counts.
+- **Real-Time Warning Alerts & Events Stream**: Highlights warning events, affected workloads, namespaces, and timestamps.
+- **Node Fleet Health & Capacity Table**: Live node status, roles, CPU/Memory reservation, Kubernetes version, and internal IPs.
 
 ---
 
@@ -43,9 +44,10 @@ NextKube equips operators and platform teams with a modern dashboard that replac
 
 ---
 
-### 5. KubeConsole — Ephemeral In-Cluster Shell
+### 5. KubeConsole — Persistent In-Cluster Shell
 ![KubeConsole](images/10-kubeconsole.png)
-- **Instant Cluster CLI**: Ephemeral, secure container running inside the cluster with direct `kubectl` access.
+- **Instant Cluster CLI**: Persistent in-cluster pod architecture (`nextkube-shell`) for sub-second terminal connections without provisioning delays.
+- **Background Session Preservation**: Minimize the window to keep the shell session, terminal buffer, and running commands alive in the background.
 - **Fast Action Toolbar**: Pre-configured query buttons for instant access to `Pods`, `Nodes`, `Deployments`, `Services`, and `Events`.
 - **Pre-loaded Tooling**: Comes equipped with `kubectl`, `alias k=kubectl`, and tab auto-completion out of the box.
 
@@ -77,11 +79,12 @@ NextKube equips operators and platform teams with a modern dashboard that replac
 
 ---
 
-### 9. System & Workspace Preferences
+### 9. System Preferences & Customizable Shortcuts
 ![System Settings](images/06-system-settings.png)
 - **Fluid Dark / Light Modes**: Switch between deep slate dark mode and clean daylight light mode with zero hydration flash.
+- **Customizable Global Hotkeys**: Rebind shortcuts for KubeConsole, manifest editor, cluster switcher, and dock actions directly from the settings panel.
 - **User Management**: Admin controls for managing operator credentials and roles.
-- **Draggable Multi-Window Floating Dock**: ActionDock provides quick access to shells, editors, settings, and session controls.
+- **Liquid Glassmorphic ActionDock**: Floating action dock provides quick access to shells, cluster switcher, manifest creation, settings, and session controls.
 
 ---
 
