@@ -38,7 +38,6 @@ import HistoryRoundedIcon from '@mui/icons-material/HistoryRounded';
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
 import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
-import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import TerminalRoundedIcon from '@mui/icons-material/TerminalRounded';
 import AutoModeRoundedIcon from '@mui/icons-material/AutoModeRounded';
 import CompareArrowsRoundedIcon from '@mui/icons-material/CompareArrowsRounded';
@@ -76,14 +75,14 @@ export function ClusterSidebarNav({
   activeTab,
   onSelectTab,
   onOpenSettings,
-  onOpenCommandPalette,
+  onOpenCommandPalette: _onOpenCommandPalette,
   onOpenPortForward,
   onOpenConfigDrift,
   onOpenDiff,
   onOpenCostAllocation,
   onOpenSecurityPosture,
   resourceCounts = {},
-  shortcutSettingsKey = 'Alt+,',
+  shortcutSettingsKey: _shortcutSettingsKey = 'Alt+,',
   activePortForwardsCount = 0,
 }: ClusterSidebarNavProps) {
   const theme = useTheme();
@@ -207,7 +206,6 @@ export function ClusterSidebarNav({
 
   const renderNavItem = (item: NavItemDef, isChild = false) => {
     const isSelected = activeTab === item.tabIndex;
-    const count = resourceCounts[item.tabIndex];
 
     return (
       <Box
@@ -277,29 +275,6 @@ export function ClusterSidebarNav({
             {item.label}
           </Typography>
         </Box>
-
-        {/* Live count chip or badge */}
-        {count !== undefined && (
-          <Chip
-            label={count}
-            size="small"
-            sx={{
-              height: 18,
-              fontSize: '0.66rem',
-              fontWeight: 700,
-              px: 0.2,
-              bgcolor: isSelected
-                ? isDark
-                  ? alpha(theme.palette.primary.main, 0.35)
-                  : alpha(theme.palette.primary.main, 0.2)
-                : isDark
-                  ? 'rgba(255, 255, 255, 0.08)'
-                  : 'rgba(0, 0, 0, 0.06)',
-              color: isSelected ? theme.palette.primary.main : 'text.secondary',
-              borderRadius: 1,
-            }}
-          />
-        )}
       </Box>
     );
   };
@@ -467,15 +442,13 @@ export function ClusterSidebarNav({
                 Port-Forward Manager
               </Typography>
             </Box>
-            {activePortForwardsCount > 0 ? (
+            {activePortForwardsCount > 0 && (
               <Chip
                 label={`${activePortForwardsCount} active`}
                 size="small"
                 color="success"
                 sx={{ height: 16, fontSize: '0.62rem', fontWeight: 700 }}
               />
-            ) : (
-              <Chip label="Alt+P" size="small" sx={{ height: 16, fontSize: '0.62rem', fontWeight: 700 }} />
             )}
           </Box>
         )}
@@ -506,7 +479,6 @@ export function ClusterSidebarNav({
                 Config Drift Detector
               </Typography>
             </Box>
-            <Chip label="Alt+C" size="small" sx={{ height: 16, fontSize: '0.62rem', fontWeight: 700 }} />
           </Box>
         )}
 
@@ -536,7 +508,6 @@ export function ClusterSidebarNav({
                 GitOps Time Machine
               </Typography>
             </Box>
-            <Chip label="Diff" size="small" sx={{ height: 16, fontSize: '0.62rem', fontWeight: 700 }} />
           </Box>
         )}
 
@@ -566,7 +537,6 @@ export function ClusterSidebarNav({
                 Cost & Right-Sizing
               </Typography>
             </Box>
-            <Chip label="FinOps" size="small" color="success" variant="outlined" sx={{ height: 16, fontSize: '0.62rem', fontWeight: 700 }} />
           </Box>
         )}
 
@@ -596,21 +566,17 @@ export function ClusterSidebarNav({
                 Security & CIS Audit
               </Typography>
             </Box>
-            <Chip label="CIS" size="small" color="error" variant="outlined" sx={{ height: 16, fontSize: '0.62rem', fontWeight: 700 }} />
           </Box>
         )}
       </Box>
 
-      {/* Pinned Bottom Footer: Settings & Quick Omnibar Launcher */}
+      {/* Pinned Bottom Footer: Settings */}
       <Box
         sx={{
           borderTop: '1px solid',
           borderColor: 'divider',
           bgcolor: isDark ? 'rgba(15, 23, 42, 0.85)' : 'rgba(241, 245, 249, 0.9)',
           p: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 0.6,
         }}
       >
         {/* Settings Launcher */}
@@ -647,60 +613,7 @@ export function ClusterSidebarNav({
               Settings
             </Typography>
           </Box>
-          <Chip
-            label={shortcutSettingsKey}
-            size="small"
-            sx={{
-              height: 18,
-              fontSize: '0.62rem',
-              fontWeight: 700,
-              bgcolor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
-              borderRadius: 1,
-            }}
-          />
         </Box>
-
-        {/* Command Palette Launcher Pill */}
-        {onOpenCommandPalette && (
-          <Box
-            onClick={onOpenCommandPalette}
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              px: 1.5,
-              py: 0.6,
-              borderRadius: 1.5,
-              cursor: 'pointer',
-              bgcolor: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.03)',
-              border: '1px solid',
-              borderColor: 'divider',
-              transition: 'all 0.16s ease',
-              '&:hover': {
-                borderColor: theme.palette.primary.main,
-                bgcolor: isDark ? 'rgba(56, 189, 248, 0.08)' : 'rgba(56, 189, 248, 0.06)',
-              },
-            }}
-          >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <SearchRoundedIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-              <Typography variant="caption" sx={{ fontSize: '0.74rem', color: 'text.secondary', fontWeight: 600 }}>
-                Command Palette
-              </Typography>
-            </Box>
-            <Chip
-              label="⌘K"
-              size="small"
-              sx={{
-                height: 17,
-                fontSize: '0.62rem',
-                fontWeight: 800,
-                bgcolor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
-                borderRadius: 0.8,
-              }}
-            />
-          </Box>
-        )}
       </Box>
     </Box>
   );
