@@ -131,6 +131,9 @@ import {
   RbacCheckRequest,
   RbacCheckResult,
   RbacMatrixEntry,
+  NamespaceClonePreview,
+  NamespaceCloneRequest,
+  NamespaceCloneResult,
 } from '../types/dashboard.types';
 
 // Fetch Namespaces
@@ -1976,6 +1979,48 @@ export const useRbacMatrix = (clusterId: string, namespace?: string, options?: {
     staleTime: 60000,
   });
 };
+
+// ==========================================
+// Phase 6: Namespace Cloner & Multi-Document YAML API
+// ==========================================
+
+export const fetchNamespaceClonePreview = async (
+  clusterId: string,
+  namespace: string
+): Promise<NamespaceClonePreview> => {
+  const baseUrl = getBackendUrl();
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/namespaces/${encodeURIComponent(namespace)}/clone-preview`);
+  if (!res.ok) throw new Error('Failed to retrieve namespace clone preview');
+  return res.json();
+};
+
+export const cloneNamespace = async (
+  clusterId: string,
+  req: NamespaceCloneRequest
+): Promise<NamespaceCloneResult> => {
+  const baseUrl = getBackendUrl();
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/namespaces/clone`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || data.message || 'Failed to clone namespace');
+  }
+  return res.json();
+};
+
+export const exportNamespaceYaml = async (
+  clusterId: string,
+  namespace: string
+): Promise<{ yaml: string }> => {
+  const baseUrl = getBackendUrl();
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/namespaces/${encodeURIComponent(namespace)}/export-yaml`);
+  if (!res.ok) throw new Error('Failed to export namespace YAML');
+  return res.json();
+};
+
 
 
 

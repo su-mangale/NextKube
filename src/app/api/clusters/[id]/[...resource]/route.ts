@@ -55,6 +55,9 @@ import {
   fetchClusterSecurityPosture,
   checkRbacPermission,
   fetchRbacMatrix,
+  fetchNamespaceClonePreview,
+  cloneNamespaceResources,
+  exportSanitizedNamespaceYaml,
 } from '@/server/k8s-client';
 import {
   startPortForwardSession,
@@ -110,6 +113,16 @@ export async function GET(
 
     // 1. Namespaces
     if (segment0 === 'namespaces') {
+      if (resource.length >= 3 && resource[2] === 'clone-preview') {
+        const nsName = resource[1];
+        const preview = await fetchNamespaceClonePreview(clusterId, nsName);
+        return NextResponse.json(preview);
+      }
+      if (resource.length >= 3 && (resource[2] === 'export-yaml' || resource[2] === 'export')) {
+        const nsName = resource[1];
+        const yaml = await exportSanitizedNamespaceYaml(clusterId, nsName);
+        return NextResponse.json({ yaml });
+      }
       const data = await fetchNamespaces(clusterId);
       return NextResponse.json(data);
     }
@@ -596,6 +609,23 @@ export async function POST(
         status: 'SUCCESS',
       });
       return NextResponse.json(res);
+    }
+
+    // Phase 6: Namespace Cloner: /namespaces/clone
+    if (segment0 === 'namespaces' && resource.length >= 2 && resource[1] === 'clone') {
+      const res = await cloneNamespaceResources(clusterId, body);
+      await recordAuditEvent({
+        clusterId,
+        user,
+        action: 'CUSTOM_OPERATION',
+        resourceType: 'Namespace',
+        resourceName: body.targetNamespace || 'target',
+        namespace: body.targetNamespace || 'target',
+        details: `Cloned namespace '${body.sourceNamespace}' -> '${body.targetNamespace}' (${res.totalCreated} created)`,
+        status: res.success ? 'SUCCESS' : 'FAILED',
+        errorMessage: res.success ? undefined : res.message,
+      });
+      return NextResponse.json(res, { status: res.success ? 200 : 400 });
     }
 
     // Helm Install from App Store: /helm/install

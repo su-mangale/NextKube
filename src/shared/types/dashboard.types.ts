@@ -1030,6 +1030,47 @@ export interface RbacMatrixEntry {
   permissions: RbacMatrixPermission[];
 }
 
+// ==========================================
+// Phase 6: Namespace Cloner & Multi-Document YAML Exporter Types
+// ==========================================
+
+export interface NamespaceClonePreview {
+  sourceNamespace: string;
+  resourceCounts: Record<string, number>;
+  totalResources: number;
+  sampleResourceNames: Record<string, string[]>;
+  sanitizedYamlPreview: string;
+}
+
+export interface NamespaceCloneRequest {
+  sourceNamespace: string;
+  targetNamespace: string;
+  resourceTypes: string[];
+  includeSecrets?: boolean;
+  includePVCs?: boolean;
+  createTargetNamespace?: boolean;
+}
+
+export interface NamespaceCloneProgressItem {
+  timestamp: string;
+  resourceType: string;
+  resourceName: string;
+  status: 'pending' | 'created' | 'skipped' | 'failed';
+  message: string;
+}
+
+export interface NamespaceCloneResult {
+  success: boolean;
+  message: string;
+  sourceNamespace: string;
+  targetNamespace: string;
+  totalCreated: number;
+  totalSkipped: number;
+  totalFailed: number;
+  logs: NamespaceCloneProgressItem[];
+}
+
+
 
 
 

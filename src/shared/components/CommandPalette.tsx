@@ -31,6 +31,7 @@ import CompareArrowsIcon from '@mui/icons-material/CompareArrowsRounded';
 import AutoModeIcon from '@mui/icons-material/AutoModeRounded';
 import MonetizationOnIcon from '@mui/icons-material/MonetizationOnRounded';
 import ShieldIcon from '@mui/icons-material/ShieldRounded';
+import DynamicFeedIcon from '@mui/icons-material/DynamicFeedRounded';
 import { useColorMode } from '../theme/theme-registry';
 
 export interface CommandPaletteProps {
@@ -49,6 +50,7 @@ export interface CommandPaletteProps {
   onOpenConfigDrift?: () => void;
   onOpenCostAllocation?: () => void;
   onOpenSecurityPosture?: () => void;
+  onOpenNamespaceCloner?: () => void;
   onOpenSettings?: () => void;
   onRefresh?: () => void;
   customItems?: Array<{
@@ -87,6 +89,7 @@ export function CommandPalette({
   onOpenConfigDrift,
   onOpenCostAllocation,
   onOpenSecurityPosture,
+  onOpenNamespaceCloner,
   onOpenSettings,
   onRefresh,
   customItems = [],
@@ -229,6 +232,19 @@ export function CommandPalette({
     });
 
     list.push({
+      id: 'action-clone-namespace',
+      title: 'Clone Namespace & Export Multi-Doc YAML',
+      subtitle: 'Duplicate environments, sanitize cluster metadata & export GitOps bundles',
+      category: 'Actions',
+      shortcut: 'Alt+N',
+      icon: <DynamicFeedIcon fontSize="small" sx={{ color: '#38bdf8' }} />,
+      action: () => {
+        onClose();
+        onOpenNamespaceCloner?.();
+      },
+    });
+
+    list.push({
       id: 'action-theme',
       title: `Switch to ${isDark ? 'Light' : 'Dark'} Mode`,
       subtitle: 'Toggle theme display appearance',
@@ -330,6 +346,7 @@ export function CommandPalette({
     onOpenConfigDrift,
     onOpenCostAllocation,
     onOpenSecurityPosture,
+    onOpenNamespaceCloner,
     onOpenSettings,
     onRefresh,
     onSelectNamespace,

@@ -34,6 +34,7 @@ export { default as ConfigDriftDrawer, type ConfigDriftDrawerProps } from './com
 export { default as NodeDrainDialog, type NodeDrainDialogProps } from './components/NodeDrainDialog';
 export { default as CostAllocationDrawer, type CostAllocationDrawerProps } from './components/CostAllocationDrawer';
 export { default as SecurityPostureDrawer, type SecurityPostureDrawerProps } from './components/SecurityPostureDrawer';
+export { default as NamespaceClonerDialog, type NamespaceClonerDialogProps } from './components/NamespaceClonerDialog';
 export { DraggablePaper, type DraggablePaperProps } from './components/DraggablePaper';
 export { NoClusterView } from './components/NoClusterView';
 export * from './components/QueryProvider';

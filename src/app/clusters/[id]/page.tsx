@@ -69,6 +69,7 @@ import AutoModeIcon from '@mui/icons-material/AutoModeRounded';
 import BlockIcon from '@mui/icons-material/BlockRounded';
 import LockOpenIcon from '@mui/icons-material/LockOpenRounded';
 import CleaningServicesIcon from '@mui/icons-material/CleaningServicesRounded';
+import DynamicFeedIcon from '@mui/icons-material/DynamicFeedRounded';
 import { useQueryClient } from '@tanstack/react-query';
 
 import {
@@ -146,6 +147,7 @@ import {
   NodeDrainDialog,
   CostAllocationDrawer,
   SecurityPostureDrawer,
+  NamespaceClonerDialog,
   useShortcuts,
   matchesShortcut,
   DraggablePaper,
@@ -284,6 +286,9 @@ spec:
 
   // Phase 5: Security Posture, CIS Benchmark & RBAC Matrix state
   const [securityPostureOpen, setSecurityPostureOpen] = useState<boolean>(false);
+
+  // Phase 6: 1-Click Namespace Cloner state
+  const [namespaceClonerOpen, setNamespaceClonerOpen] = useState<boolean>(false);
 
   // Logs states
   const [logsDialogOpen, setLogsDialogOpen] = useState<boolean>(false);
@@ -2591,6 +2596,26 @@ spec:
               ))}
             </Select>
           </FormControl>
+
+          <Tooltip title="Clone Namespace & Export Multi-Doc YAML (Ephemeral Environments)">
+            <IconButton
+              onClick={() => setNamespaceClonerOpen(true)}
+              color="primary"
+              size="small"
+              sx={{
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 2,
+                p: 0.8,
+                bgcolor: isDark ? 'rgba(56, 189, 248, 0.08)' : 'rgba(2, 132, 199, 0.06)',
+                '&:hover': {
+                  bgcolor: isDark ? 'rgba(56, 189, 248, 0.16)' : 'rgba(2, 132, 199, 0.12)',
+                },
+              }}
+            >
+              <DynamicFeedIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
 
           <Tooltip title="Refresh resources">
             <IconButton onClick={handleRefreshAll} color="primary" size="small" sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 0.8 }}>
@@ -5737,6 +5762,7 @@ spec:
         onOpenConfigDrift={() => setConfigDriftOpen(true)}
         onOpenCostAllocation={() => setCostAllocationOpen(true)}
         onOpenSecurityPosture={() => setSecurityPostureOpen(true)}
+        onOpenNamespaceCloner={() => setNamespaceClonerOpen(true)}
         onOpenSettings={() => {
           setSettingsDialogOpen(true);
           setTopWindow('settings');
@@ -5811,6 +5837,21 @@ spec:
         onClose={() => setSecurityPostureOpen(false)}
         clusterId={effectiveClusterId}
         namespaces={namespaces}
+      />
+
+      {/* Phase 6: 1-Click Namespace Cloner & Multi-Document YAML Dialog */}
+      <NamespaceClonerDialog
+        open={namespaceClonerOpen}
+        onClose={() => setNamespaceClonerOpen(false)}
+        clusterId={effectiveClusterId}
+        namespaces={namespaces}
+        initialSourceNamespace={selectedNamespace === 'all' ? (namespaces[0] || 'default') : selectedNamespace}
+        onSuccess={(newNs) => {
+          setSelectedNamespace(newNs);
+          setToastSeverity('success');
+          setToastMessage(`Successfully cloned environment into namespace '${newNs}'!`);
+          refetchNamespaces();
+        }}
       />
 
       {/* AI Root-Cause Diagnostic Dialog */}
