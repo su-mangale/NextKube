@@ -2762,7 +2762,7 @@ users:
                   </TableHead>
                   <TableBody>
                     {paginate(filteredDaemonSets).map((ds) => (
-                      <TableRow key={ds.name} hover>
+                      <TableRow key={`${ds.namespace}-${ds.name}`} hover>
                         <TableCell sx={{ fontWeight: 700 }}>{ds.name}</TableCell>
                         <TableCell><Chip label={ds.namespace} size="small" sx={{ fontSize: '0.65rem', borderRadius: 1 }} /></TableCell>
                         <TableCell>{ds.desiredNumberScheduled}</TableCell>

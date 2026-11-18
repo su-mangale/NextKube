@@ -3,7 +3,22 @@ import {
   fetchNamespaces,
   fetchPods,
   fetchDeployments,
+  fetchDaemonSets,
+  fetchStatefulSets,
+  fetchReplicaSets,
+  fetchJobs,
+  fetchCronJobs,
   fetchServices,
+  fetchIngresses,
+  fetchNetworkPolicies,
+  fetchConfigMaps,
+  fetchSecrets,
+  fetchPVCs,
+  fetchStorageClasses,
+  fetchServiceAccounts,
+  fetchRoles,
+  fetchRoleBindings,
+  fetchCRDs,
   fetchNodes,
   fetchEvents,
   fetchHPAs,
@@ -148,9 +163,80 @@ export async function GET(
       return NextResponse.json({ yaml });
     }
 
-    // 11. Workloads & Configuration Resource Fallbacks
-    if (['configmaps', 'secrets', 'ingresses', 'daemonsets', 'statefulsets', 'replicasets', 'jobs', 'cronjobs', 'networkpolicies', 'pvcs', 'storageclasses', 'serviceaccounts', 'roles', 'rolebindings', 'crds'].includes(segment0)) {
-      return NextResponse.json([]);
+    // 12. Native Kubernetes Workloads & Resources
+    if (segment0 === 'daemonsets' || segment0 === 'daemonset') {
+      const data = await fetchDaemonSets(clusterId, namespace);
+      return NextResponse.json(data);
+    }
+
+    if (segment0 === 'statefulsets' || segment0 === 'statefulset') {
+      const data = await fetchStatefulSets(clusterId, namespace);
+      return NextResponse.json(data);
+    }
+
+    if (segment0 === 'replicasets' || segment0 === 'replicaset') {
+      const data = await fetchReplicaSets(clusterId, namespace);
+      return NextResponse.json(data);
+    }
+
+    if (segment0 === 'jobs' || segment0 === 'job') {
+      const data = await fetchJobs(clusterId, namespace);
+      return NextResponse.json(data);
+    }
+
+    if (segment0 === 'cronjobs' || segment0 === 'cronjob') {
+      const data = await fetchCronJobs(clusterId, namespace);
+      return NextResponse.json(data);
+    }
+
+    if (segment0 === 'ingresses' || segment0 === 'ingress') {
+      const data = await fetchIngresses(clusterId, namespace);
+      return NextResponse.json(data);
+    }
+
+    if (segment0 === 'networkpolicies' || segment0 === 'networkpolicy') {
+      const data = await fetchNetworkPolicies(clusterId, namespace);
+      return NextResponse.json(data);
+    }
+
+    if (segment0 === 'configmaps' || segment0 === 'configmap') {
+      const data = await fetchConfigMaps(clusterId, namespace);
+      return NextResponse.json(data);
+    }
+
+    if (segment0 === 'secrets' || segment0 === 'secret') {
+      const data = await fetchSecrets(clusterId, namespace);
+      return NextResponse.json(data);
+    }
+
+    if (segment0 === 'pvcs' || segment0 === 'pvc' || segment0 === 'persistentvolumeclaims' || segment0 === 'persistentvolumeclaim') {
+      const data = await fetchPVCs(clusterId, namespace);
+      return NextResponse.json(data);
+    }
+
+    if (segment0 === 'storageclasses' || segment0 === 'storageclass') {
+      const data = await fetchStorageClasses(clusterId);
+      return NextResponse.json(data);
+    }
+
+    if (segment0 === 'serviceaccounts' || segment0 === 'serviceaccount') {
+      const data = await fetchServiceAccounts(clusterId, namespace);
+      return NextResponse.json(data);
+    }
+
+    if (segment0 === 'roles' || segment0 === 'role' || segment0 === 'clusterroles' || segment0 === 'clusterrole') {
+      const data = await fetchRoles(clusterId, namespace);
+      return NextResponse.json(data);
+    }
+
+    if (segment0 === 'rolebindings' || segment0 === 'rolebinding' || segment0 === 'clusterrolebindings' || segment0 === 'clusterrolebinding') {
+      const data = await fetchRoleBindings(clusterId, namespace);
+      return NextResponse.json(data);
+    }
+
+    if (segment0 === 'crds' || segment0 === 'crd' || segment0 === 'customresourcedefinitions' || segment0 === 'customresourcedefinition') {
+      const data = await fetchCRDs(clusterId);
+      return NextResponse.json(data);
     }
 
     return NextResponse.json({ error: `Unhandled resource path: ${resource.join('/')}` }, { status: 404 });
