@@ -74,7 +74,9 @@ function getEncryptionKey(): Buffer {
           }
         });
       }
-    } catch {}
+    } catch {
+      // ignore env file read error
+    }
   }
   const rawKey =
     process.env.NEXTKUBE_ENCRYPTION_KEY ||
@@ -129,8 +131,6 @@ function ensureStoreDir(): void {
     console.warn('[ClusterVault] Could not ensure store directory:', err);
   }
 }
-
-const DEFAULT_INITIAL_CLUSTERS: StoredClusterRecord[] = [];
 
 function readStoredClusters(): StoredClusterRecord[] {
   ensureStoreDir();

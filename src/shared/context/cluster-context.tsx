@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getBackendUrl } from '../utils/config';
 import { FleetInfo, AttachedClusterPayload } from '../types/fleet.types';
@@ -110,19 +110,6 @@ interface ClusterContextType {
 }
 
 const ClusterContext = createContext<ClusterContextType | undefined>(undefined);
-
-interface LocalClusterRecord {
-  id?: string;
-  name?: string;
-  type?: ClusterType;
-  managedType?: ClusterManagedType;
-  provider?: string;
-  status?: 'Healthy' | 'Provisioning' | 'Failed' | 'Degraded';
-  version?: string;
-  fleetId?: string;
-  labels?: Record<string, string>;
-  deleted?: boolean;
-}
 
 const EMPTY_CLUSTERS: ClusterInfo[] = [];
 

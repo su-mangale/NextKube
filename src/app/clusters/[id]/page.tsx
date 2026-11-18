@@ -16,7 +16,6 @@ import {
   Tabs,
   Tab,
   TextField,
-  TableContainer,
   Table,
   TableHead,
   TableRow,
@@ -43,8 +42,6 @@ import {
   CardContent,
   useTheme,
 } from '@mui/material';
-import Link from 'next/link';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import SearchIcon from '@mui/icons-material/Search';
 import TerminalIcon from '@mui/icons-material/Terminal';
@@ -52,7 +49,6 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import CloseIcon from '@mui/icons-material/Close';
 import ClearIcon from '@mui/icons-material/Clear';
 import ReportProblemIcon from '@mui/icons-material/ReportProblem';
-import InfoIcon from '@mui/icons-material/Info';
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
@@ -60,19 +56,9 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CheckIcon from '@mui/icons-material/Check';
 import CodeIcon from '@mui/icons-material/Code';
 import AddIcon from '@mui/icons-material/Add';
-import VisibilityIcon from '@mui/icons-material/Visibility';
-import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import PauseIcon from '@mui/icons-material/Pause';
 import StorageIcon from '@mui/icons-material/Storage';
-import VpnKeyIcon from '@mui/icons-material/VpnKey';
-import SecurityIcon from '@mui/icons-material/Security';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
-import LogoutIcon from '@mui/icons-material/Logout';
-import AccountCircleIcon from '@mui/icons-material/AccountCircle';
-import SettingsIcon from '@mui/icons-material/Settings';
 import HistoryIcon from '@mui/icons-material/History';
-import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import LinkOffIcon from '@mui/icons-material/LinkOff';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import TuneIcon from '@mui/icons-material/Tune';
@@ -123,9 +109,7 @@ import {
   fetchHelmReleaseValues,
   rollbackHelmRelease,
   uninstallHelmRelease,
-  AuditLogEntry,
   K8sHelmRelease,
-  K8sHelmRevision,
   fetchResourceYaml,
   updateResourceYaml,
   deleteResource,
@@ -142,14 +126,9 @@ import {
   AddClusterDialog,
   DraggablePaper,
   NoClusterView,
-  getZoneUrl,
 } from '@/shared';
 
-export default function ClusterDetailPage({
-  params,
-}: {
-  params?: Promise<{ id: string }>;
-}) {
+export default function ClusterDetailPage() {
   const routeParams = useParams();
   const id = (routeParams?.id as string) || '';
   const router = useRouter();
@@ -231,8 +210,6 @@ spec:
   const [rolloutMode, setRolloutMode] = useState<'restart' | 'rollback'>('restart');
   const [selectedRolloutRevision, setSelectedRolloutRevision] = useState<number | null>(null);
 
-  const [yamlDialogMaximized, setYamlDialogMaximized] = useState<boolean>(false);
-  const [yamlCopied, setYamlCopied] = useState<boolean>(false);
   const [describeCopied, setDescribeCopied] = useState<boolean>(false);
 
   // Logs states
@@ -293,7 +270,7 @@ spec:
 
   // Fetch cluster profile & metadata
   const { availableClusters, clustersLoading, disconnectCluster } = useCluster();
-  const { data: currentUser } = useCurrentUser();
+  useCurrentUser();
   const clusterMeta = useMemo(() => {
     return availableClusters.find((c) => c.id === id) || availableClusters[0] || null;
   }, [availableClusters, id]);
@@ -337,15 +314,15 @@ spec:
   const { data: roles = [], isLoading: rolesLoading, refetch: refetchRoles } = useRoles(effectiveClusterId, selectedNamespace);
   const { data: roleBindings = [], isLoading: rbLoading, refetch: refetchRoleBindings } = useRoleBindings(effectiveClusterId, selectedNamespace);
   const { data: crds = [], isLoading: crdLoading, refetch: refetchCRDs } = useCRDs(effectiveClusterId);
-  const { data: hpas = [], isLoading: hpasLoading, refetch: refetchHPAs } = useHPAs(effectiveClusterId, selectedNamespace);
-  const { data: gateways = [], isLoading: gatewaysLoading, refetch: refetchGateways } = useGateways(effectiveClusterId, selectedNamespace);
-  const { data: httpRoutes = [], isLoading: routesLoading, refetch: refetchHTTPRoutes } = useHTTPRoutes(effectiveClusterId, selectedNamespace);
+  const { data: hpas = [], isLoading: _hpasLoading, refetch: refetchHPAs } = useHPAs(effectiveClusterId, selectedNamespace);
+  const { data: gateways = [], isLoading: _gatewaysLoading, refetch: refetchGateways } = useGateways(effectiveClusterId, selectedNamespace);
+  const { data: httpRoutes = [], isLoading: _routesLoading, refetch: refetchHTTPRoutes } = useHTTPRoutes(effectiveClusterId, selectedNamespace);
   const { data: healthData, refetch: refetchHealth } = useClusterHealth(effectiveClusterId);
   const { data: auditLogs = [], isLoading: auditLoading, refetch: refetchAuditLogs } = useAuditLogs(effectiveClusterId);
   const { data: helmReleases = [], isLoading: helmLoading, refetch: refetchHelmReleases } = useHelmReleases(effectiveClusterId, selectedNamespace);
 
   const queryClient = useQueryClient();
-  const [liveWatchConnected, setLiveWatchConnected] = useState<boolean>(false);
+  const [_liveWatchConnected, setLiveWatchConnected] = useState<boolean>(false);
   const [healthBannerDismissed, setHealthBannerDismissed] = useState<boolean>(false);
   const [auditActionFilter, setAuditActionFilter] = useState<string>('all');
 
@@ -373,7 +350,9 @@ spec:
         try {
           const report = JSON.parse(event.data);
           queryClient.setQueryData(['clusterHealth', id], report);
-        } catch { }
+        } catch {
+          // ignore parse error
+        }
       });
       es.addEventListener('new-events', (event) => {
         try {
@@ -386,7 +365,9 @@ spec:
             }
           }
           refetchEvents();
-        } catch { }
+        } catch {
+          // ignore parse error
+        }
       });
       es.onerror = () => {
         setLiveWatchConnected(false);
@@ -400,9 +381,9 @@ spec:
         es.close();
       }
     };
-  }, [id, queryClient, refetchEvents]);
+  }, [id, queryClient, refetchEvents, effectiveClusterId, availableClusters.length]);
 
-  const { data: rolloutRevisions = [], isLoading: rolloutsLoading, refetch: refetchRolloutHistory } = useRolloutHistory(
+  const { data: rolloutRevisions = [], isLoading: _rolloutsLoading, refetch: refetchRolloutHistory } = useRolloutHistory(
     id,
     selectedResource?.name || '',
     selectedResource?.namespace || '',
@@ -489,39 +470,6 @@ spec:
     setDescribeTab(tabOverride !== undefined ? tabOverride : activeTab);
     setDescribeCopied(false);
     setDescribeDialogOpen(true);
-  };
-
-  const handleDownloadKubeconfig = () => {
-    if (!clusterMeta) return;
-    const yamlStr = `apiVersion: v1
-kind: Config
-clusters:
-- name: ${clusterMeta.name}
-  cluster:
-    server: https://${clusterMeta.name}.k8s.ykp-platform.io:6443
-contexts:
-- name: ykp-${clusterMeta.name}-context
-  context:
-    cluster: ${clusterMeta.name}
-    user: ykp-platform-operator
-current-context: ykp-${clusterMeta.name}-context
-users:
-- name: ykp-platform-operator
-  user:
-    token: ykp-token-mock-auth-operator-session-${clusterMeta.id}`;
-
-    const blob = new Blob([yamlStr], { type: 'text/yaml' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `kubeconfig-${clusterMeta.name}.yaml`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-
-    setToastSeverity('success');
-    setToastMessage('Kubeconfig downloaded successfully.');
   };
 
   const handleApplyCreateResource = async () => {
@@ -921,16 +869,6 @@ users:
     }
   };
 
-  const handleCopyYaml = async () => {
-    try {
-      await navigator.clipboard.writeText(yamlContent);
-      setYamlCopied(true);
-      setTimeout(() => setYamlCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy YAML manifest', err);
-    }
-  };
-
   const handleOpenScale = (resourceOverride?: any) => {
     const resource = resourceOverride || selectedResource;
     if (!resource) return;
@@ -1240,13 +1178,6 @@ users:
     }
   };
 
-  const handleCopyLogs = () => {
-    if (!logsContent) return;
-    navigator.clipboard.writeText(logsContent);
-    setToastSeverity('success');
-    setToastMessage('Logs copied to clipboard.');
-  };
-
   const handleOpenDelete = (resourceOverride?: any) => {
     const resource = resourceOverride || selectedResource;
     if (!resource) return;
@@ -1399,36 +1330,6 @@ users:
     }
   };
 
-  const getActiveTabResources = (): any[] => {
-    if (activeTab === 0) return [];
-    if (activeTab === 1) return filteredPods;
-    if (activeTab === 2) return filteredDeployments;
-    if (activeTab === 3) return filteredDaemonSets;
-    if (activeTab === 4) return filteredStatefulSets;
-    if (activeTab === 5) return filteredReplicaSets;
-    if (activeTab === 6) return filteredJobs;
-    if (activeTab === 7) return filteredCronJobs;
-    if (activeTab === 8) return filteredServices;
-    if (activeTab === 9) return filteredIngresses;
-    if (activeTab === 10) return filteredNetworkPolicies;
-    if (activeTab === 11) return filteredConfigMaps;
-    if (activeTab === 12) return filteredSecrets;
-    if (activeTab === 13) return filteredPVCs;
-    if (activeTab === 14) return filteredStorageClasses;
-    if (activeTab === 15) return filteredNodes;
-    if (activeTab === 16) return filteredServiceAccounts;
-    if (activeTab === 17) return filteredRoles;
-    if (activeTab === 18) return filteredRoleBindings;
-    if (activeTab === 19) return filteredCRDs;
-    if (activeTab === 20) return filteredEvents;
-    if (activeTab === 21) return filteredHPAs;
-    if (activeTab === 22) return filteredPVs;
-    if (activeTab === 23) return [...filteredGateways, ...filteredHTTPRoutes];
-    if (activeTab === 24) return filteredAuditLogs;
-    if (activeTab === 25) return filteredHelmReleases;
-    return [];
-  };
-
   const isRowSelected = (res: any) => {
     return selectedResources.some((r) => (r.name || r.id) === (res.name || res.id) && r.namespace === res.namespace);
   };
@@ -1455,27 +1356,6 @@ users:
         return [...prev, resource];
       }
     });
-  };
-
-  const handleToggleSelectAll = () => {
-    const resources = getActiveTabResources();
-    const allSelected = resources.length > 0 && resources.every((r: any) =>
-      selectedResources.some((sr: any) => (sr.name || sr.id) === (r.name || r.id) && sr.namespace === r.namespace)
-    );
-    if (allSelected) {
-      setSelectedResources((prev) =>
-        prev.filter((sr: any) =>
-          !resources.some((r: any) => (r.name || r.id) === (sr.name || sr.id) && r.namespace === sr.namespace)
-        )
-      );
-    } else {
-      setSelectedResources((prev) => {
-        const newSelections = resources.filter((r: any) =>
-          !prev.some((sr: any) => (sr.name || sr.id) === (r.name || r.id) && sr.namespace === r.namespace)
-        );
-        return [...prev, ...newSelections];
-      });
-    }
   };
 
   const handleOpenBulkDelete = () => {
@@ -1859,17 +1739,6 @@ users:
     URL.revokeObjectURL(element.href);
   };
 
-  const handleDownloadYaml = () => {
-    if (!yamlContent) return;
-    const element = document.createElement('a');
-    const file = new Blob([yamlContent], { type: 'text/yaml' });
-    element.href = URL.createObjectURL(file);
-    element.download = `${selectedResource?.name || 'manifest'}.yaml`;
-    document.body.appendChild(element);
-    element.click();
-    document.body.removeChild(element);
-  };
-
   const [logsCopied, setLogsCopied] = useState(false);
   const handleCopyLogsWithFeedback = async () => {
     try {
@@ -1878,7 +1747,9 @@ users:
       await navigator.clipboard.writeText(textToCopy);
       setLogsCopied(true);
       setTimeout(() => setLogsCopied(false), 2000);
-    } catch (e) { }
+    } catch {
+      // ignore clipboard error
+    }
   };
 
   const handleDisconnectCluster = async () => {
@@ -2158,9 +2029,7 @@ users:
     );
   }
 
-  const name = clusterMeta?.name || dashboardInfo?.name || id;
   const status = clusterMeta?.status || dashboardInfo?.status || 'Healthy';
-  const type = clusterMeta?.type || (dashboardInfo as any)?.type || 'workload';
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden' }}>

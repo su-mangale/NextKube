@@ -40,7 +40,7 @@ const INITIAL_FLEETS: FleetInfo[] = [
   },
 ];
 
-let fleetsStore = [...INITIAL_FLEETS];
+const fleetsStore = [...INITIAL_FLEETS];
 
 export async function GET() {
   return NextResponse.json(fleetsStore);

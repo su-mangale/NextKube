@@ -113,7 +113,6 @@ import {
   PlatformAppSpec,
   PlatformAppInfo,
   AuditLogEntry,
-  ClusterAnomaly,
   ClusterHealthReport,
 } from '../types/dashboard.types';
 

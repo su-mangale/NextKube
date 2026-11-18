@@ -1205,7 +1205,9 @@ export async function scaleDeploymentResource(
           try {
             await clients.appsApi.patchNamespacedReplicaSet({ name, namespace, body: patch });
             return { success: true, message: `Successfully scaled ReplicaSet ${name} to ${replicas} replicas.` };
-          } catch {}
+          } catch {
+            // ignore ReplicaSet patch error
+          }
         }
       }
     }
@@ -1886,7 +1888,7 @@ export async function fetchDashboardOverview(clusterId: string): Promise<Dashboa
 // High-Fidelity Fallback Mocks
 // ==========================================
 
-function getMockPods(namespace?: string): K8sPod[] {
+export function getMockPods(namespace?: string): K8sPod[] {
   const all: K8sPod[] = [
     { name: 'coredns-7c65d6cfc9-j4kl2', namespace: 'kube-system', ready: '1/1', status: 'Running', restarts: 0, ip: '10.244.0.2', node: 'node-pool-1', age: '14d', containers: ['coredns'], cpuUsage: '8m', memoryUsage: '24Mi' },
     { name: 'coredns-7c65d6cfc9-9z8xq', namespace: 'kube-system', ready: '1/1', status: 'Running', restarts: 0, ip: '10.244.0.3', node: 'node-pool-2', age: '14d', containers: ['coredns'], cpuUsage: '7m', memoryUsage: '22Mi' },
@@ -1900,7 +1902,7 @@ function getMockPods(namespace?: string): K8sPod[] {
   return all.filter((p) => p.namespace === namespace);
 }
 
-function getMockDeployments(namespace?: string): K8sDeployment[] {
+export function getMockDeployments(namespace?: string): K8sDeployment[] {
   const all: K8sDeployment[] = [
     { name: 'api-gateway', namespace: 'default', replicas: 3, readyReplicas: 3, updatedReplicas: 3, availableReplicas: 3, age: '14d', image: 'nginx:1.25-alpine' },
     { name: 'order-service', namespace: 'default', replicas: 2, readyReplicas: 2, updatedReplicas: 2, availableReplicas: 2, age: '6d', image: 'node:20-slim' },
@@ -1911,7 +1913,7 @@ function getMockDeployments(namespace?: string): K8sDeployment[] {
   return all.filter((d) => d.namespace === namespace);
 }
 
-function getMockServices(namespace?: string): K8sService[] {
+export function getMockServices(namespace?: string): K8sService[] {
   const all: K8sService[] = [
     { name: 'kubernetes', namespace: 'default', type: 'ClusterIP', clusterIp: '10.96.0.1', externalIp: '<none>', ports: '443/TCP', age: '30d' },
     { name: 'api-gateway-service', namespace: 'default', type: 'LoadBalancer', clusterIp: '10.96.14.88', externalIp: '34.120.45.10', ports: '80:30080/TCP, 443:30443/TCP', age: '14d' },
@@ -1922,7 +1924,7 @@ function getMockServices(namespace?: string): K8sService[] {
   return all.filter((s) => s.namespace === namespace);
 }
 
-function getMockNodes(): K8sNode[] {
+export function getMockNodes(): K8sNode[] {
   return [
     { name: 'node-control-plane-01', status: 'Ready', roles: 'control-plane', role: 'control-plane', age: '30d', version: 'v1.31.2', internalIp: '192.168.1.100', externalIp: '<none>', cpuPressure: false, memoryPressure: false, diskPressure: false, pidPressure: false, cpuCapacity: '8', memoryCapacity: '32Gi', podsCapacity: '110', cpuAllocatable: '7800m', memoryAllocatable: '30Gi' },
     { name: 'node-pool-1-worker-01', status: 'Ready', roles: 'worker', role: 'worker', age: '28d', version: 'v1.31.2', internalIp: '192.168.1.101', externalIp: '35.200.10.12', cpuPressure: false, memoryPressure: false, diskPressure: false, pidPressure: false, cpuCapacity: '16', memoryCapacity: '64Gi', podsCapacity: '110', cpuAllocatable: '15600m', memoryAllocatable: '61Gi' },
@@ -1930,7 +1932,7 @@ function getMockNodes(): K8sNode[] {
   ];
 }
 
-function getMockEvents(namespace?: string): K8sEvent[] {
+export function getMockEvents(namespace?: string): K8sEvent[] {
   const all: K8sEvent[] = [
     { id: '1', lastSeen: '4m', type: 'Normal', reason: 'ScalingReplicaSet', object: 'Deployment/api-gateway', message: 'Scaled up replica set api-gateway-5f78b9b6c to 3', namespace: 'default' },
     { id: '2', lastSeen: '12m', type: 'Normal', reason: 'Started', object: 'Pod/order-service-794c979bf4-m5xqz', message: 'Container order-service started', namespace: 'default' },
@@ -1940,7 +1942,7 @@ function getMockEvents(namespace?: string): K8sEvent[] {
   return all.filter((e) => e.namespace === namespace);
 }
 
-function getMockDashboardOverview(clusterId: string): DashboardQueryResult {
+export function getMockDashboardOverview(clusterId: string): DashboardQueryResult {
   return {
     overview: {
       totalClusters: 1,
@@ -1989,7 +1991,7 @@ function getMockDashboardOverview(clusterId: string): DashboardQueryResult {
   };
 }
 
-function getMockHPAs(namespace?: string): K8sHPA[] {
+export function getMockHPAs(namespace?: string): K8sHPA[] {
   const all: K8sHPA[] = [
     { name: 'api-gateway-hpa', namespace: 'default', reference: 'Deployment/api-gateway', minReplicas: 2, maxReplicas: 10, currentReplicas: 3, desiredReplicas: 3, metrics: 'cpu: 45% / 80%', age: '14d' },
     { name: 'order-service-hpa', namespace: 'default', reference: 'Deployment/order-service', minReplicas: 1, maxReplicas: 6, currentReplicas: 2, desiredReplicas: 2, metrics: 'cpu: 32% / 75%', age: '6d' },
@@ -1998,7 +2000,7 @@ function getMockHPAs(namespace?: string): K8sHPA[] {
   return all.filter((h) => h.namespace === namespace);
 }
 
-function getMockPVs(): K8sPV[] {
+export function getMockPVs(): K8sPV[] {
   return [
     { name: 'pvc-89b21f92-23f1-46da-a7cf-001', capacity: '50Gi', accessModes: 'ReadWriteOnce', reclaimPolicy: 'Delete', status: 'Bound', claim: 'default/postgres-data', storageClass: 'standard-rwo', age: '12d' },
     { name: 'pvc-49a37c18-91e2-41db-b2aa-002', capacity: '100Gi', accessModes: 'ReadWriteMany', reclaimPolicy: 'Retain', status: 'Bound', claim: 'monitoring/prom-storage', storageClass: 'nfs-shared', age: '28d' },
@@ -2006,7 +2008,7 @@ function getMockPVs(): K8sPV[] {
   ];
 }
 
-function getMockHelmReleases(namespace?: string): K8sHelmRelease[] {
+export function getMockHelmReleases(namespace?: string): K8sHelmRelease[] {
   const all: K8sHelmRelease[] = [
     {
       name: 'ingress-nginx',

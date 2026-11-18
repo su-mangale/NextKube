@@ -1,16 +1,13 @@
 import http from 'http';
 import net from 'net';
 import stream from 'stream';
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
 import crypto from 'crypto';
 import { WebSocketServer, WebSocket } from 'ws';
 import * as k8s from '@kubernetes/client-node';
 import { getDecryptedKubeConfig, getDecryptedKubeConfigRaw } from './cluster-vault';
 import { AUTH_COOKIE_NAME, verifySessionToken } from './jwt';
 
-let wssInstance: WebSocketServer | null = null;
+let _wssInstance: WebSocketServer | null = null;
 let isAttached = false;
 
 function parseCookies(header?: string): Record<string, string> {
@@ -34,7 +31,7 @@ export function attachTerminalWebSocket(server: http.Server): void {
   (server as any).__nextkubeTerminalWsAttached = true;
 
   const wss = new WebSocketServer({ noServer: true });
-  wssInstance = wss;
+  _wssInstance = wss;
 
   const originalEmit = server.emit;
   server.emit = function (event: string, ...args: any[]) {
@@ -130,7 +127,9 @@ async function handlePodExecSession(
       if (curr && curr.server && curr.server !== 'http://localhost:8080') {
         kc = defaultKc;
       }
-    } catch {}
+    } catch {
+      // ignore local kubeconfig resolution error
+    }
   }
 
   if (!kc) {
@@ -158,7 +157,7 @@ async function handlePodExecSession(
     } else if (!resolvedContainer && availableContainers.length > 0) {
       resolvedContainer = availableContainers[0];
     }
-  } catch (err: any) {
+  } catch {
     // If pod lookup fails, proceed with the specified container
   }
 
@@ -191,7 +190,9 @@ async function handlePodExecSession(
           }
           return;
         }
-      } catch {}
+      } catch {
+        // ignore resize parse error
+      }
     }
 
     if (stdin && !stdin.destroyed) {
@@ -204,12 +205,16 @@ async function handlePodExecSession(
   clientWs.on('close', () => {
     try {
       stdin.end();
-    } catch {}
+    } catch {
+      // ignore close error
+    }
     try {
       if (k8sSocket && typeof k8sSocket.close === 'function') {
         k8sSocket.close();
       }
-    } catch {}
+    } catch {
+      // ignore socket close error
+    }
   });
 
   // Try interactive bash or fallback to sh
@@ -253,7 +258,7 @@ async function handlePodExecSession(
         }
       }
     );
-  } catch (firstErr: any) {
+  } catch {
     // If complex shell invocation fails, try simple /bin/sh
     try {
       k8sSocket = await exec.exec(
@@ -326,7 +331,9 @@ async function handleClusterShellSession(clientWs: WebSocket, clusterId: string)
       const defaultKc = new k8s.KubeConfig();
       defaultKc.loadFromDefault();
       rawKubeconfig = defaultKc.exportConfig();
-    } catch {}
+    } catch {
+      // ignore local export error
+    }
   }
 
   if (!rawKubeconfig) {
@@ -362,7 +369,7 @@ async function handleClusterShellSession(clientWs: WebSocket, clusterId: string)
       namespace,
       body: { metadata: { name: saName, namespace } },
     });
-  } catch (err: any) {
+  } catch {
     // Ignore if already exists (409)
   }
 
@@ -374,7 +381,7 @@ async function handleClusterShellSession(clientWs: WebSocket, clusterId: string)
         roleRef: { kind: 'ClusterRole', name: 'cluster-admin', apiGroup: 'rbac.authorization.k8s.io' },
       },
     });
-  } catch (err: any) {
+  } catch {
     // Ignore if already exists (409)
   }
 
@@ -433,7 +440,9 @@ async function handleClusterShellSession(clientWs: WebSocket, clusterId: string)
         namespace,
         gracePeriodSeconds: 0,
       });
-    } catch {}
+    } catch {
+      // ignore pod delete error
+    }
   };
 
   // Wait for pod to be Running (polling with timeout)
@@ -457,7 +466,7 @@ async function handleClusterShellSession(clientWs: WebSocket, clusterId: string)
         clientWs.close();
         return;
       }
-    } catch (err: any) {
+    } catch {
       // Pod might still be registering in API
     }
 
@@ -504,7 +513,9 @@ async function handleClusterShellSession(clientWs: WebSocket, clusterId: string)
           }
           return;
         }
-      } catch {}
+      } catch {
+        // ignore resize error
+      }
     }
 
     if (stdin && !stdin.destroyed) {
@@ -515,12 +526,18 @@ async function handleClusterShellSession(clientWs: WebSocket, clusterId: string)
   let k8sSocket: any = null;
 
   const cleanup = async () => {
-    try { stdin.end(); } catch {}
+    try {
+      stdin.end();
+    } catch {
+      // ignore
+    }
     try {
       if (k8sSocket && typeof k8sSocket.close === 'function') {
         k8sSocket.close();
       }
-    } catch {}
+    } catch {
+      // ignore
+    }
     await deletePod();
   };
 
@@ -545,7 +562,7 @@ _get_comp_words_by_ref() {
   cur="\${COMP_WORDS[COMP_CWORD]}"
   prev="\${COMP_WORDS[COMP_CWORD-1]}"
   words=("\${COMP_WORDS[@]}")
-  cword=\$COMP_CWORD
+  cword=$COMP_CWORD
 }
 
 __kubectl_init_completion() {
@@ -553,7 +570,7 @@ __kubectl_init_completion() {
   cur="\${COMP_WORDS[COMP_CWORD]}"
   prev="\${COMP_WORDS[COMP_CWORD-1]}"
   words=("\${COMP_WORDS[@]}")
-  cword=\$COMP_CWORD
+  cword=$COMP_CWORD
 }
 
 # Source kubectl completion and bind to both k and kubectl
@@ -565,7 +582,7 @@ if command -v kubectl >/dev/null 2>&1; then
     cur="\${COMP_WORDS[COMP_CWORD]}"
     prev="\${COMP_WORDS[COMP_CWORD-1]}"
     words=("\${COMP_WORDS[@]}")
-    cword=\$COMP_CWORD
+    cword=$COMP_CWORD
   }
 
   __kubectl_init_completion() {
@@ -573,7 +590,7 @@ if command -v kubectl >/dev/null 2>&1; then
     cur="\${COMP_WORDS[COMP_CWORD]}"
     prev="\${COMP_WORDS[COMP_CWORD-1]}"
     words=("\${COMP_WORDS[@]}")
-    cword=\$COMP_CWORD
+    cword=$COMP_CWORD
   }
 
   complete -o default -F __start_kubectl k 2>/dev/null || true
@@ -610,7 +627,7 @@ fi`,
       stdout,
       stdin,
       true,
-      async (status: any) => {
+      async (_status: any) => {
         if (clientWs.readyState === WebSocket.OPEN) {
           clientWs.send('\r\n\x1b[90mSession closed by remote container.\x1b[0m\r\n');
           clientWs.close();

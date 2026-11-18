@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { evaluateClusterHealth, fetchEvents, fetchPods } from '@/server/k8s-client';
+import { evaluateClusterHealth, fetchEvents } from '@/server/k8s-client';
 
 export const dynamic = 'force-dynamic';
 
@@ -76,7 +76,9 @@ export async function GET(
         if (pollTimer) clearInterval(pollTimer);
         try {
           controller.close();
-        } catch {}
+        } catch {
+          // ignore closed stream
+        }
       });
     },
     cancel() {
