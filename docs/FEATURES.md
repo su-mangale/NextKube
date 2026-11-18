@@ -25,7 +25,33 @@ NextKube equips operators and platform teams with a modern dashboard that replac
 
 ---
 
-### 3. Deployments & Workload Management
+### 3. Real-Time Pod & Workload Logs Streaming
+![Pod Logs](images/08-pod-logs.png)
+- **Live Stream Viewer**: Tail container logs with color-coded severity levels (`ERROR`, `WARN`, `INFO`).
+- **Container Switching**: Seamlessly switch between multiple containers in a pod or across deployment replicas.
+- **Timeframe & Mode Filters**: Filter logs by recency (`5m`, `15m`, `30m`, `1h`, `6h`, `24h`, or previous terminated container `pre`).
+- **Timezone Adjustment**: One-click toggle between Local Browser Time and raw UTC pod timestamps.
+- **In-Memory Search**: Filter lines dynamically with match count indicators.
+
+---
+
+### 4. Interactive In-Pod Terminal (Container Exec)
+![Pod Exec](images/09-pod-exec.png)
+- **Direct Web Terminal**: In-browser interactive shell connected via WebSocket to the container's shell (`/bin/sh`, `/bin/bash`).
+- **Multi-Session Management**: Run simultaneous terminal sessions to different pods/containers with minimize, restore, and tab cycling.
+- **Draggable & Resizable Window**: Freeform cursor resizing and full-screen maximization.
+
+---
+
+### 5. KubeConsole — Ephemeral In-Cluster Shell
+![KubeConsole](images/10-kubeconsole.png)
+- **Instant Cluster CLI**: Ephemeral, secure container running inside the cluster with direct `kubectl` access.
+- **Fast Action Toolbar**: Pre-configured query buttons for instant access to `Pods`, `Nodes`, `Deployments`, `Services`, and `Events`.
+- **Pre-loaded Tooling**: Comes equipped with `kubectl`, `alias k=kubectl`, and tab auto-completion out of the box.
+
+---
+
+### 6. Deployments & Workload Management
 ![Deployments](images/03-deployments-scale.png)
 - **Workload Status**: Real-time breakdown of `Ready Replicas`, `Total Replicas`, `Up-to-Date`, and `Available` counts.
 - **Quick Controls**:
@@ -35,7 +61,7 @@ NextKube equips operators and platform teams with a modern dashboard that replac
 
 ---
 
-### 4. Interactive Replica Scaling
+### 7. Interactive Replica Scaling
 ![Scale Dialog](images/04-scale-dialog.png)
 - **Atomic Scaling**: Scale Deployments, StatefulSets, and ReplicaSets with an intuitive slider control.
 - **Zero Race Conditions**: Powered by RFC 6902 JSON Patch operations targeting the Kubernetes subresource scale API.
@@ -43,7 +69,7 @@ NextKube equips operators and platform teams with a modern dashboard that replac
 
 ---
 
-### 5. In-App YAML Manifest IDE
+### 8. In-App YAML Manifest IDE
 ![YAML Manifest Editor](images/05-yaml-manifest-editor.png)
 - **Apply & Create**: Paste or edit raw Kubernetes YAML/JSON manifests directly from the browser.
 - **Syntax Highlighting & Formatting**: Integrated manifest editor with syntax highlighting and line numbering.
@@ -51,7 +77,7 @@ NextKube equips operators and platform teams with a modern dashboard that replac
 
 ---
 
-### 6. System & Workspace Preferences
+### 9. System & Workspace Preferences
 ![System Settings](images/06-system-settings.png)
 - **Fluid Dark / Light Modes**: Switch between deep slate dark mode and clean daylight light mode with zero hydration flash.
 - **User Management**: Admin controls for managing operator credentials and roles.
@@ -59,7 +85,7 @@ NextKube equips operators and platform teams with a modern dashboard that replac
 
 ---
 
-### 7. Secure Authentication Portal
+### 10. Secure Authentication Portal
 ![Login Screen](images/07-login-screen.png)
 - **JWT Session Protection**: High-security, encrypted session tokens stored in HTTP-only cookies.
 - **Role-Based Access Control**: Pre-configured operator profiles (`admin`, `operator`, `viewer`) preventing unauthorized resource destruction.

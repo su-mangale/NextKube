@@ -31,23 +31,35 @@ Real-time visibility into pod readiness, deployment states, node availability, a
 Seamless pod inspection with inline action buttons for live logs, interactive terminal exec, and pod lifecycle restarts:
 ![Pods Management](docs/images/02-pods-management.png)
 
-### 3. Deployments & Workload Scaling
+### 3. Real-Time Pod & Workload Logs Streaming
+Multi-container log streaming with historical timeframe filters, local browser vs. UTC timezone toggles, live regex search, and instant clipboard export:
+![Pod Logs](docs/images/08-pod-logs.png)
+
+### 4. Interactive In-Pod Container Terminal (Exec Shell)
+Direct WebSocket terminal execution into any container with multi-session tabs, full-screen mode, and responsive cursor resizing:
+![Pod Exec](docs/images/09-pod-exec.png)
+
+### 5. KubeConsole — Ephemeral In-Cluster Shell
+Isolated in-cluster `kubectl` environment with tab auto-completion, quick resource query presets (`Pods`, `Nodes`, `Deployments`, `Services`, `Events`), and pre-loaded cluster administration tools:
+![KubeConsole](docs/images/10-kubeconsole.png)
+
+### 6. Deployments & Workload Scaling
 Inspect replica readiness across your clusters with atomic replica scaling and rolling update controls:
 ![Deployments Management](docs/images/03-deployments-scale.png)
 
-### 4. Interactive Replica Scaling Slider
+### 7. Interactive Replica Scaling Slider
 Scale Deployments, StatefulSets, and ReplicaSets with RFC 6902 JSON patch guarantees:
 ![Scale Dialog](docs/images/04-scale-dialog.png)
 
-### 5. In-Browser YAML Manifest IDE
+### 8. In-Browser YAML Manifest IDE
 Edit, validate, and apply Kubernetes YAML and JSON manifests directly from the floating dock:
 ![YAML Manifest Editor](docs/images/05-yaml-manifest-editor.png)
 
-### 6. Liquid Glassmorphic ActionDock & System Preferences
+### 9. Liquid Glassmorphic ActionDock & System Preferences
 Persistent theme toggling (Dark & Light modes) and multi-session window management:
 ![System Settings](docs/images/06-system-settings.png)
 
-### 7. Secure Operator Authentication Portal
+### 10. Secure Operator Authentication Portal
 Enterprise login protected by signed JWT session tokens:
 ![Login Screen](docs/images/07-login-screen.png)
 
