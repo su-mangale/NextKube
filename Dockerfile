@@ -14,6 +14,7 @@ FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+RUN mkdir -p public
 
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
@@ -27,6 +28,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
+RUN mkdir -p public
 
 # Copy standalone build
 COPY --from=builder /app/public ./public
