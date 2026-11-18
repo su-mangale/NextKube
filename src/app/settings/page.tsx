@@ -50,9 +50,11 @@ import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import LogoutIcon from '@mui/icons-material/Logout';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
+import KeyboardIcon from '@mui/icons-material/Keyboard';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useColorMode } from '@/shared/theme/theme-registry';
 import { useCurrentUser, logout } from '@/shared/hooks/use-auth';
+import { KeyboardShortcutsSettings } from '@/shared/components/KeyboardShortcutsSettings';
 
 interface UserRecord {
   username: string;
@@ -316,6 +318,12 @@ export default function SettingsPage() {
       subtitle: 'Accounts, credentials & roles',
       icon: <PeopleIcon sx={{ fontSize: 20 }} />,
       badge: `${usersList.length}`,
+    },
+    {
+      id: 2,
+      title: 'Keyboard Shortcuts',
+      subtitle: 'Custom hotkeys & quick actions',
+      icon: <KeyboardIcon sx={{ fontSize: 20 }} />,
     },
   ];
 
@@ -702,6 +710,12 @@ export default function SettingsPage() {
                     </Table>
                   </TableContainer>
                 </Paper>
+              </Box>
+            )}
+
+            {activeSection === 2 && (
+              <Box sx={{ maxWidth: 1000, mx: 'auto' }}>
+                <KeyboardShortcutsSettings />
               </Box>
             )}
           </Box>

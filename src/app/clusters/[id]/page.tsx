@@ -1,11 +1,10 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   Box,
   Typography,
-  Grid,
   Paper,
   Button,
   Divider,
@@ -37,9 +36,6 @@ import {
   ListItemIcon,
   ListItemText,
   Checkbox,
-  LinearProgress,
-  Card,
-  CardContent,
   useTheme,
 } from '@mui/material';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
@@ -124,6 +120,10 @@ import {
   YamlIdeEditor,
   YamlEditorDialog,
   AddClusterDialog,
+  SwitchClusterDialog,
+  ClusterOverviewObservability,
+  useShortcuts,
+  matchesShortcut,
   DraggablePaper,
   NoClusterView,
 } from '@/shared';
@@ -134,6 +134,9 @@ export default function ClusterDetailPage() {
   const router = useRouter();
   const muiTheme = useTheme();
   const isDark = muiTheme.palette.mode === 'dark';
+
+  // Customizable keyboard shortcuts
+  const { shortcuts } = useShortcuts();
 
   // System & Workspace Settings Dialog
   const [settingsDialogOpen, setSettingsDialogOpen] = useState<boolean>(false);
@@ -162,6 +165,8 @@ export default function ClusterDetailPage() {
 
   // Add / Connect Cluster Modal
   const [addClusterOpen, setAddClusterOpen] = useState<boolean>(false);
+  // Switch Cluster Modal
+  const [switchClusterOpen, setSwitchClusterOpen] = useState<boolean>(false);
 
   // Apply / Create Resource Manifest Modal
   const [createDialogOpen, setCreateDialogOpen] = useState<boolean>(false);
@@ -417,7 +422,7 @@ spec:
     auditLoading ||
     helmLoading;
 
-  const handleRefreshAll = () => {
+  const handleRefreshAll = useCallback(() => {
     refetchMetrics();
     refetchNamespaces();
     refetchDeployments();
@@ -449,7 +454,111 @@ spec:
     refetchHelmReleases();
     setToastSeverity('success');
     setToastMessage('Reloading cluster resources from API...');
-  };
+  }, [
+    refetchMetrics,
+    refetchNamespaces,
+    refetchDeployments,
+    refetchServices,
+    refetchPods,
+    refetchIngresses,
+    refetchConfigMaps,
+    refetchSecrets,
+    refetchNodes,
+    refetchEvents,
+    refetchDaemonSets,
+    refetchStatefulSets,
+    refetchReplicaSets,
+    refetchCronJobs,
+    refetchJobs,
+    refetchNetworkPolicies,
+    refetchPVCs,
+    refetchPVs,
+    refetchStorageClasses,
+    refetchServiceAccounts,
+    refetchRoles,
+    refetchRoleBindings,
+    refetchCRDs,
+    refetchHPAs,
+    refetchGateways,
+    refetchHTTPRoutes,
+    refetchHealth,
+    refetchAuditLogs,
+    refetchHelmReleases,
+  ]);
+
+  // Global customizable keyboard shortcuts handling
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isInput = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+
+      const consoleSc = shortcuts.find((s) => s.id === 'console')?.key;
+      const createSc = shortcuts.find((s) => s.id === 'create')?.key;
+      const addClusterSc = shortcuts.find((s) => s.id === 'addCluster')?.key;
+      const switchClusterSc = shortcuts.find((s) => s.id === 'switchCluster')?.key;
+      const settingsSc = shortcuts.find((s) => s.id === 'settings')?.key;
+      const refreshSc = shortcuts.find((s) => s.id === 'refresh')?.key;
+      const toggleDockSc = shortcuts.find((s) => s.id === 'toggleDock')?.key;
+
+      if (consoleSc && matchesShortcut(e, consoleSc)) {
+        e.preventDefault();
+        setKubectlShellOpen((prev) => {
+          if (!prev) setTopWindow('console');
+          return !prev;
+        });
+        return;
+      }
+
+      if (isInput) return;
+
+      if (createSc && matchesShortcut(e, createSc)) {
+        e.preventDefault();
+        setCreateDialogOpen(true);
+        setTopWindow('yamlCreate');
+        return;
+      }
+
+      if (addClusterSc && matchesShortcut(e, addClusterSc)) {
+        e.preventDefault();
+        setAddClusterOpen(true);
+        return;
+      }
+
+      if (switchClusterSc && matchesShortcut(e, switchClusterSc)) {
+        e.preventDefault();
+        setSwitchClusterOpen((prev) => !prev);
+        return;
+      }
+
+      if (settingsSc && matchesShortcut(e, settingsSc)) {
+        e.preventDefault();
+        setSettingsDialogOpen((prev) => {
+          if (!prev) setTopWindow('settings');
+          return !prev;
+        });
+        return;
+      }
+
+      if (refreshSc && matchesShortcut(e, refreshSc)) {
+        e.preventDefault();
+        handleRefreshAll();
+        return;
+      }
+
+      if (toggleDockSc && matchesShortcut(e, toggleDockSc)) {
+        e.preventDefault();
+        if (typeof window !== 'undefined') {
+          const current = localStorage.getItem('nextkube-dock-visible') !== 'false';
+          localStorage.setItem('nextkube-dock-visible', current ? 'false' : 'true');
+          window.dispatchEvent(new Event('nextkube-dock-visibility-change'));
+        }
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [shortcuts, handleRefreshAll]);
 
   const handleOpenRowMenu = (event: React.MouseEvent<HTMLElement>, resource: any, tab: number) => {
     event.stopPropagation();
@@ -2420,61 +2529,27 @@ spec:
             <Box sx={{ flexGrow: 1, overflowY: 'auto', borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
               {/* TAB 0: OVERVIEW */}
               {activeTab === 0 && (
-                <Box sx={{ p: 2 }}>
-                  <Typography variant="h6" sx={{ fontWeight: 800, mb: 3 }}>
-                    Cluster Health & Workloads Overview
-                  </Typography>
-
-                  <Grid container spacing={3} sx={{ mb: 4 }}>
-                    <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                      <Card variant="outlined" sx={{ borderRadius: 2 }}>
-                        <CardContent>
-                          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>PODS RUNNING</Typography>
-                          <Typography variant="h4" sx={{ fontWeight: 800, my: 1, color: 'success.main' }}>
-                            {(pods || []).filter(p => p && p.status === 'Running').length} / {(pods || []).length}
-                          </Typography>
-                          <LinearProgress variant="determinate" value={(pods || []).length > 0 ? ((pods || []).filter(p => p && p.status === 'Running').length / (pods || []).length) * 100 : 100} color="success" sx={{ height: 6, borderRadius: 1 }} />
-                        </CardContent>
-                      </Card>
-                    </Grid>
-
-                    <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                      <Card variant="outlined" sx={{ borderRadius: 2 }}>
-                        <CardContent>
-                          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>DEPLOYMENTS HEALTHY</Typography>
-                          <Typography variant="h4" sx={{ fontWeight: 800, my: 1, color: 'info.main' }}>
-                            {(deployments || []).filter(d => d && d.readyReplicas === d.replicas).length} / {(deployments || []).length}
-                          </Typography>
-                          <LinearProgress variant="determinate" value={(deployments || []).length > 0 ? ((deployments || []).filter(d => d && d.readyReplicas === d.replicas).length / (deployments || []).length) * 100 : 100} color="info" sx={{ height: 6, borderRadius: 1 }} />
-                        </CardContent>
-                      </Card>
-                    </Grid>
-
-                    <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                      <Card variant="outlined" sx={{ borderRadius: 2 }}>
-                        <CardContent>
-                          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>NODES READY</Typography>
-                          <Typography variant="h4" sx={{ fontWeight: 800, my: 1, color: 'primary.main' }}>
-                            {(nodes || []).filter(n => n && n.status === 'Ready').length} / {(nodes || []).length}
-                          </Typography>
-                          <LinearProgress variant="determinate" value={(nodes || []).length > 0 ? ((nodes || []).filter(n => n && n.status === 'Ready').length / (nodes || []).length) * 100 : 100} color="primary" sx={{ height: 6, borderRadius: 1 }} />
-                        </CardContent>
-                      </Card>
-                    </Grid>
-
-                    <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                      <Card variant="outlined" sx={{ borderRadius: 2 }}>
-                        <CardContent>
-                          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>TOTAL NAMESPACES</Typography>
-                          <Typography variant="h4" sx={{ fontWeight: 800, my: 1, color: 'secondary.main' }}>
-                            {namespaces.length}
-                          </Typography>
-                          <LinearProgress variant="determinate" value={100} color="secondary" sx={{ height: 6, borderRadius: 1 }} />
-                        </CardContent>
-                      </Card>
-                    </Grid>
-                  </Grid>
-                </Box>
+                <ClusterOverviewObservability
+                  clusterMeta={clusterMeta}
+                  dashboardInfo={dashboardInfo}
+                  healthData={healthData}
+                  pods={pods}
+                  deployments={deployments}
+                  daemonSets={daemonSets}
+                  statefulSets={statefulSets}
+                  nodes={nodes}
+                  events={events}
+                  namespaces={namespaces}
+                  pvcs={pvcs}
+                  services={services}
+                  ingresses={ingresses}
+                  onNavigateTab={(tab) => setActiveTab(tab)}
+                  onOpenConsole={() => {
+                    setKubectlShellOpen(true);
+                    setTopWindow('console');
+                  }}
+                  onRefresh={handleRefreshAll}
+                />
               )}
 
               {/* TAB 1: PODS */}
@@ -4023,6 +4098,22 @@ spec:
         }}
       />
 
+      {/* Switch Cluster Dialog */}
+      <SwitchClusterDialog
+        open={switchClusterOpen}
+        onClose={() => setSwitchClusterOpen(false)}
+        currentClusterId={effectiveClusterId}
+        clusters={availableClusters}
+        onSelectCluster={(cid) => {
+          setSwitchClusterOpen(false);
+          router.push(`/clusters/${cid}`);
+        }}
+        onAddCluster={() => {
+          setSwitchClusterOpen(false);
+          setAddClusterOpen(true);
+        }}
+      />
+
       {/* YAML IDE Editor Dialog */}
       <YamlEditorDialog
         open={yamlDialogOpen}
@@ -5030,6 +5121,8 @@ spec:
           setCreateDialogOpen(true);
           setTopWindow('yamlCreate');
         }}
+        onAddCluster={() => setAddClusterOpen(true)}
+        onSwitchCluster={() => setSwitchClusterOpen(true)}
         onOpenSettings={() => {
           if (!settingsDialogOpen) {
             setSettingsDialogOpen(true);

@@ -44,10 +44,12 @@ import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import KeyRoundedIcon from '@mui/icons-material/KeyRounded';
 import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
+import KeyboardIcon from '@mui/icons-material/Keyboard';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useColorMode } from '@/shared/theme/theme-registry';
 import { useCurrentUser } from '@/shared/hooks/use-auth';
 import { DraggablePaper } from './DraggablePaper';
+import { KeyboardShortcutsSettings } from './KeyboardShortcutsSettings';
 
 export interface SettingsDialogProps {
   open: boolean;
@@ -337,6 +339,11 @@ export function SettingsDialog({ open, onClose, zIndex, onFocus }: SettingsDialo
                 </Box>
               }
             />
+            <Tab
+              icon={<KeyboardIcon sx={{ fontSize: 18 }} />}
+              iconPosition="start"
+              label="Keyboard Shortcuts"
+            />
           </Tabs>
         </Box>
 
@@ -591,6 +598,12 @@ export function SettingsDialog({ open, onClose, zIndex, onFocus }: SettingsDialo
                   </TableBody>
                 </Table>
               </TableContainer>
+            </Box>
+          )}
+
+          {activeTab === 2 && (
+            <Box sx={{ p: 1 }}>
+              <KeyboardShortcutsSettings />
             </Box>
           )}
         </DialogContent>

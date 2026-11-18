@@ -28,6 +28,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CheckIcon from '@mui/icons-material/Check';
 import { DraggablePaper } from './DraggablePaper';
+import { copyTextToClipboard } from '../utils/clipboard';
 
 import '@xterm/xterm/css/xterm.css';
 import type { Terminal } from '@xterm/xterm';
@@ -345,8 +346,11 @@ export function KubectlTerminalDrawer({
         outputText = termInstanceRef.current.getSelection();
         termInstanceRef.current.clearSelection();
       }
-      if (outputText) {
-        await navigator.clipboard.writeText(outputText);
+      if (!outputText) {
+        outputText = '(No terminal output to copy)';
+      }
+      const copied = await copyTextToClipboard(outputText);
+      if (copied) {
         setOutputCopied(true);
         setTimeout(() => setOutputCopied(false), 2000);
       }

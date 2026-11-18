@@ -20,6 +20,7 @@ import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CheckIcon from '@mui/icons-material/Check';
 import { DraggablePaper } from './DraggablePaper';
+import { copyTextToClipboard } from '../utils/clipboard';
 
 // Import Xterm.js styles globally in the client bundle
 import '@xterm/xterm/css/xterm.css';
@@ -86,8 +87,11 @@ export function TerminalWindow({
         outputText = termInstanceRef.current.getSelection();
         termInstanceRef.current.clearSelection();
       }
-      if (outputText) {
-        await navigator.clipboard.writeText(outputText);
+      if (!outputText) {
+        outputText = '(No terminal output to copy)';
+      }
+      const copied = await copyTextToClipboard(outputText);
+      if (copied) {
         setCopiedOutput(true);
         setTimeout(() => setCopiedOutput(false), 2000);
       }

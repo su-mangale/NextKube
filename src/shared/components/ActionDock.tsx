@@ -15,6 +15,9 @@ import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
 import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded';
+import CloudUploadRoundedIcon from '@mui/icons-material/CloudUploadRounded';
+import SwapHorizRoundedIcon from '@mui/icons-material/SwapHorizRounded';
+import { useShortcuts } from '../utils/shortcuts';
 
 export interface ExecSessionItem {
   id: string;
@@ -30,6 +33,8 @@ export interface ActionDockProps {
   isConsoleOpen: boolean;
   isConsoleConnected?: boolean;
   onCreateResource: () => void;
+  onAddCluster?: () => void;
+  onSwitchCluster?: () => void;
   onOpenSettings: () => void;
   onLogout: () => void;
   // Multi-session Exec Support
@@ -48,6 +53,8 @@ export function ActionDock({
   isConsoleOpen,
   isConsoleConnected = false,
   onCreateResource,
+  onAddCluster,
+  onSwitchCluster,
   onOpenSettings,
   onLogout,
   execSessions,
@@ -59,6 +66,7 @@ export function ActionDock({
 }: ActionDockProps) {
   const muiTheme = useTheme();
   const isDark = muiTheme.palette.mode === 'dark';
+  const { getShortcutKey } = useShortcuts();
 
   const [isDockVisible, setIsDockVisible] = useState<boolean>(true);
 
@@ -201,7 +209,7 @@ export function ActionDock({
         }}
       >
         {/* 1. KubeConsole Interactive Shell */}
-        <Tooltip title="KubeConsole • Interactive Cluster Shell (Ctrl+\)" placement="left" arrow>
+        <Tooltip title={`KubeConsole • Interactive Cluster Shell (${getShortcutKey('console') || 'Ctrl+\\'})`} placement="left" arrow>
           <Box sx={{ position: 'relative' }}>
             <IconButton
               onClick={onToggleConsole}
@@ -392,7 +400,7 @@ export function ActionDock({
         ) : null}
 
         {/* 3. Apply / Create Resource Manifest */}
-        <Tooltip title="Apply / Create Resource Manifest" placement="left" arrow>
+        <Tooltip title={`Apply / Create Resource Manifest (${getShortcutKey('create') || 'Alt+A'})`} placement="left" arrow>
           <IconButton
             onClick={onCreateResource}
             sx={{
@@ -419,8 +427,68 @@ export function ActionDock({
           </IconButton>
         </Tooltip>
 
-        {/* 4. Workspace & System Settings */}
-        <Tooltip title="System & Workspace Settings" placement="left" arrow>
+        {/* 4. Add / Attach Cluster via Kubeconfig */}
+        {onAddCluster && (
+          <Tooltip title={`Add Cluster • Attach via Kubeconfig (${getShortcutKey('addCluster') || 'Alt+N'})`} placement="left" arrow>
+            <IconButton
+              onClick={onAddCluster}
+              sx={{
+                width: 42,
+                height: 42,
+                borderRadius: '50%',
+                bgcolor: isDark ? 'rgba(6, 182, 212, 0.15)' : 'rgba(8, 145, 178, 0.12)',
+                color: isDark ? '#22d3ee' : '#0891b2',
+                border: '1px solid',
+                borderColor: isDark ? 'rgba(6, 182, 212, 0.28)' : 'rgba(8, 145, 178, 0.22)',
+                transition: 'all 0.24s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                '&:hover': {
+                  transform: 'scale(1.15)',
+                  bgcolor: isDark ? 'rgba(6, 182, 212, 0.25)' : 'rgba(8, 145, 178, 0.2)',
+                  borderColor: isDark ? '#22d3ee' : '#0891b2',
+                  boxShadow: '0 4px 14px rgba(8, 145, 178, 0.35)',
+                },
+                '&:active': {
+                  transform: 'scale(0.95)',
+                },
+              }}
+            >
+              <CloudUploadRoundedIcon sx={{ fontSize: 21 }} />
+            </IconButton>
+          </Tooltip>
+        )}
+
+        {/* 5. Switch Cluster Quick Selector */}
+        {onSwitchCluster && (
+          <Tooltip title={`Switch Cluster (${getShortcutKey('switchCluster') || 'Alt+S'})`} placement="left" arrow>
+            <IconButton
+              onClick={onSwitchCluster}
+              sx={{
+                width: 42,
+                height: 42,
+                borderRadius: '50%',
+                bgcolor: isDark ? 'rgba(245, 158, 11, 0.15)' : 'rgba(217, 119, 6, 0.12)',
+                color: isDark ? '#fbbf24' : '#d97706',
+                border: '1px solid',
+                borderColor: isDark ? 'rgba(245, 158, 11, 0.28)' : 'rgba(217, 119, 6, 0.22)',
+                transition: 'all 0.24s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                '&:hover': {
+                  transform: 'scale(1.15)',
+                  bgcolor: isDark ? 'rgba(245, 158, 11, 0.25)' : 'rgba(217, 119, 6, 0.2)',
+                  borderColor: isDark ? '#fbbf24' : '#d97706',
+                  boxShadow: '0 4px 14px rgba(217, 119, 6, 0.35)',
+                },
+                '&:active': {
+                  transform: 'scale(0.95)',
+                },
+              }}
+            >
+              <SwapHorizRoundedIcon sx={{ fontSize: 22 }} />
+            </IconButton>
+          </Tooltip>
+        )}
+
+        {/* 6. Workspace & System Settings */}
+        <Tooltip title={`System & Workspace Settings (${getShortcutKey('settings') || 'Alt+,'})`} placement="left" arrow>
           <IconButton
             onClick={onOpenSettings}
             sx={{
@@ -484,8 +552,8 @@ export function ActionDock({
           </IconButton>
         </Tooltip>
 
-        {/* 6. Collapse Dock Button */}
-        <Tooltip title="Hide Dock" placement="left" arrow>
+        {/* 7. Collapse Dock Button */}
+        <Tooltip title={`Hide Dock (${getShortcutKey('toggleDock') || 'Alt+D'})`} placement="left" arrow>
           <IconButton
             onClick={handleHideDock}
             size="small"
