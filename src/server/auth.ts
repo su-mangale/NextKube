@@ -18,8 +18,12 @@ const STORE_DIR = path.join(process.cwd(), '.nextkube');
 const USERS_FILE = path.join(STORE_DIR, 'users.json');
 
 function ensureStoreDir(): void {
-  if (!fs.existsSync(STORE_DIR)) {
-    fs.mkdirSync(STORE_DIR, { recursive: true });
+  try {
+    if (!fs.existsSync(STORE_DIR)) {
+      fs.mkdirSync(STORE_DIR, { recursive: true });
+    }
+  } catch (err) {
+    console.warn('[NextKube Auth] Could not ensure store directory:', err);
   }
 }
 
@@ -29,34 +33,37 @@ function ensureStoreDir(): void {
  */
 export function readStoredUsers(): StoredUser[] {
   ensureStoreDir();
-  if (!fs.existsSync(USERS_FILE)) {
-    const defaultUsername = process.env.NEXTKUBE_ADMIN_USER || 'admin';
-    const defaultPassword = process.env.NEXTKUBE_ADMIN_PASSWORD || 'admin123';
-    const salt = bcrypt.genSaltSync(10);
-    const hash = bcrypt.hashSync(defaultPassword, salt);
-    const initialUsers: StoredUser[] = [
-      {
-        username: defaultUsername,
-        hash,
-        role: 'admin',
-        displayName: 'Cluster Administrator',
-        createdAt: new Date().toISOString(),
-      },
-    ];
-    try {
-      fs.writeFileSync(USERS_FILE, JSON.stringify(initialUsers, null, 2), 'utf-8');
-    } catch (err) {
-      console.warn('[NextKube Auth] Failed to write initial users.json:', err);
-    }
-    return initialUsers;
-  }
+  const defaultUsername = process.env.NEXTKUBE_ADMIN_USER || 'admin';
+  const defaultPassword = process.env.NEXTKUBE_ADMIN_PASSWORD || 'admin123';
+  const salt = bcrypt.genSaltSync(10);
+  const hash = bcrypt.hashSync(defaultPassword, salt);
+  const fallbackAdmin: StoredUser = {
+    username: defaultUsername,
+    hash,
+    role: 'admin',
+    displayName: 'Cluster Administrator',
+    createdAt: new Date().toISOString(),
+  };
 
   try {
+    if (!fs.existsSync(USERS_FILE)) {
+      try {
+        fs.writeFileSync(USERS_FILE, JSON.stringify([fallbackAdmin], null, 2), 'utf-8');
+      } catch (err) {
+        console.warn('[NextKube Auth] Failed to write initial users.json to disk (filesystem may be read-only):', err);
+      }
+      return [fallbackAdmin];
+    }
+
     const raw = fs.readFileSync(USERS_FILE, 'utf-8');
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return parsed;
+    }
+    return [fallbackAdmin];
   } catch (err) {
-    console.error('[NextKube Auth] Error reading users.json:', err);
-    return [];
+    console.warn('[NextKube Auth] Error reading users.json from disk, falling back to in-memory admin:', err);
+    return [fallbackAdmin];
   }
 }
 
@@ -64,8 +71,12 @@ export function readStoredUsers(): StoredUser[] {
  * Writes users list back to .nextkube/users.json.
  */
 export function writeStoredUsers(users: StoredUser[]): void {
-  ensureStoreDir();
-  fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), 'utf-8');
+  try {
+    ensureStoreDir();
+    fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('[NextKube Auth] Error writing users.json to disk:', err);
+  }
 }
 
 // In-Memory Rate Limiting Tracker

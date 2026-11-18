@@ -121,8 +121,12 @@ function decryptPayload(ciphertext: string, ivHex: string, tagHex: string): Encr
 }
 
 function ensureStoreDir(): void {
-  if (!fs.existsSync(STORE_DIR)) {
-    fs.mkdirSync(STORE_DIR, { recursive: true });
+  try {
+    if (!fs.existsSync(STORE_DIR)) {
+      fs.mkdirSync(STORE_DIR, { recursive: true });
+    }
+  } catch (err) {
+    console.warn('[ClusterVault] Could not ensure store directory:', err);
   }
 }
 
@@ -157,8 +161,12 @@ function readStoredClusters(): StoredClusterRecord[] {
 }
 
 function writeStoredClusters(records: StoredClusterRecord[]): void {
-  ensureStoreDir();
-  fs.writeFileSync(STORE_FILE, JSON.stringify(records, null, 2), 'utf-8');
+  try {
+    ensureStoreDir();
+    fs.writeFileSync(STORE_FILE, JSON.stringify(records, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('[ClusterVault] Failed to write store file to disk:', err);
+  }
 }
 
 /**

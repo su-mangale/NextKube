@@ -71,11 +71,20 @@ export async function POST(req: NextRequest) {
       user: authResult.user,
     });
 
+    // Detect if connection is HTTPS or behind SSL termination.
+    // Plain HTTP access (e.g. http://10.21.10.222) MUST NOT set secure: true,
+    // otherwise browsers will drop the cookie.
+    const forwardedProto = req.headers.get('x-forwarded-proto');
+    const isHttps = req.nextUrl.protocol === 'https:' || forwardedProto === 'https';
+    const isLocalhost =
+      req.nextUrl.hostname === 'localhost' || req.nextUrl.hostname === '127.0.0.1';
+    const isSecure = isHttps && !isLocalhost;
+
     response.cookies.set({
       name: AUTH_COOKIE_NAME,
       value: token,
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isSecure,
       sameSite: 'lax',
       path: '/',
       maxAge: 12 * 60 * 60, // 12 hours
@@ -83,9 +92,9 @@ export async function POST(req: NextRequest) {
 
     return response;
   } catch (error: any) {
-    console.error('[NextKube Auth API] Login Error:', error);
+    console.error('[NextKube Auth API] Login Error:', error?.message || error, error?.stack);
     return NextResponse.json(
-      { error: 'Internal authentication server error.' },
+      { error: error?.message || 'Internal authentication server error.' },
       { status: 500 }
     );
   }
