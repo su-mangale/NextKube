@@ -22,6 +22,7 @@ import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import AltRouteRoundedIcon from '@mui/icons-material/AltRouteRounded';
 import AutoModeRoundedIcon from '@mui/icons-material/AutoModeRounded';
 import MonetizationOnRoundedIcon from '@mui/icons-material/MonetizationOnRounded';
+import ShieldRoundedIcon from '@mui/icons-material/ShieldRounded';
 import { useShortcuts } from '../utils/shortcuts';
 
 export interface ExecSessionItem {
@@ -47,6 +48,7 @@ export interface ActionDockProps {
   onToggleConfigDrift?: () => void;
   driftedCount?: number;
   onToggleCostAllocation?: () => void;
+  onToggleSecurityPosture?: () => void;
   onAddCluster?: () => void;
   onSwitchCluster?: () => void;
   onOpenSettings?: () => void;
@@ -76,6 +78,7 @@ export function ActionDock({
   onToggleConfigDrift,
   driftedCount = 0,
   onToggleCostAllocation,
+  onToggleSecurityPosture,
   onAddCluster,
   onSwitchCluster,
   onOpenSettings,
@@ -667,6 +670,36 @@ export function ActionDock({
               }}
             >
               <MonetizationOnRoundedIcon sx={{ fontSize: 21 }} />
+            </IconButton>
+          </Tooltip>
+        )}
+
+        {/* Security Posture & CIS Benchmark Scanner */}
+        {onToggleSecurityPosture && (
+          <Tooltip title="Security Posture & CIS Benchmark Audit" placement="left" arrow>
+            <IconButton
+              onClick={onToggleSecurityPosture}
+              sx={{
+                width: 42,
+                height: 42,
+                borderRadius: '50%',
+                bgcolor: isDark ? 'rgba(239, 68, 68, 0.15)' : 'rgba(220, 38, 38, 0.12)',
+                color: isDark ? '#f87171' : '#dc2626',
+                border: '1px solid',
+                borderColor: isDark ? 'rgba(239, 68, 68, 0.28)' : 'rgba(220, 38, 38, 0.22)',
+                transition: 'all 0.24s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                '&:hover': {
+                  transform: 'scale(1.15)',
+                  bgcolor: isDark ? 'rgba(239, 68, 68, 0.25)' : 'rgba(220, 38, 38, 0.2)',
+                  borderColor: isDark ? '#f87171' : '#dc2626',
+                  boxShadow: '0 4px 14px rgba(239, 68, 68, 0.35)',
+                },
+                '&:active': {
+                  transform: 'scale(0.95)',
+                },
+              }}
+            >
+              <ShieldRoundedIcon sx={{ fontSize: 21 }} />
             </IconButton>
           </Tooltip>
         )}

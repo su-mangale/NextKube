@@ -53,6 +53,7 @@ export interface ClusterSidebarNavProps {
   onOpenConfigDrift?: () => void;
   onOpenDiff?: () => void;
   onOpenCostAllocation?: () => void;
+  onOpenSecurityPosture?: () => void;
   resourceCounts?: Partial<Record<number, number>>;
   shortcutSettingsKey?: string;
   activePortForwardsCount?: number;
@@ -80,6 +81,7 @@ export function ClusterSidebarNav({
   onOpenConfigDrift,
   onOpenDiff,
   onOpenCostAllocation,
+  onOpenSecurityPosture,
   resourceCounts = {},
   shortcutSettingsKey = 'Alt+,',
   activePortForwardsCount = 0,
@@ -565,6 +567,36 @@ export function ClusterSidebarNav({
               </Typography>
             </Box>
             <Chip label="FinOps" size="small" color="success" variant="outlined" sx={{ height: 16, fontSize: '0.62rem', fontWeight: 700 }} />
+          </Box>
+        )}
+
+        {onOpenSecurityPosture && (
+          <Box
+            onClick={onOpenSecurityPosture}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              px: 1.5,
+              py: 0.7,
+              mx: 0.8,
+              borderRadius: 1.8,
+              cursor: 'pointer',
+              color: 'text.secondary',
+              transition: 'all 0.15s ease',
+              '&:hover': {
+                bgcolor: isDark ? 'rgba(239, 68, 68, 0.1)' : 'rgba(239, 68, 68, 0.08)',
+                color: isDark ? '#f87171' : '#dc2626',
+              },
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2 }}>
+              <SecurityRoundedIcon sx={{ fontSize: 18, color: '#ef4444' }} />
+              <Typography variant="body2" sx={{ fontSize: '0.81rem', fontWeight: 600 }}>
+                Security & CIS Audit
+              </Typography>
+            </Box>
+            <Chip label="CIS" size="small" color="error" variant="outlined" sx={{ height: 16, fontSize: '0.62rem', fontWeight: 700 }} />
           </Box>
         )}
       </Box>

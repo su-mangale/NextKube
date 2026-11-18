@@ -52,6 +52,9 @@ import {
   drainNodeResource,
   fetchClusterFinOpsSummary,
   applyWorkloadRightSizing,
+  fetchClusterSecurityPosture,
+  checkRbacPermission,
+  fetchRbacMatrix,
 } from '@/server/k8s-client';
 import {
   startPortForwardSession,
@@ -400,6 +403,18 @@ export async function GET(
       return NextResponse.json(data);
     }
 
+    // Phase 5: Security Posture & CIS Benchmark: /security/posture
+    if (segment0 === 'security') {
+      const data = await fetchClusterSecurityPosture(clusterId);
+      return NextResponse.json(data);
+    }
+
+    // Phase 5: RBAC Matrix: /rbac/matrix
+    if (segment0 === 'rbac' && resource.length >= 2 && resource[1] === 'matrix') {
+      const data = await fetchRbacMatrix(clusterId, namespace);
+      return NextResponse.json(data);
+    }
+
     return NextResponse.json({ error: `Unhandled resource path: ${resource.join('/')}` }, { status: 404 });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
@@ -565,6 +580,22 @@ export async function POST(
         errorMessage: res.success ? undefined : res.message,
       });
       return NextResponse.json(res, { status: res.success ? 200 : 400 });
+    }
+
+    // Phase 5: RBAC "Can I do X?" Policy Check: /rbac/can-i
+    if (segment0 === 'rbac' && resource.length >= 2 && resource[1] === 'can-i') {
+      const res = await checkRbacPermission(clusterId, body);
+      await recordAuditEvent({
+        clusterId,
+        user,
+        action: 'CUSTOM_OPERATION',
+        resourceType: 'RBAC',
+        resourceName: body.subjectName || 'subject',
+        namespace: body.namespace || namespace,
+        details: `RBAC check: ${body.verb} ${body.resource} -> ${res.allowed ? 'ALLOWED' : 'DENIED'}`,
+        status: 'SUCCESS',
+      });
+      return NextResponse.json(res);
     }
 
     // Helm Install from App Store: /helm/install

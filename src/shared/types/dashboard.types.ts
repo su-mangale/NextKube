@@ -951,6 +951,86 @@ export interface ApplyRightSizingRequest {
   memoryLimit: string;
 }
 
+// ==========================================
+// Phase 5: Security Posture, CIS Benchmark & RBAC Matrix Types
+// ==========================================
+
+export type SecuritySeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+
+export interface SecurityViolation {
+  id: string;
+  ruleId: string;
+  severity: SecuritySeverity;
+  category: 'Privilege & Isolation' | 'Runtime Hardening' | 'Resource Limits' | 'Network & Auth';
+  workloadName: string;
+  namespace: string;
+  kind: 'Deployment' | 'StatefulSet' | 'DaemonSet' | 'Pod';
+  containerName?: string;
+  title: string;
+  message: string;
+  remediation: string;
+  cisSection?: string;
+}
+
+export interface SecurityCategoryScore {
+  category: string;
+  score: number; // 0 - 100
+  passedChecks: number;
+  totalChecks: number;
+}
+
+export interface SecurityPostureReport {
+  clusterId: string;
+  score: number; // 0 - 100
+  grade: 'A+' | 'A' | 'B' | 'C' | 'D' | 'F';
+  criticalCount: number;
+  highCount: number;
+  mediumCount: number;
+  lowCount: number;
+  scannedWorkloadsCount: number;
+  violations: SecurityViolation[];
+  categoryScores: SecurityCategoryScore[];
+  updatedAt: string;
+}
+
+export interface RbacCheckRequest {
+  subjectKind: 'User' | 'Group' | 'ServiceAccount';
+  subjectName: string;
+  namespace: string;
+  verb: 'get' | 'list' | 'watch' | 'create' | 'update' | 'patch' | 'delete' | 'deletecollection' | '*';
+  resource: string; // e.g. pods, deployments, secrets, *
+  subresource?: string; // e.g. exec, log, status
+}
+
+export interface RbacCheckResult {
+  allowed: boolean;
+  reason: string;
+  subject: string;
+  verb: string;
+  resource: string;
+  namespace: string;
+  matchedRule?: string;
+  grantingRole?: string;
+  grantingBinding?: string;
+}
+
+export interface RbacMatrixPermission {
+  resource: string;
+  verbs: string[];
+}
+
+export interface RbacMatrixEntry {
+  id: string;
+  subjectName: string;
+  subjectKind: 'ServiceAccount' | 'User' | 'Group';
+  namespace: string;
+  roleName: string;
+  roleKind: 'Role' | 'ClusterRole';
+  bindingName: string;
+  permissions: RbacMatrixPermission[];
+}
+
+
 
 
 

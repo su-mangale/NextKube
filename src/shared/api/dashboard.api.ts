@@ -127,6 +127,10 @@ import {
   ClusterFinOpsSummary,
   ResourceCostRates,
   ApplyRightSizingRequest,
+  SecurityPostureReport,
+  RbacCheckRequest,
+  RbacCheckResult,
+  RbacMatrixEntry,
 } from '../types/dashboard.types';
 
 // Fetch Namespaces
@@ -1914,6 +1918,63 @@ export const applyRightSizingRecommendation = async (
     throw new Error(data.error || data.message || 'Failed to apply right-sizing patch');
   }
   return res.json();
+};
+
+// ==========================================
+// Phase 5: Security Posture & RBAC Matrix API
+// ==========================================
+
+export const fetchClusterSecurityPosture = async (clusterId: string): Promise<SecurityPostureReport> => {
+  const baseUrl = getBackendUrl();
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/security/posture`);
+  if (!res.ok) throw new Error('Failed to retrieve cluster security posture report');
+  return res.json();
+};
+
+export const useSecurityPosture = (clusterId: string, options?: { enabled?: boolean }) => {
+  return useQuery({
+    queryKey: ['securityPosture', clusterId],
+    queryFn: () => fetchClusterSecurityPosture(clusterId),
+    enabled: options?.enabled !== undefined ? options.enabled && !!clusterId : !!clusterId,
+    staleTime: 60000,
+  });
+};
+
+export const checkRbacCanI = async (
+  clusterId: string,
+  req: RbacCheckRequest
+): Promise<RbacCheckResult> => {
+  const baseUrl = getBackendUrl();
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/rbac/can-i`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Failed to execute RBAC policy check');
+  }
+  return res.json();
+};
+
+export const fetchRbacMatrix = async (
+  clusterId: string,
+  namespace?: string
+): Promise<RbacMatrixEntry[]> => {
+  const baseUrl = getBackendUrl();
+  const query = namespace ? `?namespace=${encodeURIComponent(namespace)}` : '';
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/rbac/matrix${query}`);
+  if (!res.ok) throw new Error('Failed to retrieve RBAC matrix');
+  return res.json();
+};
+
+export const useRbacMatrix = (clusterId: string, namespace?: string, options?: { enabled?: boolean }) => {
+  return useQuery({
+    queryKey: ['rbacMatrix', clusterId, namespace],
+    queryFn: () => fetchRbacMatrix(clusterId, namespace),
+    enabled: options?.enabled !== undefined ? options.enabled && !!clusterId : !!clusterId,
+    staleTime: 60000,
+  });
 };
 
 

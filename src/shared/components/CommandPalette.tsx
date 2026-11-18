@@ -30,6 +30,7 @@ import AltRouteIcon from '@mui/icons-material/AltRouteRounded';
 import CompareArrowsIcon from '@mui/icons-material/CompareArrowsRounded';
 import AutoModeIcon from '@mui/icons-material/AutoModeRounded';
 import MonetizationOnIcon from '@mui/icons-material/MonetizationOnRounded';
+import ShieldIcon from '@mui/icons-material/ShieldRounded';
 import { useColorMode } from '../theme/theme-registry';
 
 export interface CommandPaletteProps {
@@ -47,6 +48,7 @@ export interface CommandPaletteProps {
   onOpenDiff?: () => void;
   onOpenConfigDrift?: () => void;
   onOpenCostAllocation?: () => void;
+  onOpenSecurityPosture?: () => void;
   onOpenSettings?: () => void;
   onRefresh?: () => void;
   customItems?: Array<{
@@ -84,6 +86,7 @@ export function CommandPalette({
   onOpenDiff,
   onOpenConfigDrift,
   onOpenCostAllocation,
+  onOpenSecurityPosture,
   onOpenSettings,
   onRefresh,
   customItems = [],
@@ -213,6 +216,19 @@ export function CommandPalette({
     });
 
     list.push({
+      id: 'action-security-posture',
+      title: 'Security Posture & CIS Benchmark Audit',
+      subtitle: 'Audit Pod Security Standards (PSS), CIS violations & interactive RBAC policy tester',
+      category: 'Actions',
+      shortcut: 'Alt+S',
+      icon: <ShieldIcon fontSize="small" sx={{ color: '#ef4444' }} />,
+      action: () => {
+        onClose();
+        onOpenSecurityPosture?.();
+      },
+    });
+
+    list.push({
       id: 'action-theme',
       title: `Switch to ${isDark ? 'Light' : 'Dark'} Mode`,
       subtitle: 'Toggle theme display appearance',
@@ -313,6 +329,7 @@ export function CommandPalette({
     onOpenDiff,
     onOpenConfigDrift,
     onOpenCostAllocation,
+    onOpenSecurityPosture,
     onOpenSettings,
     onRefresh,
     onSelectNamespace,

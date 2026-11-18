@@ -145,6 +145,7 @@ import {
   cordonNode,
   NodeDrainDialog,
   CostAllocationDrawer,
+  SecurityPostureDrawer,
   useShortcuts,
   matchesShortcut,
   DraggablePaper,
@@ -280,6 +281,9 @@ spec:
 
   // Phase 4: FinOps Cost Allocation & Right-Sizing state
   const [costAllocationOpen, setCostAllocationOpen] = useState<boolean>(false);
+
+  // Phase 5: Security Posture, CIS Benchmark & RBAC Matrix state
+  const [securityPostureOpen, setSecurityPostureOpen] = useState<boolean>(false);
 
   // Logs states
   const [logsDialogOpen, setLogsDialogOpen] = useState<boolean>(false);
@@ -2622,6 +2626,7 @@ spec:
           onOpenConfigDrift={() => setConfigDriftOpen(true)}
           onOpenDiff={() => handleOpenDiff(selectedResource || (deployments.length > 0 ? deployments[0] : null))}
           onOpenCostAllocation={() => setCostAllocationOpen(true)}
+          onOpenSecurityPosture={() => setSecurityPostureOpen(true)}
           resourceCounts={resourceCounts}
           shortcutSettingsKey={shortcuts.find((s) => s.id === 'settings')?.key || 'Alt+,'}
           activePortForwardsCount={activePortForwards.length}
@@ -5667,6 +5672,7 @@ spec:
         onToggleConfigDrift={() => setConfigDriftOpen((prev) => !prev)}
         driftedCount={driftedCount}
         onToggleCostAllocation={() => setCostAllocationOpen((prev) => !prev)}
+        onToggleSecurityPosture={() => setSecurityPostureOpen((prev) => !prev)}
         onCreateResource={() => {
           setCreateDialogOpen(true);
           setTopWindow('yamlCreate');
@@ -5730,6 +5736,7 @@ spec:
         }}
         onOpenConfigDrift={() => setConfigDriftOpen(true)}
         onOpenCostAllocation={() => setCostAllocationOpen(true)}
+        onOpenSecurityPosture={() => setSecurityPostureOpen(true)}
         onOpenSettings={() => {
           setSettingsDialogOpen(true);
           setTopWindow('settings');
@@ -5796,6 +5803,14 @@ spec:
           refetchStatefulSets();
           refetchDaemonSets();
         }}
+      />
+
+      {/* Phase 5: Security Posture & CIS Benchmark Audit Drawer */}
+      <SecurityPostureDrawer
+        open={securityPostureOpen}
+        onClose={() => setSecurityPostureOpen(false)}
+        clusterId={effectiveClusterId}
+        namespaces={namespaces}
       />
 
       {/* AI Root-Cause Diagnostic Dialog */}

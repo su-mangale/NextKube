@@ -33,6 +33,7 @@ export { default as YamlDiffViewerDialog, type YamlDiffViewerDialogProps } from 
 export { default as ConfigDriftDrawer, type ConfigDriftDrawerProps } from './components/ConfigDriftDrawer';
 export { default as NodeDrainDialog, type NodeDrainDialogProps } from './components/NodeDrainDialog';
 export { default as CostAllocationDrawer, type CostAllocationDrawerProps } from './components/CostAllocationDrawer';
+export { default as SecurityPostureDrawer, type SecurityPostureDrawerProps } from './components/SecurityPostureDrawer';
 export { DraggablePaper, type DraggablePaperProps } from './components/DraggablePaper';
 export { NoClusterView } from './components/NoClusterView';
 export * from './components/QueryProvider';
