@@ -167,6 +167,13 @@ export interface K8sIngress {
   age: string;
 }
 
+export interface K8sIngressClass {
+  name: string;
+  controller: string;
+  isDefault: boolean;
+  age: string;
+}
+
 export interface K8sConfigMap {
   name: string;
   namespace: string;

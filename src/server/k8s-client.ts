@@ -7,6 +7,7 @@ import {
   K8sDeployment,
   K8sService,
   K8sIngress,
+  K8sIngressClass,
   K8sConfigMap,
   K8sSecret,
   K8sNode,
@@ -392,6 +393,26 @@ export async function fetchIngresses(clusterId: string, namespace?: string): Pro
     });
   } catch (err) {
     console.warn(`[K8sClient] fetchIngresses failed for ${clusterId}:`, err);
+    return [];
+  }
+}
+
+export async function fetchIngressClasses(clusterId: string): Promise<K8sIngressClass[]> {
+  const clients = getClusterApiClients(clusterId);
+  if (!clients) {
+    return [];
+  }
+
+  try {
+    const res = await clients.networkingApi.listIngressClass({});
+    return res.items.map((ic) => ({
+      name: ic.metadata?.name || 'unknown',
+      controller: ic.spec?.controller || 'unknown',
+      isDefault: ic.metadata?.annotations?.['ingressclass.kubernetes.io/is-default-class'] === 'true',
+      age: formatAge(ic.metadata?.creationTimestamp),
+    }));
+  } catch (err) {
+    console.warn(`[K8sClient] fetchIngressClasses failed for ${clusterId}:`, err);
     return [];
   }
 }
@@ -819,12 +840,12 @@ export async function fetchPVs(clusterId: string): Promise<K8sPV[]> {
     const res = await clients.coreApi.listPersistentVolume({});
     return res.items.map((pv) => ({
       name: pv.metadata?.name || 'unknown-pv',
-      capacity: pv.spec?.capacity?.storage || '10Gi',
+      capacity: pv.spec?.capacity?.storage || '-',
       accessModes: (pv.spec?.accessModes || ['ReadWriteOnce']).join(', '),
       reclaimPolicy: pv.spec?.persistentVolumeReclaimPolicy || 'Retain',
       status: (pv.status?.phase as 'Available' | 'Bound' | 'Released') || 'Bound',
       claim: pv.spec?.claimRef ? `${pv.spec.claimRef.namespace}/${pv.spec.claimRef.name}` : '<none>',
-      storageClass: pv.spec?.storageClassName || 'standard',
+      storageClass: pv.spec?.storageClassName || '<none>',
       age: formatAge(pv.metadata?.creationTimestamp),
     }));
   } catch (err) {
@@ -1279,6 +1300,8 @@ export async function deleteResourceObject(
         await clients.batchApi.deleteNamespacedJob({ name, namespace });
       } else if (norm.includes('cronjob')) {
         await clients.batchApi.deleteNamespacedCronJob({ name, namespace });
+      } else if (norm.includes('ingressclass')) {
+        await clients.networkingApi.deleteIngressClass({ name });
       } else if (norm.includes('ingress')) {
         await clients.networkingApi.deleteNamespacedIngress({ name, namespace });
       } else if (norm.includes('networkpolicy')) {
@@ -1533,6 +1556,8 @@ export async function fetchResourceYamlContent(
         resObj = await clients.coreApi.readNamespacedServiceAccount({ name, namespace });
       } else if (norm.includes('service')) {
         resObj = await clients.coreApi.readNamespacedService({ name, namespace });
+      } else if (norm.includes('ingressclass')) {
+        resObj = await clients.networkingApi.readIngressClass({ name });
       } else if (norm.includes('ingress')) {
         resObj = await clients.networkingApi.readNamespacedIngress({ name, namespace });
       } else if (norm.includes('networkpolicy')) {

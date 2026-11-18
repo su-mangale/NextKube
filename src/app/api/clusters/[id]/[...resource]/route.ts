@@ -10,6 +10,7 @@ import {
   fetchCronJobs,
   fetchServices,
   fetchIngresses,
+  fetchIngressClasses,
   fetchNetworkPolicies,
   fetchConfigMaps,
   fetchSecrets,
@@ -128,7 +129,7 @@ export async function GET(
     }
 
     // 8. PVs (PersistentVolumes)
-    if (segment0 === 'pvs' || segment0 === 'persistentvolumes') {
+    if (segment0 === 'pvs' || segment0 === 'pv' || segment0 === 'persistentvolumes' || segment0 === 'persistentvolume' || segment0 === 'persistent-volumes' || segment0 === 'persistent-volume') {
       const data = await fetchPVs(clusterId);
       return NextResponse.json(data);
     }
@@ -164,17 +165,17 @@ export async function GET(
     }
 
     // 12. Native Kubernetes Workloads & Resources
-    if (segment0 === 'daemonsets' || segment0 === 'daemonset') {
+    if (segment0 === 'daemonsets' || segment0 === 'daemonset' || segment0 === 'daemon-sets' || segment0 === 'daemon-set') {
       const data = await fetchDaemonSets(clusterId, namespace);
       return NextResponse.json(data);
     }
 
-    if (segment0 === 'statefulsets' || segment0 === 'statefulset') {
+    if (segment0 === 'statefulsets' || segment0 === 'statefulset' || segment0 === 'stateful-sets' || segment0 === 'stateful-set') {
       const data = await fetchStatefulSets(clusterId, namespace);
       return NextResponse.json(data);
     }
 
-    if (segment0 === 'replicasets' || segment0 === 'replicaset') {
+    if (segment0 === 'replicasets' || segment0 === 'replicaset' || segment0 === 'replica-sets' || segment0 === 'replica-set') {
       const data = await fetchReplicaSets(clusterId, namespace);
       return NextResponse.json(data);
     }
@@ -184,7 +185,7 @@ export async function GET(
       return NextResponse.json(data);
     }
 
-    if (segment0 === 'cronjobs' || segment0 === 'cronjob') {
+    if (segment0 === 'cronjobs' || segment0 === 'cronjob' || segment0 === 'cron-jobs' || segment0 === 'cron-job') {
       const data = await fetchCronJobs(clusterId, namespace);
       return NextResponse.json(data);
     }
@@ -194,12 +195,17 @@ export async function GET(
       return NextResponse.json(data);
     }
 
-    if (segment0 === 'networkpolicies' || segment0 === 'networkpolicy') {
+    if (segment0 === 'ingressclasses' || segment0 === 'ingressclass' || segment0 === 'ingress-classes' || segment0 === 'ingress-class') {
+      const data = await fetchIngressClasses(clusterId);
+      return NextResponse.json(data);
+    }
+
+    if (segment0 === 'networkpolicies' || segment0 === 'networkpolicy' || segment0 === 'network-policies' || segment0 === 'network-policy') {
       const data = await fetchNetworkPolicies(clusterId, namespace);
       return NextResponse.json(data);
     }
 
-    if (segment0 === 'configmaps' || segment0 === 'configmap') {
+    if (segment0 === 'configmaps' || segment0 === 'configmap' || segment0 === 'config-maps' || segment0 === 'config-map') {
       const data = await fetchConfigMaps(clusterId, namespace);
       return NextResponse.json(data);
     }
@@ -209,17 +215,17 @@ export async function GET(
       return NextResponse.json(data);
     }
 
-    if (segment0 === 'pvcs' || segment0 === 'pvc' || segment0 === 'persistentvolumeclaims' || segment0 === 'persistentvolumeclaim') {
+    if (segment0 === 'pvcs' || segment0 === 'pvc' || segment0 === 'persistentvolumeclaims' || segment0 === 'persistentvolumeclaim' || segment0 === 'persistent-volume-claims' || segment0 === 'persistent-volume-claim') {
       const data = await fetchPVCs(clusterId, namespace);
       return NextResponse.json(data);
     }
 
-    if (segment0 === 'storageclasses' || segment0 === 'storageclass') {
+    if (segment0 === 'storageclasses' || segment0 === 'storageclass' || segment0 === 'storage-classes' || segment0 === 'storage-class') {
       const data = await fetchStorageClasses(clusterId);
       return NextResponse.json(data);
     }
 
-    if (segment0 === 'serviceaccounts' || segment0 === 'serviceaccount') {
+    if (segment0 === 'serviceaccounts' || segment0 === 'serviceaccount' || segment0 === 'service-accounts' || segment0 === 'service-account') {
       const data = await fetchServiceAccounts(clusterId, namespace);
       return NextResponse.json(data);
     }
@@ -229,12 +235,12 @@ export async function GET(
       return NextResponse.json(data);
     }
 
-    if (segment0 === 'rolebindings' || segment0 === 'rolebinding' || segment0 === 'clusterrolebindings' || segment0 === 'clusterrolebinding') {
+    if (segment0 === 'rolebindings' || segment0 === 'rolebinding' || segment0 === 'clusterrolebindings' || segment0 === 'clusterrolebinding' || segment0 === 'role-bindings' || segment0 === 'role-binding') {
       const data = await fetchRoleBindings(clusterId, namespace);
       return NextResponse.json(data);
     }
 
-    if (segment0 === 'crds' || segment0 === 'crd' || segment0 === 'customresourcedefinitions' || segment0 === 'customresourcedefinition') {
+    if (segment0 === 'crds' || segment0 === 'crd' || segment0 === 'customresourcedefinitions' || segment0 === 'customresourcedefinition' || segment0 === 'custom-resource-definitions' || segment0 === 'custom-resource-definition') {
       const data = await fetchCRDs(clusterId);
       return NextResponse.json(data);
     }

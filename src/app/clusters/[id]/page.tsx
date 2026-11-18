@@ -2995,7 +2995,7 @@ users:
                   </TableHead>
                   <TableBody>
                     {paginate(filteredIngresses).map((ing) => (
-                      <TableRow key={ing.name} hover>
+                      <TableRow key={`${ing.namespace}-${ing.name}`} hover>
                         <TableCell sx={{ fontWeight: 700 }}>{ing.name}</TableCell>
                         <TableCell><Chip label={ing.namespace} size="small" sx={{ fontSize: '0.65rem', borderRadius: 1 }} /></TableCell>
                         <TableCell>{ing.ingressClass}</TableCell>
@@ -3023,7 +3023,7 @@ users:
                   </TableHead>
                   <TableBody>
                     {paginate(filteredNetworkPolicies).map((np) => (
-                      <TableRow key={np.name} hover>
+                      <TableRow key={`${np.namespace}-${np.name}`} hover>
                         <TableCell sx={{ fontWeight: 700 }}>{np.name}</TableCell>
                         <TableCell><Chip label={np.namespace} size="small" sx={{ fontSize: '0.65rem', borderRadius: 1 }} /></TableCell>
                         <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{np.policyTypes}</TableCell>
@@ -3049,7 +3049,7 @@ users:
                   </TableHead>
                   <TableBody>
                     {paginate(filteredConfigMaps).map((cm) => (
-                      <TableRow key={cm.name} hover>
+                      <TableRow key={`${cm.namespace}-${cm.name}`} hover>
                         <TableCell sx={{ fontWeight: 700 }}>{cm.name}</TableCell>
                         <TableCell><Chip label={cm.namespace} size="small" sx={{ fontSize: '0.65rem', borderRadius: 1 }} /></TableCell>
                         <TableCell>{cm.keysCount ?? cm.dataCount} keys</TableCell>
@@ -3076,7 +3076,7 @@ users:
                   </TableHead>
                   <TableBody>
                     {paginate(filteredSecrets).map((sec) => (
-                      <TableRow key={sec.name} hover>
+                      <TableRow key={`${sec.namespace}-${sec.name}`} hover>
                         <TableCell sx={{ fontWeight: 700 }}>{sec.name}</TableCell>
                         <TableCell><Chip label={sec.namespace} size="small" sx={{ fontSize: '0.65rem', borderRadius: 1 }} /></TableCell>
                         <TableCell sx={{ fontSize: '0.75rem' }}>{sec.type}</TableCell>
@@ -3106,7 +3106,7 @@ users:
                   </TableHead>
                   <TableBody>
                     {paginate(filteredPVCs).map((pvc) => (
-                      <TableRow key={pvc.name} hover>
+                      <TableRow key={`${pvc.namespace}-${pvc.name}`} hover>
                         <TableCell sx={{ fontWeight: 700 }}>{pvc.name}</TableCell>
                         <TableCell><Chip label={pvc.namespace} size="small" sx={{ fontSize: '0.65rem', borderRadius: 1 }} /></TableCell>
                         <TableCell><Chip label={pvc.status} size="small" color={pvc.status === 'Bound' ? 'success' : 'warning'} sx={{ fontSize: '0.65rem' }} /></TableCell>
@@ -3220,7 +3220,7 @@ users:
                   </TableHead>
                   <TableBody>
                     {paginate(filteredServiceAccounts).map((sa) => (
-                      <TableRow key={sa.name} hover>
+                      <TableRow key={`${sa.namespace}-${sa.name}`} hover>
                         <TableCell sx={{ fontWeight: 700 }}>{sa.name}</TableCell>
                         <TableCell><Chip label={sa.namespace} size="small" sx={{ fontSize: '0.65rem', borderRadius: 1 }} /></TableCell>
                         <TableCell>{sa.secretsCount}</TableCell>
@@ -3246,7 +3246,7 @@ users:
                   </TableHead>
                   <TableBody>
                     {paginate(filteredRoles).map((r) => (
-                      <TableRow key={r.name} hover>
+                      <TableRow key={`${r.namespace}-${r.name}`} hover>
                         <TableCell sx={{ fontWeight: 700 }}>{r.name}</TableCell>
                         <TableCell>{r.isClusterRole ? <Chip label="ClusterRole" color="secondary" size="small" sx={{ fontSize: '0.65rem' }} /> : <Chip label={r.namespace} size="small" sx={{ fontSize: '0.65rem' }} />}</TableCell>
                         <TableCell>{r.rulesCount} rules</TableCell>
@@ -3272,7 +3272,7 @@ users:
                   </TableHead>
                   <TableBody>
                     {paginate(filteredRoleBindings).map((rb) => (
-                      <TableRow key={rb.name} hover>
+                      <TableRow key={`${rb.namespace}-${rb.name}`} hover>
                         <TableCell sx={{ fontWeight: 700 }}>{rb.name}</TableCell>
                         <TableCell>{rb.isClusterBinding ? <Chip label="ClusterRoleBinding" color="secondary" size="small" sx={{ fontSize: '0.65rem' }} /> : <Chip label={rb.namespace} size="small" sx={{ fontSize: '0.65rem' }} />}</TableCell>
                         <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{rb.roleRef || '-'}</TableCell>
