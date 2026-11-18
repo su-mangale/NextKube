@@ -66,6 +66,9 @@ import StorefrontIcon from '@mui/icons-material/Storefront';
 import AltRouteIcon from '@mui/icons-material/AltRouteRounded';
 import CompareArrowsIcon from '@mui/icons-material/CompareArrowsRounded';
 import AutoModeIcon from '@mui/icons-material/AutoModeRounded';
+import BlockIcon from '@mui/icons-material/BlockRounded';
+import LockOpenIcon from '@mui/icons-material/LockOpenRounded';
+import CleaningServicesIcon from '@mui/icons-material/CleaningServicesRounded';
 import { useQueryClient } from '@tanstack/react-query';
 
 import {
@@ -139,6 +142,8 @@ import {
   fetchRolloutHistory,
   K8sRolloutRevision,
   ConfigDriftItem,
+  cordonNode,
+  NodeDrainDialog,
   useShortcuts,
   matchesShortcut,
   DraggablePaper,
@@ -266,6 +271,11 @@ spec:
 
   // Phase 2: Configuration Drift Inspector state
   const [configDriftOpen, setConfigDriftOpen] = useState<boolean>(false);
+
+  // Phase 3: Zero-Downtime Node Maintenance state
+  const [drainDialogOpen, setDrainDialogOpen] = useState<boolean>(false);
+  const [drainNodeTarget, setDrainNodeTarget] = useState<any | null>(null);
+  const [cordonLoading, setCordonLoading] = useState<Record<string, boolean>>({});
 
   // Logs states
   const [logsDialogOpen, setLogsDialogOpen] = useState<boolean>(false);
@@ -1524,6 +1534,29 @@ spec:
     setDiffViewerOpen(true);
   };
 
+  const handleToggleCordonNode = async (node: any) => {
+    if (!node?.name) return;
+    const targetUnschedulable = !node.unschedulable;
+    setCordonLoading((prev) => ({ ...prev, [node.name]: true }));
+    try {
+      const res = await cordonNode(id, node.name, targetUnschedulable);
+      setToastSeverity('success');
+      setToastMessage(res.message);
+      refetchNodes();
+    } catch (err: any) {
+      setToastSeverity('error');
+      setToastMessage(err?.message || 'Failed to update node scheduling state.');
+    } finally {
+      setCordonLoading((prev) => ({ ...prev, [node.name]: false }));
+    }
+  };
+
+  const handleOpenDrainNode = (node: any) => {
+    if (!node?.name) return;
+    setDrainNodeTarget(node);
+    setDrainDialogOpen(true);
+  };
+
   const handleOpenImageDialog = (resourceOverride?: any) => {
     const resource = resourceOverride || selectedResource;
     if (!resource) return;
@@ -2298,17 +2331,41 @@ spec:
             </Tooltip>
           )}
 
-          {/* Tab 15: Nodes -> SSH Terminal */}
+          {/* Tab 15: Nodes -> SSH Terminal, Cordon & Drain */}
           {tab === 15 && (
-            <Tooltip title="Node SSH Terminal">
-              <IconButton
-                size="small"
-                onClick={() => handleOpenExec(resource)}
-                sx={{ color: 'text.secondary', '&:hover': { color: 'info.main', bgcolor: 'action.hover' } }}
-              >
-                <TerminalIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
+            <>
+              <Tooltip title={resource.unschedulable ? 'Uncordon Node (Allow Scheduling)' : 'Cordon Node (Mark Unschedulable)'}>
+                <IconButton
+                  size="small"
+                  disabled={Boolean(cordonLoading[resource.name])}
+                  onClick={() => handleToggleCordonNode(resource)}
+                  sx={{
+                    color: resource.unschedulable ? 'warning.main' : 'text.secondary',
+                    '&:hover': { color: resource.unschedulable ? 'success.main' : 'warning.main', bgcolor: 'action.hover' },
+                  }}
+                >
+                  {resource.unschedulable ? <LockOpenIcon fontSize="small" /> : <BlockIcon fontSize="small" />}
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Drain Node (Evict Workloads Safely)">
+                <IconButton
+                  size="small"
+                  onClick={() => handleOpenDrainNode(resource)}
+                  sx={{ color: 'text.secondary', '&:hover': { color: 'error.main', bgcolor: 'action.hover' } }}
+                >
+                  <CleaningServicesIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Node SSH Terminal">
+                <IconButton
+                  size="small"
+                  onClick={() => handleOpenExec(resource)}
+                  sx={{ color: 'text.secondary', '&:hover': { color: 'info.main', bgcolor: 'action.hover' } }}
+                >
+                  <TerminalIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </>
           )}
 
           {/* Tab 20: Events -> Describe */}
@@ -3382,15 +3439,26 @@ spec:
                         <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{node.version}</TableCell>
                         <TableCell>{node.age}</TableCell>
                         <TableCell>
-                          {!node.cpuPressure && !node.memoryPressure && !node.diskPressure && !node.pidPressure ? (
-                            <Chip label="Healthy" size="small" color="success" variant="outlined" sx={{ fontSize: '0.6rem', height: 18 }} />
-                          ) : (
-                            <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                              {node.memoryPressure && <Chip label="MemPressure" size="small" color="warning" sx={{ fontSize: '0.6rem', height: 18 }} />}
-                              {node.diskPressure && <Chip label="DiskPressure" size="small" color="error" sx={{ fontSize: '0.6rem', height: 18 }} />}
-                              {node.pidPressure && <Chip label="PIDPressure" size="small" color="error" sx={{ fontSize: '0.6rem', height: 18 }} />}
-                            </Box>
-                          )}
+                          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
+                            {node.unschedulable && (
+                              <Chip
+                                label="SchedulingDisabled"
+                                size="small"
+                                color="warning"
+                                variant="filled"
+                                sx={{ fontSize: '0.6rem', height: 18, fontWeight: 700 }}
+                              />
+                            )}
+                            {!node.cpuPressure && !node.memoryPressure && !node.diskPressure && !node.pidPressure ? (
+                              <Chip label="Healthy" size="small" color="success" variant="outlined" sx={{ fontSize: '0.6rem', height: 18 }} />
+                            ) : (
+                              <>
+                                {node.memoryPressure && <Chip label="MemPressure" size="small" color="warning" sx={{ fontSize: '0.6rem', height: 18 }} />}
+                                {node.diskPressure && <Chip label="DiskPressure" size="small" color="error" sx={{ fontSize: '0.6rem', height: 18 }} />}
+                                {node.pidPressure && <Chip label="PIDPressure" size="small" color="error" sx={{ fontSize: '0.6rem', height: 18 }} />}
+                              </>
+                            )}
+                          </Box>
                         </TableCell>
                         {renderRowActionCell(node, 15)}
                       </TableRow>
@@ -4280,6 +4348,46 @@ spec:
                 <ClearIcon fontSize="small" color="error" />
               </ListItemIcon>
               <ListItemText primary="Uninstall Release" />
+            </MenuItem>
+          </>
+        )}
+
+        {/* Node Specific: Cordon/Uncordon & Drain */}
+        {rowMenuTab === 15 && (
+          <>
+            <MenuItem
+              dense
+              disabled={Boolean(cordonLoading[rowMenuResource?.name])}
+              onClick={() => {
+                const res = rowMenuResource;
+                handleCloseRowMenu();
+                handleToggleCordonNode(res);
+              }}
+            >
+              <ListItemIcon>
+                {rowMenuResource?.unschedulable ? (
+                  <LockOpenIcon fontSize="small" sx={{ color: '#10b981' }} />
+                ) : (
+                  <BlockIcon fontSize="small" sx={{ color: '#f59e0b' }} />
+                )}
+              </ListItemIcon>
+              <ListItemText
+                primary={rowMenuResource?.unschedulable ? 'Uncordon Node' : 'Cordon Node (Mark Unschedulable)'}
+              />
+            </MenuItem>
+            <MenuItem
+              dense
+              onClick={() => {
+                const res = rowMenuResource;
+                handleCloseRowMenu();
+                handleOpenDrainNode(res);
+              }}
+              sx={{ color: 'error.main' }}
+            >
+              <ListItemIcon>
+                <CleaningServicesIcon fontSize="small" color="error" />
+              </ListItemIcon>
+              <ListItemText primary="Drain Node Maintenance" />
             </MenuItem>
           </>
         )}
@@ -5655,6 +5763,18 @@ spec:
         clusterId={effectiveClusterId}
         namespace={selectedNamespace || 'default'}
         onOpenDiff={handleOpenDriftManifest}
+      />
+
+      {/* Phase 3: Zero-Downtime Node Maintenance Dialog */}
+      <NodeDrainDialog
+        open={drainDialogOpen}
+        onClose={() => setDrainDialogOpen(false)}
+        clusterId={effectiveClusterId}
+        nodeName={drainNodeTarget?.name || ''}
+        isCordoned={Boolean(drainNodeTarget?.unschedulable)}
+        onSuccess={() => {
+          refetchNodes();
+        }}
       />
 
       {/* AI Root-Cause Diagnostic Dialog */}

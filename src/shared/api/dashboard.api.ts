@@ -121,6 +121,9 @@ import {
   CreatePortForwardRequest,
   PortForwardTargetOption,
   ConfigDriftSummary,
+  NodeDrainOptions,
+  NodeDrainResult,
+  NodeDrainPreview,
 } from '../types/dashboard.types';
 
 // Fetch Namespaces
@@ -635,6 +638,54 @@ export const useNodes = (clusterId: string) => {
     queryFn: () => fetchNodes(clusterId),
     enabled: !!clusterId,
   });
+};
+
+// Phase 3: Cordon / Uncordon Node
+export const cordonNode = async (
+  clusterId: string,
+  nodeName: string,
+  unschedulable: boolean
+): Promise<{ success: boolean; message: string }> => {
+  const baseUrl = getBackendUrl();
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/nodes/${nodeName}/cordon`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ unschedulable }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.message || data.error || 'Failed to update node scheduling state');
+  }
+  return await res.json();
+};
+
+// Phase 3: Fetch Node Drain Preview
+export const fetchNodeDrainPreview = async (
+  clusterId: string,
+  nodeName: string
+): Promise<NodeDrainPreview> => {
+  const baseUrl = getBackendUrl();
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/nodes/${nodeName}/drain-preview`);
+  if (!res.ok) throw new Error('Failed to retrieve node drain preview');
+  return await res.json();
+};
+
+// Phase 3: Zero-Downtime Node Drain
+export const drainNode = async (
+  clusterId: string,
+  options: NodeDrainOptions
+): Promise<NodeDrainResult> => {
+  const baseUrl = getBackendUrl();
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/nodes/${options.nodeName}/drain`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(options),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.message || data.error || 'Failed to drain node');
+  }
+  return await res.json();
 };
 
 export const useGitOps = (clusterId: string) => {

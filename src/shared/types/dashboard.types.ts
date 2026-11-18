@@ -205,11 +205,52 @@ export interface K8sNode {
   memoryPressure: boolean;
   diskPressure: boolean;
   pidPressure: boolean;
+  unschedulable?: boolean;
+  taints?: Array<{ key: string; value?: string; effect: string }>;
+  conditions?: Array<{ type: string; status: string; reason?: string; message?: string }>;
+  podCount?: number;
   cpuCapacity?: string;
   memoryCapacity?: string;
   podsCapacity?: string;
   cpuAllocatable?: string;
   memoryAllocatable?: string;
+}
+
+export interface NodeDrainOptions {
+  nodeName: string;
+  ignoreDaemonSets?: boolean;
+  deleteEmptyDirData?: boolean;
+  force?: boolean;
+  gracePeriodSeconds?: number;
+  timeoutSeconds?: number;
+}
+
+export interface NodeDrainProgressItem {
+  timestamp: string;
+  podName?: string;
+  namespace?: string;
+  status: 'cordoned' | 'evicting' | 'evicted' | 'skipped' | 'failed' | 'completed';
+  message: string;
+}
+
+export interface NodeDrainResult {
+  success: boolean;
+  message: string;
+  totalPods: number;
+  evictedPods: number;
+  skippedPods: number;
+  failedPods: number;
+  logs: NodeDrainProgressItem[];
+}
+
+export interface NodeDrainPreview {
+  nodeName: string;
+  isCordoned: boolean;
+  totalPods: number;
+  evictablePods: Array<{ name: string; namespace: string; kind: string }>;
+  daemonSetPods: Array<{ name: string; namespace: string }>;
+  emptyDirPods: Array<{ name: string; namespace: string }>;
+  standalonePods: Array<{ name: string; namespace: string }>;
 }
 
 export interface K8sEvent {

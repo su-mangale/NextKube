@@ -47,6 +47,9 @@ import {
   rollbackWorkloadRevision,
   fetchConfigDriftAnalysis,
   syncDriftedWorkload,
+  cordonNodeResource,
+  fetchNodeDrainPreview,
+  drainNodeResource,
 } from '@/server/k8s-client';
 import {
   startPortForwardSession,
@@ -172,6 +175,11 @@ export async function GET(
 
     // 5. Nodes
     if (segment0 === 'nodes') {
+      if (resource.length >= 3 && resource[2] === 'drain-preview') {
+        const nodeName = resource[1];
+        const preview = await fetchNodeDrainPreview(clusterId, nodeName);
+        return NextResponse.json(preview);
+      }
       const data = await fetchNodes(clusterId);
       return NextResponse.json(data);
     }
@@ -483,6 +491,44 @@ export async function POST(
         resourceName: workloadName,
         namespace: targetNs || namespace,
         details: 'Synchronized configuration drift via zero-downtime rolling restart',
+        status: res.success ? 'SUCCESS' : 'FAILED',
+        errorMessage: res.success ? undefined : res.message,
+      });
+      return NextResponse.json(res, { status: res.success ? 200 : 400 });
+    }
+
+    // Phase 3: Node Cordon / Uncordon: /nodes/[name]/cordon
+    if (segment0 === 'nodes' && resource.length >= 3 && resource[2] === 'cordon') {
+      const nodeName = resource[1];
+      const unschedulable = body.unschedulable !== undefined ? Boolean(body.unschedulable) : true;
+      const res = await cordonNodeResource(clusterId, nodeName, unschedulable);
+      await recordAuditEvent({
+        clusterId,
+        user,
+        action: 'CUSTOM_OPERATION',
+        resourceType: 'Node',
+        resourceName: nodeName,
+        namespace: '-',
+        details: unschedulable ? 'Cordoned node (scheduling disabled)' : 'Uncordoned node (scheduling enabled)',
+        status: res.success ? 'SUCCESS' : 'FAILED',
+        errorMessage: res.success ? undefined : res.message,
+      });
+      return NextResponse.json(res, { status: res.success ? 200 : 400 });
+    }
+
+    // Phase 3: Zero-Downtime Node Drain: /nodes/[name]/drain
+    if (segment0 === 'nodes' && resource.length >= 3 && resource[2] === 'drain') {
+      const nodeName = resource[1];
+      const options = { nodeName, ...body };
+      const res = await drainNodeResource(clusterId, options);
+      await recordAuditEvent({
+        clusterId,
+        user,
+        action: 'CUSTOM_OPERATION',
+        resourceType: 'Node',
+        resourceName: nodeName,
+        namespace: '-',
+        details: `Drained node: ${res.evictedPods} evicted, ${res.skippedPods} skipped`,
         status: res.success ? 'SUCCESS' : 'FAILED',
         errorMessage: res.success ? undefined : res.message,
       });
