@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import {
   Drawer,
+  Paper,
   Box,
   Typography,
   IconButton,
@@ -42,6 +43,7 @@ export interface ConfigDriftDrawerProps {
   onClose: () => void;
   clusterId: string;
   namespace?: string;
+  embedded?: boolean;
   onOpenDiff?: (item: ConfigDriftItem) => void;
 }
 
@@ -50,6 +52,7 @@ export default function ConfigDriftDrawer({
   onClose,
   clusterId,
   namespace = 'default',
+  embedded = false,
   onOpenDiff,
 }: ConfigDriftDrawerProps) {
   const muiTheme = useTheme();
@@ -66,7 +69,7 @@ export default function ConfigDriftDrawer({
     isLoading,
     refetch,
     isRefetching,
-  } = useConfigDrift(clusterId, namespace, { enabled: open });
+  } = useConfigDrift(clusterId, namespace, { enabled: open || embedded });
 
   const toggleExpandPods = (id: string) => {
     setExpandedPods((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -114,24 +117,10 @@ export default function ConfigDriftDrawer({
     });
   }, [driftData, statusFilter, searchQuery]);
 
-  return (
-    <Drawer
-      anchor="right"
-      open={open}
-      onClose={onClose}
-      slotProps={{
-        paper: {
-          sx: {
-            width: { xs: '100vw', sm: '580px', md: '640px' },
-            bgcolor: isDark ? '#080c14' : '#ffffff',
-            backgroundImage: 'none',
-            borderLeft: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.1)'}`,
-            display: 'flex',
-            flexDirection: 'column',
-          },
-        },
-      }}
-    >
+  if (!open && !embedded) return null;
+
+  const bodyContent = (
+    <>
       {/* Header */}
       <Box
         sx={{
@@ -180,9 +169,11 @@ export default function ConfigDriftDrawer({
               />
             </IconButton>
           </Tooltip>
-          <IconButton size="small" onClick={onClose}>
-            <CloseRoundedIcon fontSize="small" />
-          </IconButton>
+          {!embedded && (
+            <IconButton size="small" onClick={onClose}>
+              <CloseRoundedIcon fontSize="small" />
+            </IconButton>
+          )}
         </Box>
       </Box>
 
@@ -528,6 +519,49 @@ export default function ConfigDriftDrawer({
           })
         )}
       </Box>
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <Paper
+        elevation={0}
+        sx={{
+          flexGrow: 1,
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          bgcolor: isDark ? 'rgba(15, 23, 42, 0.6)' : '#ffffff',
+          borderRadius: 2.5,
+          border: '1px solid',
+          borderColor: 'divider',
+          overflow: 'hidden',
+        }}
+      >
+        {bodyContent}
+      </Paper>
+    );
+  }
+
+  return (
+    <Drawer
+      anchor="right"
+      open={open}
+      onClose={onClose}
+      slotProps={{
+        paper: {
+          sx: {
+            width: { xs: '100vw', sm: '580px', md: '640px' },
+            bgcolor: isDark ? '#080c14' : '#ffffff',
+            backgroundImage: 'none',
+            borderLeft: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.1)'}`,
+            display: 'flex',
+            flexDirection: 'column',
+          },
+        },
+      }}
+    >
+      {bodyContent}
     </Drawer>
   );
 }

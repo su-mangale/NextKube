@@ -3,9 +3,9 @@
 import React, { useState, useMemo } from 'react';
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
   DialogActions,
+  Paper,
   Box,
   Typography,
   Button,
@@ -53,6 +53,7 @@ export interface YamlDiffViewerDialogProps {
   currentYaml?: string;
   previousYaml?: string;
   title?: string;
+  embedded?: boolean;
   onRollback?: (revision: number) => Promise<void> | void;
   rollbackLoading?: boolean;
 }
@@ -67,6 +68,7 @@ export default function YamlDiffViewerDialog({
   currentYaml = '',
   previousYaml = '',
   title,
+  embedded = false,
   onRollback,
   rollbackLoading = false,
 }: YamlDiffViewerDialogProps) {
@@ -170,35 +172,12 @@ export default function YamlDiffViewerDialog({
   const removedBorder = isDark ? 'rgba(239, 68, 68, 0.4)' : '#dc2626';
   const removedText = isDark ? '#f87171' : '#b91c1c';
 
-  return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      maxWidth={maximized ? false : 'lg'}
-      fullWidth
-      slotProps={{
-        paper: {
-          sx: {
-            width: maximized ? '98vw' : '92vw',
-            maxWidth: maximized ? '98vw' : '1240px',
-            height: maximized ? '95vh' : '86vh',
-            maxHeight: maximized ? '95vh' : '86vh',
-            display: 'flex',
-            flexDirection: 'column',
-            bgcolor: isDark ? '#090d16' : '#ffffff',
-            backgroundImage: 'none',
-            borderRadius: maximized ? 1 : 3,
-            border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.1)'}`,
-            boxShadow: isDark
-              ? '0 24px 48px -12px rgba(0,0,0,0.85)'
-              : '0 20px 40px -10px rgba(0,0,0,0.15)',
-            overflow: 'hidden',
-          },
-        },
-      }}
-    >
+  if (!open && !embedded) return null;
+
+  const bodyContent = (
+    <>
       {/* Header */}
-      <DialogTitle
+      <Box
         sx={{
           p: 2,
           px: 3,
@@ -255,17 +234,21 @@ export default function YamlDiffViewerDialog({
             </IconButton>
           </Tooltip>
 
-          <Tooltip title={maximized ? 'Restore Dialog' : 'Maximize'}>
-            <IconButton size="small" onClick={() => setMaximized(!maximized)}>
-              {maximized ? <FullscreenExitRoundedIcon fontSize="small" /> : <FullscreenRoundedIcon fontSize="small" />}
-            </IconButton>
-          </Tooltip>
+          {!embedded && (
+            <Tooltip title={maximized ? 'Restore Dialog' : 'Maximize'}>
+              <IconButton size="small" onClick={() => setMaximized(!maximized)}>
+                {maximized ? <FullscreenExitRoundedIcon fontSize="small" /> : <FullscreenRoundedIcon fontSize="small" />}
+              </IconButton>
+            </Tooltip>
+          )}
 
-          <IconButton size="small" onClick={onClose} sx={{ color: 'text.secondary' }}>
-            <CloseRoundedIcon fontSize="small" />
-          </IconButton>
+          {!embedded && (
+            <IconButton size="small" onClick={onClose} sx={{ color: 'text.secondary' }}>
+              <CloseRoundedIcon fontSize="small" />
+            </IconButton>
+          )}
         </Box>
-      </DialogTitle>
+      </Box>
 
       {/* Control Toolbar */}
       <Box
@@ -733,24 +716,78 @@ export default function YamlDiffViewerDialog({
       </DialogContent>
 
       {/* Footer */}
-      <DialogActions
+      {!embedded && (
+        <DialogActions
+          sx={{
+            px: 3,
+            py: 1.5,
+            bgcolor: isDark ? '#0f1422' : '#f8fafc',
+            borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)'}`,
+            justifyContent: 'space-between',
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+              Tip: Press <b>ESC</b> to close. Rollbacks are safely applied as progressive zero-downtime rolling updates.
+            </Typography>
+          </Box>
+          <Button onClick={onClose} sx={{ fontWeight: 700, color: 'text.secondary' }}>
+            Close
+          </Button>
+        </DialogActions>
+      )}
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <Paper
+        elevation={0}
         sx={{
-          px: 3,
-          py: 1.5,
-          bgcolor: isDark ? '#0f1422' : '#f8fafc',
-          borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)'}`,
-          justifyContent: 'space-between',
+          flexGrow: 1,
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          bgcolor: isDark ? 'rgba(15, 23, 42, 0.6)' : '#ffffff',
+          borderRadius: 2.5,
+          border: '1px solid',
+          borderColor: 'divider',
+          overflow: 'hidden',
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-            Tip: Press <b>ESC</b> to close. Rollbacks are safely applied as progressive zero-downtime rolling updates.
-          </Typography>
-        </Box>
-        <Button onClick={onClose} sx={{ fontWeight: 700, color: 'text.secondary' }}>
-          Close
-        </Button>
-      </DialogActions>
+        {bodyContent}
+      </Paper>
+    );
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth={maximized ? false : 'lg'}
+      fullWidth
+      slotProps={{
+        paper: {
+          sx: {
+            width: maximized ? '98vw' : '92vw',
+            maxWidth: maximized ? '98vw' : '1240px',
+            height: maximized ? '95vh' : '86vh',
+            maxHeight: maximized ? '95vh' : '86vh',
+            display: 'flex',
+            flexDirection: 'column',
+            bgcolor: isDark ? '#090d16' : '#ffffff',
+            backgroundImage: 'none',
+            borderRadius: maximized ? 1 : 3,
+            border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.1)'}`,
+            boxShadow: isDark
+              ? '0 24px 48px -12px rgba(0,0,0,0.85)'
+              : '0 20px 40px -10px rgba(0,0,0,0.15)',
+            overflow: 'hidden',
+          },
+        },
+      }}
+    >
+      {bodyContent}
     </Dialog>
   );
 }

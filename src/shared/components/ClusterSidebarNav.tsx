@@ -405,7 +405,10 @@ export function ClusterSidebarNav({
 
         {onOpenPortForward && (
           <Box
-            onClick={onOpenPortForward}
+            onClick={() => {
+              if (onOpenPortForward) onOpenPortForward();
+              else onSelectTab(28);
+            }}
             sx={{
               display: 'flex',
               alignItems: 'center',
@@ -415,17 +418,30 @@ export function ClusterSidebarNav({
               mx: 0.8,
               borderRadius: 1.8,
               cursor: 'pointer',
-              color: 'text.secondary',
+              bgcolor: activeTab === 28
+                ? isDark
+                  ? alpha(theme.palette.primary.main, 0.22)
+                  : alpha(theme.palette.primary.main, 0.12)
+                : 'transparent',
+              color: activeTab === 28
+                ? theme.palette.primary.main
+                : 'text.secondary',
               transition: 'all 0.15s ease',
               '&:hover': {
-                bgcolor: isDark ? 'rgba(56, 189, 248, 0.1)' : 'rgba(2, 132, 199, 0.08)',
+                bgcolor: activeTab === 28
+                  ? isDark
+                    ? alpha(theme.palette.primary.main, 0.28)
+                    : alpha(theme.palette.primary.main, 0.18)
+                  : isDark
+                    ? 'rgba(56, 189, 248, 0.1)'
+                    : 'rgba(2, 132, 199, 0.08)',
                 color: isDark ? '#38bdf8' : '#0284c7',
               },
             }}
           >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2 }}>
-              <AltRouteRoundedIcon sx={{ fontSize: 18, color: '#38bdf8' }} />
-              <Typography variant="body2" sx={{ fontSize: '0.81rem', fontWeight: 600 }}>
+              <AltRouteRoundedIcon sx={{ fontSize: 18, color: activeTab === 28 ? theme.palette.primary.main : '#38bdf8' }} />
+              <Typography variant="body2" sx={{ fontSize: '0.81rem', fontWeight: activeTab === 28 ? 750 : 600 }}>
                 Port-Forward Manager
               </Typography>
             </Box>
@@ -442,7 +458,10 @@ export function ClusterSidebarNav({
 
         {onOpenConfigDrift && (
           <Box
-            onClick={onOpenConfigDrift}
+            onClick={() => {
+              if (onOpenConfigDrift) onOpenConfigDrift();
+              else onSelectTab(29);
+            }}
             sx={{
               display: 'flex',
               alignItems: 'center',
@@ -452,17 +471,30 @@ export function ClusterSidebarNav({
               mx: 0.8,
               borderRadius: 1.8,
               cursor: 'pointer',
-              color: 'text.secondary',
+              bgcolor: activeTab === 29
+                ? isDark
+                  ? alpha(theme.palette.primary.main, 0.22)
+                  : alpha(theme.palette.primary.main, 0.12)
+                : 'transparent',
+              color: activeTab === 29
+                ? theme.palette.primary.main
+                : 'text.secondary',
               transition: 'all 0.15s ease',
               '&:hover': {
-                bgcolor: isDark ? 'rgba(245, 158, 11, 0.1)' : 'rgba(245, 158, 11, 0.08)',
+                bgcolor: activeTab === 29
+                  ? isDark
+                    ? alpha(theme.palette.primary.main, 0.28)
+                    : alpha(theme.palette.primary.main, 0.18)
+                  : isDark
+                    ? 'rgba(245, 158, 11, 0.1)'
+                    : 'rgba(245, 158, 11, 0.08)',
                 color: isDark ? '#fbbf24' : '#d97706',
               },
             }}
           >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2 }}>
-              <AutoModeRoundedIcon sx={{ fontSize: 18, color: '#f59e0b' }} />
-              <Typography variant="body2" sx={{ fontSize: '0.81rem', fontWeight: 600 }}>
+              <AutoModeRoundedIcon sx={{ fontSize: 18, color: activeTab === 29 ? theme.palette.primary.main : '#f59e0b' }} />
+              <Typography variant="body2" sx={{ fontSize: '0.81rem', fontWeight: activeTab === 29 ? 750 : 600 }}>
                 Config Drift Detector
               </Typography>
             </Box>
@@ -471,7 +503,10 @@ export function ClusterSidebarNav({
 
         {onOpenDiff && (
           <Box
-            onClick={onOpenDiff}
+            onClick={() => {
+              if (onOpenDiff) onOpenDiff();
+              else onSelectTab(30);
+            }}
             sx={{
               display: 'flex',
               alignItems: 'center',
@@ -481,17 +516,30 @@ export function ClusterSidebarNav({
               mx: 0.8,
               borderRadius: 1.8,
               cursor: 'pointer',
-              color: 'text.secondary',
+              bgcolor: activeTab === 30
+                ? isDark
+                  ? alpha(theme.palette.primary.main, 0.22)
+                  : alpha(theme.palette.primary.main, 0.12)
+                : 'transparent',
+              color: activeTab === 30
+                ? theme.palette.primary.main
+                : 'text.secondary',
               transition: 'all 0.15s ease',
               '&:hover': {
-                bgcolor: isDark ? 'rgba(168, 85, 247, 0.1)' : 'rgba(168, 85, 247, 0.08)',
+                bgcolor: activeTab === 30
+                  ? isDark
+                    ? alpha(theme.palette.primary.main, 0.28)
+                    : alpha(theme.palette.primary.main, 0.18)
+                  : isDark
+                    ? 'rgba(168, 85, 247, 0.1)'
+                    : 'rgba(168, 85, 247, 0.08)',
                 color: isDark ? '#c084fc' : '#9333ea',
               },
             }}
           >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2 }}>
-              <CompareArrowsRoundedIcon sx={{ fontSize: 18, color: '#a855f7' }} />
-              <Typography variant="body2" sx={{ fontSize: '0.81rem', fontWeight: 600 }}>
+              <CompareArrowsRoundedIcon sx={{ fontSize: 18, color: activeTab === 30 ? theme.palette.primary.main : '#a855f7' }} />
+              <Typography variant="body2" sx={{ fontSize: '0.81rem', fontWeight: activeTab === 30 ? 750 : 600 }}>
                 GitOps Time Machine
               </Typography>
             </Box>
@@ -500,7 +548,10 @@ export function ClusterSidebarNav({
 
         {onOpenCostAllocation && (
           <Box
-            onClick={onOpenCostAllocation}
+            onClick={() => {
+              if (onOpenCostAllocation) onOpenCostAllocation();
+              else onSelectTab(31);
+            }}
             sx={{
               display: 'flex',
               alignItems: 'center',
@@ -510,17 +561,30 @@ export function ClusterSidebarNav({
               mx: 0.8,
               borderRadius: 1.8,
               cursor: 'pointer',
-              color: 'text.secondary',
+              bgcolor: activeTab === 31
+                ? isDark
+                  ? alpha(theme.palette.primary.main, 0.22)
+                  : alpha(theme.palette.primary.main, 0.12)
+                : 'transparent',
+              color: activeTab === 31
+                ? theme.palette.primary.main
+                : 'text.secondary',
               transition: 'all 0.15s ease',
               '&:hover': {
-                bgcolor: isDark ? 'rgba(16, 185, 129, 0.1)' : 'rgba(16, 185, 129, 0.08)',
+                bgcolor: activeTab === 31
+                  ? isDark
+                    ? alpha(theme.palette.primary.main, 0.28)
+                    : alpha(theme.palette.primary.main, 0.18)
+                  : isDark
+                    ? 'rgba(16, 185, 129, 0.1)'
+                    : 'rgba(16, 185, 129, 0.08)',
                 color: isDark ? '#34d399' : '#059669',
               },
             }}
           >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2 }}>
-              <MonetizationOnRoundedIcon sx={{ fontSize: 18, color: '#10b981' }} />
-              <Typography variant="body2" sx={{ fontSize: '0.81rem', fontWeight: 600 }}>
+              <MonetizationOnRoundedIcon sx={{ fontSize: 18, color: activeTab === 31 ? theme.palette.primary.main : '#10b981' }} />
+              <Typography variant="body2" sx={{ fontSize: '0.81rem', fontWeight: activeTab === 31 ? 750 : 600 }}>
                 Cost & Right-Sizing
               </Typography>
             </Box>
@@ -529,7 +593,10 @@ export function ClusterSidebarNav({
 
         {onOpenSecurityPosture && (
           <Box
-            onClick={onOpenSecurityPosture}
+            onClick={() => {
+              if (onOpenSecurityPosture) onOpenSecurityPosture();
+              else onSelectTab(32);
+            }}
             sx={{
               display: 'flex',
               alignItems: 'center',
@@ -539,17 +606,30 @@ export function ClusterSidebarNav({
               mx: 0.8,
               borderRadius: 1.8,
               cursor: 'pointer',
-              color: 'text.secondary',
+              bgcolor: activeTab === 32
+                ? isDark
+                  ? alpha(theme.palette.primary.main, 0.22)
+                  : alpha(theme.palette.primary.main, 0.12)
+                : 'transparent',
+              color: activeTab === 32
+                ? theme.palette.primary.main
+                : 'text.secondary',
               transition: 'all 0.15s ease',
               '&:hover': {
-                bgcolor: isDark ? 'rgba(239, 68, 68, 0.1)' : 'rgba(239, 68, 68, 0.08)',
+                bgcolor: activeTab === 32
+                  ? isDark
+                    ? alpha(theme.palette.primary.main, 0.28)
+                    : alpha(theme.palette.primary.main, 0.18)
+                  : isDark
+                    ? 'rgba(239, 68, 68, 0.1)'
+                    : 'rgba(239, 68, 68, 0.08)',
                 color: isDark ? '#f87171' : '#dc2626',
               },
             }}
           >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2 }}>
-              <SecurityRoundedIcon sx={{ fontSize: 18, color: '#ef4444' }} />
-              <Typography variant="body2" sx={{ fontSize: '0.81rem', fontWeight: 600 }}>
+              <SecurityRoundedIcon sx={{ fontSize: 18, color: activeTab === 32 ? theme.palette.primary.main : '#ef4444' }} />
+              <Typography variant="body2" sx={{ fontSize: '0.81rem', fontWeight: activeTab === 32 ? 750 : 600 }}>
                 Security & CIS Audit
               </Typography>
             </Box>
@@ -568,7 +648,10 @@ export function ClusterSidebarNav({
       >
         {/* Settings Launcher */}
         <Box
-          onClick={onOpenSettings}
+          onClick={() => {
+            if (onOpenSettings) onOpenSettings();
+            else onSelectTab(27);
+          }}
           sx={{
             display: 'flex',
             alignItems: 'center',
@@ -578,7 +661,14 @@ export function ClusterSidebarNav({
             borderRadius: 1.8,
             cursor: 'pointer',
             transition: 'all 0.16s ease',
-            color: isDark ? 'rgba(241, 245, 249, 0.9)' : 'rgba(30, 41, 59, 0.9)',
+            bgcolor: activeTab === 27
+              ? isDark
+                ? alpha(theme.palette.primary.main, 0.22)
+                : alpha(theme.palette.primary.main, 0.12)
+              : 'transparent',
+            color: activeTab === 27
+              ? theme.palette.primary.main
+              : isDark ? 'rgba(241, 245, 249, 0.9)' : 'rgba(30, 41, 59, 0.9)',
             '&:hover': {
               bgcolor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
               '& .settings-icon': {
@@ -596,7 +686,7 @@ export function ClusterSidebarNav({
                 transition: 'transform 0.25s ease',
               }}
             />
-            <Typography variant="body2" sx={{ fontSize: '0.82rem', fontWeight: 700 }}>
+            <Typography variant="body2" sx={{ fontSize: '0.82rem', fontWeight: activeTab === 27 ? 750 : 700 }}>
               Settings
             </Typography>
           </Box>

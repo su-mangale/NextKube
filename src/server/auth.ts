@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import fs from 'fs';
 import path from 'path';
 import { UserSession } from './jwt';
+import { readKubeSecretKey, writeKubeSecretKey } from './k8s-secret-vault';
 
 export interface StoredUser {
   username: string;
@@ -27,11 +28,51 @@ function ensureStoreDir(): void {
   }
 }
 
+let cachedUsers: StoredUser[] | null = null;
+let lastUsersSync = 0;
+const USERS_SYNC_INTERVAL_MS = 4000;
+
+async function syncUsersFromKubeSecret(): Promise<StoredUser[]> {
+  lastUsersSync = Date.now();
+  try {
+    const raw = await readKubeSecretKey('users.json');
+    if (raw) {
+      const parsed: StoredUser[] = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        cachedUsers = parsed;
+        try {
+          ensureStoreDir();
+          fs.writeFileSync(USERS_FILE, JSON.stringify(parsed, null, 2), 'utf-8');
+        } catch {
+          // ignore disk write failure
+        }
+        return parsed;
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return cachedUsers || [];
+}
+
+// Initial sync on module load
+syncUsersFromKubeSecret().catch(() => {});
+
 /**
- * Reads persistent users from .nextkube/users.json.
+ * Reads persistent users from .nextkube/users.json with K8s Secret replication.
  * If file does not exist, seeds it with initial default admin.
  */
 export function readStoredUsers(): StoredUser[] {
+  // If cache is fresh, return immediately
+  if (cachedUsers !== null && Date.now() - lastUsersSync < USERS_SYNC_INTERVAL_MS) {
+    return cachedUsers;
+  }
+
+  // Trigger non-blocking async sync if interval elapsed
+  if (Date.now() - lastUsersSync >= USERS_SYNC_INTERVAL_MS) {
+    syncUsersFromKubeSecret().catch(() => {});
+  }
+
   ensureStoreDir();
   const defaultUsername = process.env.NEXTKUBE_ADMIN_USER || 'admin';
   const defaultPassword = process.env.NEXTKUBE_ADMIN_PASSWORD || 'admin123';
@@ -52,31 +93,41 @@ export function readStoredUsers(): StoredUser[] {
       } catch (err) {
         console.warn('[NextKube Auth] Failed to write initial users.json to disk (filesystem may be read-only):', err);
       }
+      cachedUsers = [fallbackAdmin];
       return [fallbackAdmin];
     }
 
     const raw = fs.readFileSync(USERS_FILE, 'utf-8');
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0) {
+      cachedUsers = parsed;
       return parsed;
     }
+    cachedUsers = [fallbackAdmin];
     return [fallbackAdmin];
   } catch (err) {
     console.warn('[NextKube Auth] Error reading users.json from disk, falling back to in-memory admin:', err);
-    return [fallbackAdmin];
+    return cachedUsers || [fallbackAdmin];
   }
 }
 
 /**
- * Writes users list back to .nextkube/users.json.
+ * Writes users list back to .nextkube/users.json and replicates to K8s Secret.
  */
 export function writeStoredUsers(users: StoredUser[]): void {
+  cachedUsers = users;
+  lastUsersSync = Date.now();
   try {
     ensureStoreDir();
     fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), 'utf-8');
   } catch (err) {
     console.error('[NextKube Auth] Error writing users.json to disk:', err);
   }
+
+  // Replicate to in-cluster Kubernetes Secret for cross-replica sync
+  writeKubeSecretKey('users.json', JSON.stringify(users, null, 2)).catch((err) => {
+    console.warn('[NextKube Auth] Could not sync users to Kubernetes Secret:', err?.message || err);
+  });
 }
 
 // In-Memory Rate Limiting Tracker

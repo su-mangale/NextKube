@@ -70,6 +70,7 @@ import BlockIcon from '@mui/icons-material/BlockRounded';
 import LockOpenIcon from '@mui/icons-material/LockOpenRounded';
 import CleaningServicesIcon from '@mui/icons-material/CleaningServicesRounded';
 import DynamicFeedIcon from '@mui/icons-material/DynamicFeedRounded';
+import ViewSidebarRoundedIcon from '@mui/icons-material/ViewSidebarRounded';
 import { useQueryClient } from '@tanstack/react-query';
 
 import {
@@ -166,6 +167,47 @@ export default function ClusterDetailPage() {
 
   // System & Workspace Settings Dialog
   const [settingsDialogOpen, setSettingsDialogOpen] = useState<boolean>(false);
+
+  // Left Navigation Sidebar visibility toggle (can collapse to use Omnibar ⌘K)
+  const [sidebarVisible, setSidebarVisible] = useState<boolean>(true);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('nextkube-sidebar-visible');
+        if (saved !== null) {
+          setSidebarVisible(JSON.parse(saved));
+        }
+      } catch {
+        // use default
+      }
+    }
+  }, []);
+
+  const toggleSidebar = useCallback(() => {
+    setSidebarVisible((prev) => {
+      const next = !prev;
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('nextkube-sidebar-visible', JSON.stringify(next));
+        } catch {
+          // ignore
+        }
+      }
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    const handleToggleKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        toggleSidebar();
+      }
+    };
+    window.addEventListener('keydown', handleToggleKey);
+    return () => window.removeEventListener('keydown', handleToggleKey);
+  }, [toggleSidebar]);
 
   // Namespace selector state
   const [selectedNamespace, setSelectedNamespace] = useState<string>('all');
@@ -2519,6 +2561,29 @@ spec:
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+          <Tooltip title={sidebarVisible ? "Collapse Sidebar (Ctrl+B / ⌘B)" : "Expand Sidebar (Ctrl+B / ⌘B)"}>
+            <IconButton
+              onClick={toggleSidebar}
+              size="small"
+              sx={{
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 2,
+                p: 0.8,
+                bgcolor: !sidebarVisible
+                  ? (isDark ? 'rgba(56, 189, 248, 0.15)' : 'rgba(2, 132, 199, 0.12)')
+                  : 'action.hover',
+                color: !sidebarVisible ? 'primary.main' : 'text.secondary',
+                '&:hover': {
+                  bgcolor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+                  color: 'primary.main',
+                },
+              }}
+            >
+              <ViewSidebarRoundedIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+
           <Box
             sx={{
               display: 'flex',
@@ -2572,6 +2637,47 @@ spec:
                 Disconnect
               </Button>
             </Tooltip>
+          </Box>
+
+          {/* Omnibar Search Trigger Pill */}
+          <Box
+            onClick={() => setCommandPaletteOpen(true)}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1.2,
+              px: 1.8,
+              py: 0.6,
+              borderRadius: 2,
+              bgcolor: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.03)',
+              border: '1px solid',
+              borderColor: 'divider',
+              cursor: 'pointer',
+              color: 'text.secondary',
+              transition: 'all 0.16s ease',
+              '&:hover': {
+                bgcolor: isDark ? 'rgba(56, 189, 248, 0.08)' : 'rgba(2, 132, 199, 0.06)',
+                borderColor: 'primary.main',
+                color: 'text.primary',
+              },
+            }}
+          >
+            <SearchIcon sx={{ fontSize: 17, color: 'primary.main' }} />
+            <Typography variant="body2" sx={{ fontSize: '0.8rem', fontWeight: 600, userSelect: 'none' }}>
+              Switch object or view...
+            </Typography>
+            <Chip
+              label="⌘K"
+              size="small"
+              sx={{
+                height: 18,
+                fontSize: '0.62rem',
+                fontWeight: 800,
+                borderRadius: 1,
+                bgcolor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+                pointerEvents: 'none',
+              }}
+            />
           </Box>
         </Box>
 
@@ -2635,27 +2741,51 @@ spec:
         }}
       >
         {/* Left Vertical Grouped Navigation Sidebar */}
-        <ClusterSidebarNav
-          activeTab={activeTab}
-          onSelectTab={(val) => {
-            setActiveTab(val);
-            setSearchQuery('');
-            setPage(0);
-          }}
-          onOpenSettings={() => {
-            setSettingsDialogOpen(true);
-            setTopWindow('settings');
-          }}
-          onOpenCommandPalette={() => setCommandPaletteOpen(true)}
-          onOpenPortForward={() => setPortForwardOpen(true)}
-          onOpenConfigDrift={() => setConfigDriftOpen(true)}
-          onOpenDiff={() => handleOpenDiff(selectedResource || (deployments.length > 0 ? deployments[0] : null))}
-          onOpenCostAllocation={() => setCostAllocationOpen(true)}
-          onOpenSecurityPosture={() => setSecurityPostureOpen(true)}
-          resourceCounts={resourceCounts}
-          shortcutSettingsKey={shortcuts.find((s) => s.id === 'settings')?.key || 'Alt+,'}
-          activePortForwardsCount={activePortForwards.length}
-        />
+        {sidebarVisible && (
+          <ClusterSidebarNav
+            activeTab={activeTab}
+            onSelectTab={(val) => {
+              setActiveTab(val);
+              setSearchQuery('');
+              setPage(0);
+            }}
+            onOpenSettings={() => {
+              setActiveTab(27);
+              setSearchQuery('');
+            }}
+            onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+            onOpenPortForward={() => {
+              setActiveTab(28);
+              setSearchQuery('');
+            }}
+            onOpenConfigDrift={() => {
+              setActiveTab(29);
+              setSearchQuery('');
+            }}
+            onOpenDiff={() => {
+              if (!diffResource && deployments.length > 0) {
+                setDiffResource({
+                  name: deployments[0]?.name || 'app',
+                  namespace: deployments[0]?.namespace || 'default',
+                  resourceType: 'Deployment',
+                });
+              }
+              setActiveTab(30);
+              setSearchQuery('');
+            }}
+            onOpenCostAllocation={() => {
+              setActiveTab(31);
+              setSearchQuery('');
+            }}
+            onOpenSecurityPosture={() => {
+              setActiveTab(32);
+              setSearchQuery('');
+            }}
+            resourceCounts={resourceCounts}
+            shortcutSettingsKey={shortcuts.find((s) => s.id === 'settings')?.key || 'Alt+,'}
+            activePortForwardsCount={activePortForwards.length}
+          />
+        )}
 
         {/* Right Main Resource Content Panel */}
         <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', p: 3 }}>
@@ -2766,7 +2896,7 @@ spec:
               </Box>
             </Paper>
           )}
-          {activeTab !== 0 && activeTab !== 26 && (
+          {activeTab !== 0 && activeTab !== 26 && activeTab < 27 && (
             <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
               <TextField
                 placeholder="Search resources by name..."
@@ -4011,11 +4141,101 @@ spec:
                 </Box>
               )}
 
+              {/* TAB 27: EMBEDDED SETTINGS VIEW */}
+              {activeTab === 27 && (
+                <Box sx={{ width: '100%', height: 'calc(100vh - 145px)', minHeight: 640 }}>
+                  <SettingsDialog
+                    open={true}
+                    embedded={true}
+                    onClose={() => setActiveTab(0)}
+                  />
+                </Box>
+              )}
+
+              {/* TAB 28: EMBEDDED PORT FORWARD MANAGER */}
+              {activeTab === 28 && (
+                <Box sx={{ width: '100%', height: 'calc(100vh - 145px)', minHeight: 640 }}>
+                  <PortForwardDrawer
+                    open={true}
+                    embedded={true}
+                    onClose={() => setActiveTab(0)}
+                    clusterId={effectiveClusterId}
+                    namespaces={namespaces}
+                    initialTarget={portForwardInitialTarget}
+                  />
+                </Box>
+              )}
+
+              {/* TAB 29: EMBEDDED CONFIG DRIFT DETECTOR */}
+              {activeTab === 29 && (
+                <Box sx={{ width: '100%', height: 'calc(100vh - 145px)', minHeight: 640 }}>
+                  <ConfigDriftDrawer
+                    open={true}
+                    embedded={true}
+                    onClose={() => setActiveTab(0)}
+                    clusterId={effectiveClusterId}
+                    namespace={selectedNamespace || 'default'}
+                    onOpenDiff={handleOpenDriftManifest}
+                  />
+                </Box>
+              )}
+
+              {/* TAB 30: EMBEDDED GITOPS TIME MACHINE (YAML DIFF) */}
+              {activeTab === 30 && (
+                <Box sx={{ width: '100%', height: 'calc(100vh - 145px)', minHeight: 640 }}>
+                  <YamlDiffViewerDialog
+                    open={true}
+                    embedded={true}
+                    onClose={() => setActiveTab(0)}
+                    resourceName={diffResource?.name || deployments[0]?.name || 'workload'}
+                    resourceType={diffResource?.resourceType || 'Deployment'}
+                    namespace={diffResource?.namespace || (selectedNamespace !== 'all' ? selectedNamespace : 'default')}
+                    revisions={diffResource?.revisions || rolloutRevisions}
+                    currentYaml={diffResource?.currentYaml}
+                    previousYaml={diffResource?.previousYaml}
+                    onRollback={handleRollbackFromDiff}
+                    rollbackLoading={diffRollbackLoading}
+                  />
+                </Box>
+              )}
+
+              {/* TAB 31: EMBEDDED FINOPS COST ALLOCATION & RIGHT-SIZING */}
+              {activeTab === 31 && (
+                <Box sx={{ width: '100%', height: 'calc(100vh - 145px)', minHeight: 640 }}>
+                  <CostAllocationDrawer
+                    open={true}
+                    embedded={true}
+                    onClose={() => setActiveTab(0)}
+                    clusterId={effectiveClusterId}
+                    onSuccessPatch={(msg) => {
+                      setToastSeverity('success');
+                      setToastMessage(msg);
+                      refetchDeployments();
+                      refetchStatefulSets();
+                      refetchDaemonSets();
+                    }}
+                  />
+                </Box>
+              )}
+
+              {/* TAB 32: EMBEDDED SECURITY POSTURE & CIS BENCHMARK AUDIT */}
+              {activeTab === 32 && (
+                <Box sx={{ width: '100%', height: 'calc(100vh - 145px)', minHeight: 640 }}>
+                  <SecurityPostureDrawer
+                    open={true}
+                    embedded={true}
+                    onClose={() => setActiveTab(0)}
+                    clusterId={effectiveClusterId}
+                    namespaces={namespaces}
+                  />
+                </Box>
+              )}
+
             </Box>
           )}
 
           {/* MUI TablePagination Footer */}
-          {activeTab !== 0 && activeTab !== 26 && (
+          {activeTab !== 0 && activeTab !== 26 && activeTab < 27 && (
             <TablePagination
               rowsPerPageOptions={[10, 25, 50, 100]}
               component="div"
@@ -5692,12 +5912,12 @@ spec:
         onOpenCommandPalette={() => setCommandPaletteOpen((prev) => !prev)}
         onToggleTopology={() => setActiveTab((prev) => (prev === 26 ? 0 : 26))}
         isTopologyActive={activeTab === 26}
-        onTogglePortForward={() => setPortForwardOpen((prev) => !prev)}
+        onTogglePortForward={() => setActiveTab((prev) => (prev === 28 ? 0 : 28))}
         activePortForwardsCount={activePortForwards.length}
-        onToggleConfigDrift={() => setConfigDriftOpen((prev) => !prev)}
+        onToggleConfigDrift={() => setActiveTab((prev) => (prev === 29 ? 0 : 29))}
         driftedCount={driftedCount}
-        onToggleCostAllocation={() => setCostAllocationOpen((prev) => !prev)}
-        onToggleSecurityPosture={() => setSecurityPostureOpen((prev) => !prev)}
+        onToggleCostAllocation={() => setActiveTab((prev) => (prev === 31 ? 0 : 31))}
+        onToggleSecurityPosture={() => setActiveTab((prev) => (prev === 32 ? 0 : 32))}
         onCreateResource={() => {
           setCreateDialogOpen(true);
           setTopWindow('yamlCreate');
@@ -5751,22 +5971,22 @@ spec:
           setCreateDialogOpen(true);
           setTopWindow('yamlCreate');
         }}
-        onOpenPortForward={() => setPortForwardOpen(true)}
+        onOpenPortForward={() => setActiveTab(28)}
         onOpenDiff={() => {
-          if (deployments.length > 0) {
-            handleOpenDiff(deployments[0], 'Deployment');
-          } else {
-            setDiffViewerOpen(true);
+          if (!diffResource && deployments.length > 0) {
+            setDiffResource({
+              name: deployments[0]?.name || 'app',
+              namespace: deployments[0]?.namespace || 'default',
+              resourceType: 'Deployment',
+            });
           }
+          setActiveTab(30);
         }}
-        onOpenConfigDrift={() => setConfigDriftOpen(true)}
-        onOpenCostAllocation={() => setCostAllocationOpen(true)}
-        onOpenSecurityPosture={() => setSecurityPostureOpen(true)}
+        onOpenConfigDrift={() => setActiveTab(29)}
+        onOpenCostAllocation={() => setActiveTab(31)}
+        onOpenSecurityPosture={() => setActiveTab(32)}
         onOpenNamespaceCloner={() => setNamespaceClonerOpen(true)}
-        onOpenSettings={() => {
-          setSettingsDialogOpen(true);
-          setTopWindow('settings');
-        }}
+        onOpenSettings={() => setActiveTab(27)}
         onRefresh={handleRefreshAll}
       />
 

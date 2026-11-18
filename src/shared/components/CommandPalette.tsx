@@ -32,6 +32,23 @@ import AutoModeIcon from '@mui/icons-material/AutoModeRounded';
 import MonetizationOnIcon from '@mui/icons-material/MonetizationOnRounded';
 import ShieldIcon from '@mui/icons-material/ShieldRounded';
 import DynamicFeedIcon from '@mui/icons-material/DynamicFeedRounded';
+import LayersIcon from '@mui/icons-material/LayersRounded';
+import PrecisionManufacturingIcon from '@mui/icons-material/PrecisionManufacturingRounded';
+import WorkOutlineIcon from '@mui/icons-material/WorkOutlineRounded';
+import UpdateIcon from '@mui/icons-material/UpdateRounded';
+import RouterIcon from '@mui/icons-material/RouterRounded';
+import LanguageIcon from '@mui/icons-material/LanguageRounded';
+import DeviceHubIcon from '@mui/icons-material/DeviceHubRounded';
+import PolicyIcon from '@mui/icons-material/PolicyRounded';
+import DescriptionIcon from '@mui/icons-material/DescriptionRounded';
+import KeyIcon from '@mui/icons-material/KeyRounded';
+import WarehouseIcon from '@mui/icons-material/WarehouseRounded';
+import PeopleIcon from '@mui/icons-material/PeopleRounded';
+import LockPersonIcon from '@mui/icons-material/LockPersonRounded';
+import ExtensionIcon from '@mui/icons-material/ExtensionRounded';
+import NotificationsIcon from '@mui/icons-material/NotificationsRounded';
+import HistoryIcon from '@mui/icons-material/HistoryRounded';
+import StorefrontIcon from '@mui/icons-material/StorefrontRounded';
 import { useColorMode } from '../theme/theme-registry';
 
 export interface CommandPaletteProps {
@@ -67,7 +84,7 @@ interface PaletteActionItem {
   id: string;
   title: string;
   subtitle?: string;
-  category: 'Clusters' | 'Namespaces' | 'Navigation' | 'Actions';
+  category: string;
   shortcut?: string;
   icon: React.ReactNode;
   action: () => void;
@@ -115,27 +132,97 @@ export function CommandPalette({
   const allItems: PaletteActionItem[] = useMemo(() => {
     const list: PaletteActionItem[] = [];
 
-    // 1. Navigation items
+    // 1. Navigation items (All 33 Kubernetes Objects & Views)
     const navItems = [
-      { id: 'nav-overview', title: 'Cluster Overview & Observability', subtitle: 'View capacity gauges and fleet matrix', tab: 0, shortcut: 'Alt+O', icon: <SpeedIcon fontSize="small" sx={{ color: '#38bdf8' }} /> },
-      { id: 'nav-topology', title: 'Visual Topology Map', subtitle: 'Interactive dependency graph & live traffic', tab: 26, shortcut: 'Alt+T', icon: <HubIcon fontSize="small" sx={{ color: '#818cf8' }} /> },
-      { id: 'nav-pods', title: 'Pods Fleet', subtitle: 'Inspect and manage all running pods', tab: 1, shortcut: 'Alt+P', icon: <MemoryIcon fontSize="small" sx={{ color: '#f59e0b' }} /> },
-      { id: 'nav-deployments', title: 'Deployments', subtitle: 'Scale and restart controllers', tab: 2, shortcut: 'Alt+E', icon: <WidgetsIcon fontSize="small" sx={{ color: '#a855f7' }} /> },
-      { id: 'nav-helm', title: 'Helm App Store & Releases', subtitle: 'Browse catalog and manage releases', tab: 25, shortcut: 'Alt+H', icon: <StorageIcon fontSize="small" sx={{ color: '#ec4899' }} /> },
+      // Platform & Observability
+      { id: 'nav-overview', title: 'Cluster Overview & Observability', subtitle: 'Capacity gauges, resource saturation & fleet matrix', tab: 0, category: 'Platform Tools', shortcut: 'Alt+O', icon: <SpeedIcon fontSize="small" sx={{ color: '#38bdf8' }} /> },
+      { id: 'nav-topology', title: 'Visual Topology Map', subtitle: 'Live architecture graph, workloads & network flows', tab: 26, category: 'Platform Tools', shortcut: 'Alt+T', icon: <HubIcon fontSize="small" sx={{ color: '#818cf8' }} /> },
+      { id: 'nav-helm', title: 'Helm App Store & Releases', subtitle: 'Browse catalog charts and manage installed releases', tab: 25, category: 'Platform Tools', shortcut: 'Alt+H', icon: <StorefrontIcon fontSize="small" sx={{ color: '#ec4899' }} /> },
+      { id: 'nav-audit', title: 'Audit Trail & Cluster Events', subtitle: 'Audit log timeline and control-plane activity', tab: 24, category: 'Platform Tools', icon: <HistoryIcon fontSize="small" sx={{ color: '#64748b' }} /> },
+      { id: 'nav-settings', title: 'Workspace & System Settings', subtitle: 'Configure appearance, user profiles, and keyboard shortcuts', tab: 27, category: 'Platform Tools', shortcut: 'Alt+,', icon: <SettingsIcon fontSize="small" sx={{ color: '#94a3b8' }} /> },
+      { id: 'nav-port-forward', title: 'Port-Forward Manager', subtitle: 'Active TCP/HTTP tunnels into private pods & services', tab: 28, category: 'Platform Tools', shortcut: 'Alt+P', icon: <AltRouteIcon fontSize="small" sx={{ color: '#38bdf8' }} /> },
+      { id: 'nav-config-drift', title: 'Config Drift Detector', subtitle: 'Detect pods running outdated configurations after ConfigMap/Secret edits', tab: 29, category: 'Platform Tools', shortcut: 'Alt+C', icon: <AutoModeIcon fontSize="small" sx={{ color: '#f59e0b' }} /> },
+      { id: 'nav-gitops', title: 'GitOps Time Machine (YAML Diff)', subtitle: 'Compare rollout revisions, live vs applied manifests & environments', tab: 30, category: 'Platform Tools', shortcut: 'Alt+G', icon: <CompareArrowsIcon fontSize="small" sx={{ color: '#a855f7' }} /> },
+      { id: 'nav-cost', title: 'Cost Allocation & Right-Sizing', subtitle: 'Analyze monthly Kubernetes spend, wasted allocation & 1-click resource tuning', tab: 31, category: 'Platform Tools', shortcut: 'Alt+$', icon: <MonetizationOnIcon fontSize="small" sx={{ color: '#10b981' }} /> },
+      { id: 'nav-security', title: 'Security Posture & CIS Audit', subtitle: 'Audit Pod Security Standards (PSS), CIS benchmark & RBAC policies', tab: 32, category: 'Platform Tools', shortcut: 'Alt+S', icon: <ShieldIcon fontSize="small" sx={{ color: '#ef4444' }} /> },
+
+      // Workloads
+      { id: 'nav-pods', title: 'Pods Fleet', subtitle: 'Inspect, diagnose, and manage all running pods', tab: 1, category: 'Workloads', icon: <MemoryIcon fontSize="small" sx={{ color: '#f59e0b' }} /> },
+      { id: 'nav-deployments', title: 'Deployments', subtitle: 'Scale, restart, and rollout application controllers', tab: 2, category: 'Workloads', shortcut: 'Alt+E', icon: <LayersIcon fontSize="small" sx={{ color: '#a855f7' }} /> },
+      { id: 'nav-daemonsets', title: 'DaemonSets', subtitle: 'Manage node agent and infrastructure daemon workloads', tab: 3, category: 'Workloads', icon: <WidgetsIcon fontSize="small" sx={{ color: '#6366f1' }} /> },
+      { id: 'nav-statefulsets', title: 'StatefulSets', subtitle: 'Manage stateful clustered workloads and persistent storage', tab: 4, category: 'Workloads', icon: <WarehouseIcon fontSize="small" sx={{ color: '#06b6d4' }} /> },
+      { id: 'nav-replicasets', title: 'ReplicaSets', subtitle: 'Inspect underlying deployment replica controllers', tab: 5, category: 'Workloads', icon: <PrecisionManufacturingIcon fontSize="small" sx={{ color: '#14b8a6' }} /> },
+      { id: 'nav-jobs', title: 'Batch Jobs', subtitle: 'Run-to-completion batch execution tasks', tab: 6, category: 'Workloads', icon: <WorkOutlineIcon fontSize="small" sx={{ color: '#84cc16' }} /> },
+      { id: 'nav-cronjobs', title: 'CronJobs', subtitle: 'Automated scheduled tasks and recurring executions', tab: 7, category: 'Workloads', icon: <UpdateIcon fontSize="small" sx={{ color: '#eab308' }} /> },
+
+      // Networking
+      { id: 'nav-services', title: 'Services (Core DNS & LB)', subtitle: 'ClusterIP, NodePort, and LoadBalancer discovery endpoints', tab: 8, category: 'Networking', icon: <RouterIcon fontSize="small" sx={{ color: '#38bdf8' }} /> },
+      { id: 'nav-ingresses', title: 'Ingresses', subtitle: 'HTTP/HTTPS external routing rules and SSL/TLS ingress', tab: 9, category: 'Networking', icon: <LanguageIcon fontSize="small" sx={{ color: '#0ea5e9' }} /> },
+      { id: 'nav-gateway-api', title: 'Gateway API (Gateways & Routes)', subtitle: 'Next-gen Gateway API listeners and HTTPRoute routing', tab: 23, category: 'Networking', icon: <DeviceHubIcon fontSize="small" sx={{ color: '#6366f1' }} /> },
+      { id: 'nav-network-policies', title: 'Network Policies', subtitle: 'Zero-trust egress and ingress packet isolation policies', tab: 10, category: 'Networking', icon: <PolicyIcon fontSize="small" sx={{ color: '#ec4899' }} /> },
+
+      // Config & Storage
+      { id: 'nav-configmaps', title: 'ConfigMaps', subtitle: 'Manage non-confidential configuration key-value pairs', tab: 11, category: 'Config & Storage', icon: <DescriptionIcon fontSize="small" sx={{ color: '#3b82f6' }} /> },
+      { id: 'nav-secrets', title: 'Secrets', subtitle: 'Encrypted certificates, tokens, and confidential keys', tab: 12, category: 'Config & Storage', icon: <KeyIcon fontSize="small" sx={{ color: '#f43f5e' }} /> },
+      { id: 'nav-pvcs', title: 'PersistentVolumeClaims (PVC)', subtitle: 'Storage volume allocations claimed by workloads', tab: 13, category: 'Config & Storage', icon: <StorageIcon fontSize="small" sx={{ color: '#10b981' }} /> },
+      { id: 'nav-pvs', title: 'PersistentVolumes (PV)', subtitle: 'Underlying physical and cloud persistent disk volumes', tab: 22, category: 'Config & Storage', icon: <StorageIcon fontSize="small" sx={{ color: '#059669' }} /> },
+      { id: 'nav-storageclasses', title: 'Storage Classes', subtitle: 'Dynamic volume provisioners and retention profiles', tab: 14, category: 'Config & Storage', icon: <StorageIcon fontSize="small" sx={{ color: '#14b8a6' }} /> },
+
+      // Cluster & Access
+      { id: 'nav-nodes', title: 'Nodes Fleet', subtitle: 'Bare-metal & cloud worker node capacity and health', tab: 15, category: 'Cluster & Access', icon: <DnsIcon fontSize="small" sx={{ color: '#06b6d4' }} /> },
+      { id: 'nav-serviceaccounts', title: 'Service Accounts', subtitle: 'In-cluster identities for workload automation', tab: 16, category: 'Cluster & Access', icon: <PeopleIcon fontSize="small" sx={{ color: '#8b5cf6' }} /> },
+      { id: 'nav-roles', title: 'Roles & ClusterRoles', subtitle: 'RBAC resource permission rules and verbs', tab: 17, category: 'Cluster & Access', icon: <KeyIcon fontSize="small" sx={{ color: '#a855f7' }} /> },
+      { id: 'nav-rolebindings', title: 'Role Bindings', subtitle: 'RBAC subject and group authorization assignments', tab: 18, category: 'Cluster & Access', icon: <LockPersonIcon fontSize="small" sx={{ color: '#d946ef' }} /> },
+      { id: 'nav-hpa', title: 'Autoscalers (HPA)', subtitle: 'Horizontal Pod Autoscalers based on CPU and memory', tab: 21, category: 'Cluster & Access', icon: <SpeedIcon fontSize="small" sx={{ color: '#22c55e' }} /> },
+      { id: 'nav-crds', title: 'Custom Resource Definitions (CRD)', subtitle: 'Custom operator schema extensions and custom resources', tab: 19, category: 'Cluster & Access', icon: <ExtensionIcon fontSize="small" sx={{ color: '#f97316' }} /> },
+      { id: 'nav-events', title: 'Cluster Events', subtitle: 'Real-time warning and informational cluster event stream', tab: 20, category: 'Cluster & Access', icon: <NotificationsIcon fontSize="small" sx={{ color: '#eab308' }} /> },
     ];
 
     navItems.forEach((n) => {
+      let resolvedAction = () => {
+        onClose();
+        onNavigateTab?.(n.tab);
+      };
+      if (n.tab === 27 && onOpenSettings) {
+        resolvedAction = () => {
+          onClose();
+          onOpenSettings();
+        };
+      } else if (n.tab === 28 && onOpenPortForward) {
+        resolvedAction = () => {
+          onClose();
+          onOpenPortForward();
+        };
+      } else if (n.tab === 29 && onOpenConfigDrift) {
+        resolvedAction = () => {
+          onClose();
+          onOpenConfigDrift();
+        };
+      } else if (n.tab === 30 && onOpenDiff) {
+        resolvedAction = () => {
+          onClose();
+          onOpenDiff();
+        };
+      } else if (n.tab === 31 && onOpenCostAllocation) {
+        resolvedAction = () => {
+          onClose();
+          onOpenCostAllocation();
+        };
+      } else if (n.tab === 32 && onOpenSecurityPosture) {
+        resolvedAction = () => {
+          onClose();
+          onOpenSecurityPosture();
+        };
+      }
+
       list.push({
         id: n.id,
         title: n.title,
         subtitle: n.subtitle,
-        category: 'Navigation',
+        category: n.category,
         shortcut: n.shortcut,
         icon: n.icon,
-        action: () => {
-          onClose();
-          onNavigateTab?.(n.tab);
-        },
+        action: resolvedAction,
       });
     });
 
@@ -163,71 +250,6 @@ export function CommandPalette({
       action: () => {
         onClose();
         onOpenCreate?.();
-      },
-    });
-
-    list.push({
-      id: 'action-port-forward',
-      title: 'Open Port-Forward Manager',
-      subtitle: 'TCP/HTTP tunnels into private pods & services',
-      category: 'Actions',
-      shortcut: 'Alt+P',
-      icon: <AltRouteIcon fontSize="small" sx={{ color: '#38bdf8' }} />,
-      action: () => {
-        onClose();
-        onOpenPortForward?.();
-      },
-    });
-
-    list.push({
-      id: 'action-diff',
-      title: 'GitOps Time Machine: Visual YAML Diff',
-      subtitle: 'Compare rollout revisions, live vs applied manifests & environments',
-      category: 'Actions',
-      shortcut: 'Alt+G',
-      icon: <CompareArrowsIcon fontSize="small" sx={{ color: '#a855f7' }} />,
-      action: () => {
-        onClose();
-        onOpenDiff?.();
-      },
-    });
-
-    list.push({
-      id: 'action-config-drift',
-      title: 'ConfigMap & Secret Drift Detector',
-      subtitle: 'Detect pods running outdated configurations after ConfigMap/Secret updates',
-      category: 'Actions',
-      shortcut: 'Alt+C',
-      icon: <AutoModeIcon fontSize="small" sx={{ color: '#f59e0b' }} />,
-      action: () => {
-        onClose();
-        onOpenConfigDrift?.();
-      },
-    });
-
-    list.push({
-      id: 'action-finops-cost',
-      title: 'Cost Allocation & Right-Sizing Advisor',
-      subtitle: 'Analyze monthly Kubernetes spend, wasted allocation & 1-click resource tuning',
-      category: 'Actions',
-      shortcut: 'Alt+$',
-      icon: <MonetizationOnIcon fontSize="small" sx={{ color: '#10b981' }} />,
-      action: () => {
-        onClose();
-        onOpenCostAllocation?.();
-      },
-    });
-
-    list.push({
-      id: 'action-security-posture',
-      title: 'Security Posture & CIS Benchmark Audit',
-      subtitle: 'Audit Pod Security Standards (PSS), CIS violations & interactive RBAC policy tester',
-      category: 'Actions',
-      shortcut: 'Alt+S',
-      icon: <ShieldIcon fontSize="small" sx={{ color: '#ef4444' }} />,
-      action: () => {
-        onClose();
-        onOpenSecurityPosture?.();
       },
     });
 
@@ -267,19 +289,6 @@ export function CommandPalette({
       action: () => {
         onClose();
         onRefresh?.();
-      },
-    });
-
-    list.push({
-      id: 'action-settings',
-      title: 'Workspace & System Settings',
-      subtitle: 'Configure hotkeys, preferences, and profiles',
-      category: 'Actions',
-      shortcut: 'Alt+,',
-      icon: <SettingsIcon fontSize="small" sx={{ color: '#64748b' }} />,
-      action: () => {
-        onClose();
-        onOpenSettings?.();
       },
     });
 

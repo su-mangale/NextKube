@@ -6,6 +6,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Paper,
   Box,
   Typography,
   Button,
@@ -53,9 +54,10 @@ import { KeyboardShortcutsSettings } from './KeyboardShortcutsSettings';
 
 export interface SettingsDialogProps {
   open: boolean;
-  onClose: () => void;
+  onClose?: () => void;
   zIndex?: number;
   onFocus?: () => void;
+  embedded?: boolean;
 }
 
 interface UserRecord {
@@ -65,7 +67,7 @@ interface UserRecord {
   createdAt?: string;
 }
 
-export function SettingsDialog({ open, onClose, zIndex, onFocus }: SettingsDialogProps) {
+export function SettingsDialog({ open, onClose, zIndex, onFocus, embedded = false }: SettingsDialogProps) {
   const muiTheme = useTheme();
   const isDark = muiTheme.palette.mode === 'dark';
   const queryClient = useQueryClient();
@@ -83,7 +85,7 @@ export function SettingsDialog({ open, onClose, zIndex, onFocus }: SettingsDialo
       if (!res.ok) throw new Error('Failed to fetch users');
       return res.json();
     },
-    enabled: open,
+    enabled: open || embedded,
   });
 
   const usersList = usersData?.users || [];
@@ -210,71 +212,36 @@ export function SettingsDialog({ open, onClose, zIndex, onFocus }: SettingsDialo
     }
   };
 
-  return (
+  if (!open && !embedded) return null;
+
+  const innerBody = (
     <>
-      <Dialog
-        open={open}
-        onClose={(e, reason) => {
-          if (reason === 'backdropClick') return;
-          onClose();
-        }}
-        PaperComponent={DraggablePaper}
-        maxWidth="md"
-        fullWidth
-        hideBackdrop={true}
-        disableEnforceFocus={true}
+      {/* Header matching Create Resource Dialog layout */}
+      <Box
         sx={{
-          zIndex: zIndex || 1315,
-          pointerEvents: 'none',
-          '& .MuiDialog-container': {
-            pointerEvents: 'none',
-          },
-          '& .MuiPaper-root': {
-            pointerEvents: 'auto',
-          },
-        }}
-        slotProps={{
-          paper: {
-            onClick: onFocus,
-            onMouseDown: onFocus,
-            sx: {
-              bgcolor: isDark ? '#0a0e17' : '#ffffff',
-              backgroundImage: 'none',
-              borderRadius: 3,
-              border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #e2e8f0',
-              overflow: 'hidden',
-              boxShadow: isDark
-                ? '0 25px 50px -12px rgba(0, 0, 0, 0.7)'
-                : '0 25px 50px -12px rgba(15, 23, 42, 0.16)',
-            },
-          },
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          bgcolor: isDark ? '#0f1422' : '#f8fafc',
+          color: isDark ? '#f0f6fc' : '#0f172a',
+          px: 3,
+          py: 2,
+          borderBottom: isDark ? '1px solid rgba(255,255,255,0.06)' : '1px solid #e2e8f0',
         }}
       >
-        {/* Header matching Create Resource Dialog layout */}
-        <DialogTitle
-          sx={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            bgcolor: isDark ? '#0f1422' : '#f8fafc',
-            color: isDark ? '#f0f6fc' : '#0f172a',
-            px: 3,
-            py: 2,
-            borderBottom: isDark ? '1px solid rgba(255,255,255,0.06)' : '1px solid #e2e8f0',
-          }}
-        >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <SettingsRoundedIcon sx={{ color: isDark ? '#38bdf8' : '#0284c7', fontSize: 24 }} />
-            <Box>
-              <Typography variant="h6" sx={{ color: isDark ? '#f8fafc' : '#0f172a', fontWeight: 800, fontSize: '1.05rem', lineHeight: 1.2 }}>
-                System & Workspace Settings
-              </Typography>
-              <Typography variant="caption" sx={{ color: isDark ? '#8b949e' : '#64748b', fontSize: '0.75rem' }}>
-                Manage theme preferences, dock accessibility, and user accounts
-              </Typography>
-            </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <SettingsRoundedIcon sx={{ color: isDark ? '#38bdf8' : '#0284c7', fontSize: 24 }} />
+          <Box>
+            <Typography variant="h6" sx={{ color: isDark ? '#f8fafc' : '#0f172a', fontWeight: 800, fontSize: '1.05rem', lineHeight: 1.2 }}>
+              System & Workspace Settings
+            </Typography>
+            <Typography variant="caption" sx={{ color: isDark ? '#8b949e' : '#64748b', fontSize: '0.75rem' }}>
+              Manage theme preferences, dock accessibility, user accounts, and keyboard shortcuts
+            </Typography>
           </Box>
+        </Box>
 
+        {onClose && !embedded && (
           <IconButton
             size="small"
             onClick={onClose}
@@ -291,7 +258,8 @@ export function SettingsDialog({ open, onClose, zIndex, onFocus }: SettingsDialo
           >
             <CloseRoundedIcon fontSize="small" />
           </IconButton>
-        </DialogTitle>
+        )}
+      </Box>
 
         {/* Tab Navigation */}
         <Box sx={{ bgcolor: isDark ? '#0c101c' : '#f1f5f9', px: 3, borderBottom: isDark ? '1px solid rgba(255,255,255,0.06)' : '1px solid #e2e8f0' }}>
@@ -609,34 +577,98 @@ export function SettingsDialog({ open, onClose, zIndex, onFocus }: SettingsDialo
         </DialogContent>
 
         {/* Footer matching Create Resource Dialog layout */}
-        <DialogActions
-          sx={{
-            px: 3,
-            py: 2,
-            bgcolor: isDark ? '#0f1422' : '#f8fafc',
-            borderTop: isDark ? '1px solid rgba(255,255,255,0.06)' : '1px solid #e2e8f0',
-            justifyContent: 'space-between',
-          }}
-        >
-          <Typography variant="caption" sx={{ color: isDark ? '#8b949e' : '#64748b', fontSize: '0.75rem' }}>
-            NextKube System Workspace Preferences
-          </Typography>
-
-          <Button
-            onClick={onClose}
-            variant="contained"
-            color="primary"
+        {!embedded && (
+          <DialogActions
             sx={{
-              fontWeight: 700,
-              textTransform: 'none',
-              borderRadius: 2,
               px: 3,
+              py: 2,
+              bgcolor: isDark ? '#0f1422' : '#f8fafc',
+              borderTop: isDark ? '1px solid rgba(255,255,255,0.06)' : '1px solid #e2e8f0',
+              justifyContent: 'space-between',
             }}
           >
-            Done
-          </Button>
-        </DialogActions>
-      </Dialog>
+            <Typography variant="caption" sx={{ color: isDark ? '#8b949e' : '#64748b', fontSize: '0.75rem' }}>
+              NextKube System Workspace Preferences
+            </Typography>
+
+            <Button
+              onClick={onClose}
+              variant="contained"
+              color="primary"
+              sx={{
+                fontWeight: 700,
+                textTransform: 'none',
+                borderRadius: 2,
+                px: 3,
+              }}
+            >
+              Done
+            </Button>
+          </DialogActions>
+        )}
+    </>
+  );
+
+  return (
+    <>
+      {embedded ? (
+        <Paper
+          elevation={0}
+          sx={{
+            flexGrow: 1,
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            bgcolor: isDark ? '#0a0e17' : '#ffffff',
+            borderRadius: 3,
+            border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #e2e8f0',
+            overflow: 'hidden',
+          }}
+        >
+          {innerBody}
+        </Paper>
+      ) : (
+        <Dialog
+          open={open}
+          onClose={(e, reason) => {
+            if (reason === 'backdropClick') return;
+            onClose?.();
+          }}
+          PaperComponent={DraggablePaper}
+          maxWidth="md"
+          fullWidth
+          hideBackdrop={true}
+          disableEnforceFocus={true}
+          sx={{
+            zIndex: zIndex || 1315,
+            pointerEvents: 'none',
+            '& .MuiDialog-container': {
+              pointerEvents: 'none',
+            },
+            '& .MuiPaper-root': {
+              pointerEvents: 'auto',
+            },
+          }}
+          slotProps={{
+            paper: {
+              onClick: onFocus,
+              onMouseDown: onFocus,
+              sx: {
+                bgcolor: isDark ? '#0a0e17' : '#ffffff',
+                backgroundImage: 'none',
+                borderRadius: 3,
+                border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #e2e8f0',
+                overflow: 'hidden',
+                boxShadow: isDark
+                  ? '0 25px 50px -12px rgba(0, 0, 0, 0.7)'
+                  : '0 25px 50px -12px rgba(15, 23, 42, 0.16)',
+              },
+            },
+          }}
+        >
+          {innerBody}
+        </Dialog>
+      )}
 
       {/* Subdialog 1: Create User */}
       <Dialog

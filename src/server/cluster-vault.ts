@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { AttachedClusterPayload, ClusterConnectionTestResult, FleetEnvironment } from '@/shared/types/fleet.types';
+import { readKubeSecretKey, writeKubeSecretKey } from './k8s-secret-vault';
 
 const STORE_DIR = path.join(process.cwd(), '.nextkube');
 const STORE_FILE = path.join(STORE_DIR, 'clusters.json');
@@ -132,41 +133,85 @@ function ensureStoreDir(): void {
   }
 }
 
+let cachedClusters: StoredClusterRecord[] | null = null;
+let lastClusterSync = 0;
+const CLUSTER_SYNC_INTERVAL_MS = 4000;
+
+async function syncClustersFromKubeSecret(): Promise<StoredClusterRecord[]> {
+  lastClusterSync = Date.now();
+  try {
+    const raw = await readKubeSecretKey('clusters.json');
+    if (raw) {
+      const records: StoredClusterRecord[] = JSON.parse(raw);
+      const valid = records.filter((r) => Boolean(r.encryptedData && r.iv && r.tag));
+      cachedClusters = valid;
+      try {
+        ensureStoreDir();
+        fs.writeFileSync(STORE_FILE, JSON.stringify(valid, null, 2), 'utf-8');
+      } catch {
+        // ignore disk write failure
+      }
+      return valid;
+    }
+  } catch {
+    // ignore
+  }
+  return cachedClusters || [];
+}
+
+// Initial eager sync on module load
+syncClustersFromKubeSecret().catch(() => {});
+
 function readStoredClusters(): StoredClusterRecord[] {
+  // If cache is fresh, return immediately
+  if (cachedClusters !== null && Date.now() - lastClusterSync < CLUSTER_SYNC_INTERVAL_MS) {
+    return cachedClusters;
+  }
+
+  // Trigger non-blocking async sync if interval elapsed
+  if (Date.now() - lastClusterSync >= CLUSTER_SYNC_INTERVAL_MS) {
+    syncClustersFromKubeSecret().catch(() => {});
+  }
+
   ensureStoreDir();
   if (!fs.existsSync(STORE_FILE)) {
     try {
       fs.writeFileSync(STORE_FILE, JSON.stringify([], null, 2), 'utf-8');
+      cachedClusters = [];
       return [];
     } catch {
-      return [];
+      return cachedClusters || [];
     }
   }
 
   try {
     const raw = fs.readFileSync(STORE_FILE, 'utf-8');
     const records: StoredClusterRecord[] = JSON.parse(raw);
-    // Only return clusters that have encrypted vault credentials attached via Kubeconfig
     const valid = records.filter(
       (r) => Boolean(r.encryptedData && r.iv && r.tag)
     );
-    if (valid.length !== records.length) {
-      writeStoredClusters(valid);
-    }
+    cachedClusters = valid;
     return valid;
   } catch (err) {
     console.error('[ClusterVault] Failed to read store file:', err);
-    return [];
+    return cachedClusters || [];
   }
 }
 
 function writeStoredClusters(records: StoredClusterRecord[]): void {
+  cachedClusters = records;
+  lastClusterSync = Date.now();
   try {
     ensureStoreDir();
     fs.writeFileSync(STORE_FILE, JSON.stringify(records, null, 2), 'utf-8');
   } catch (err) {
     console.error('[ClusterVault] Failed to write store file to disk:', err);
   }
+
+  // Replicate to in-cluster Kubernetes Secret for multi-replica cross-pod persistence
+  writeKubeSecretKey('clusters.json', JSON.stringify(records, null, 2)).catch((err) => {
+    console.warn('[ClusterVault] Could not sync clusters to Kubernetes Secret:', err?.message || err);
+  });
 }
 
 /**

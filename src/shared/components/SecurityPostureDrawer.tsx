@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import {
   Drawer,
+  Paper,
   Box,
   Typography,
   IconButton,
@@ -54,6 +55,7 @@ export interface SecurityPostureDrawerProps {
   onClose: () => void;
   clusterId: string;
   namespaces?: string[];
+  embedded?: boolean;
 }
 
 export default function SecurityPostureDrawer({
@@ -61,6 +63,7 @@ export default function SecurityPostureDrawer({
   onClose,
   clusterId,
   namespaces = ['default', 'production', 'kube-system'],
+  embedded = false,
 }: SecurityPostureDrawerProps) {
   const muiTheme = useTheme();
   const isDark = muiTheme.palette.mode === 'dark';
@@ -83,13 +86,13 @@ export default function SecurityPostureDrawer({
     isLoading: isPostureLoading,
     isRefetching: isPostureRefetching,
     refetch: refetchPosture,
-  } = useSecurityPosture(clusterId, { enabled: open });
+  } = useSecurityPosture(clusterId, { enabled: open || embedded });
 
   const {
     data: rbacMatrix,
     isLoading: isRbacLoading,
     refetch: refetchRbac,
-  } = useRbacMatrix(clusterId, rbacNamespace, { enabled: open && activeTab === 1 });
+  } = useRbacMatrix(clusterId, rbacNamespace, { enabled: (open || embedded) && activeTab === 1 });
 
   // Filtered violations
   const filteredViolations = useMemo(() => {
@@ -161,31 +164,10 @@ export default function SecurityPostureDrawer({
     return '#ef4444';
   };
 
-  return (
-    <Drawer
-      anchor="right"
-      open={open}
-      onClose={onClose}
-      slotProps={{
-        backdrop: {
-          sx: {
-            bgcolor: 'rgba(0, 0, 0, 0.4)',
-            backdropFilter: 'blur(3px)',
-          },
-        },
-        paper: {
-          sx: {
-            width: { xs: '100%', sm: 780, md: 950 },
-            bgcolor: isDark ? '#090d16' : '#f8fafc',
-            borderLeft: '1px solid',
-            borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
-            boxShadow: isDark ? '-8px 0 32px rgba(0,0,0,0.6)' : '-8px 0 24px rgba(0,0,0,0.12)',
-            display: 'flex',
-            flexDirection: 'column',
-          },
-        },
-      }}
-    >
+  if (!open && !embedded) return null;
+
+  const bodyContent = (
+    <>
       {/* Drawer Header */}
       <Box
         sx={{
@@ -253,9 +235,11 @@ export default function SecurityPostureDrawer({
               <FileDownloadRoundedIcon fontSize="small" />
             </IconButton>
           </Tooltip>
-          <IconButton size="small" onClick={onClose} sx={{ border: '1px solid', borderColor: 'divider' }}>
-            <CloseRoundedIcon fontSize="small" />
-          </IconButton>
+          {!embedded && (
+            <IconButton size="small" onClick={onClose} sx={{ border: '1px solid', borderColor: 'divider' }}>
+              <CloseRoundedIcon fontSize="small" />
+            </IconButton>
+          )}
         </Box>
       </Box>
 
@@ -767,24 +751,76 @@ export default function SecurityPostureDrawer({
       </Box>
 
       {/* Drawer Footer */}
-      <Box
+      {!embedded && (
+        <Box
+          sx={{
+            p: 2,
+            borderTop: '1px solid',
+            borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
+            bgcolor: isDark ? '#0f172a' : '#ffffff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+            Compliance: CIS Kubernetes Benchmark v1.8 · NSA/CISA Kubernetes Hardening Guide
+          </Typography>
+          <Button size="small" variant="outlined" onClick={onClose} sx={{ textTransform: 'none' }}>
+            Close
+          </Button>
+        </Box>
+      )}
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <Paper
+        elevation={0}
         sx={{
-          p: 2,
-          borderTop: '1px solid',
-          borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
-          bgcolor: isDark ? '#0f172a' : '#ffffff',
+          flexGrow: 1,
+          height: '100%',
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
+          flexDirection: 'column',
+          bgcolor: isDark ? 'rgba(15, 23, 42, 0.6)' : '#ffffff',
+          borderRadius: 2.5,
+          border: '1px solid',
+          borderColor: 'divider',
+          overflow: 'hidden',
         }}
       >
-        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-          Compliance: CIS Kubernetes Benchmark v1.8 · NSA/CISA Kubernetes Hardening Guide
-        </Typography>
-        <Button size="small" variant="outlined" onClick={onClose} sx={{ textTransform: 'none' }}>
-          Close
-        </Button>
-      </Box>
+        {bodyContent}
+      </Paper>
+    );
+  }
+
+  return (
+    <Drawer
+      anchor="right"
+      open={open}
+      onClose={onClose}
+      slotProps={{
+        backdrop: {
+          sx: {
+            bgcolor: 'rgba(0, 0, 0, 0.4)',
+            backdropFilter: 'blur(3px)',
+          },
+        },
+        paper: {
+          sx: {
+            width: { xs: '100%', sm: 780, md: 950 },
+            bgcolor: isDark ? '#090d16' : '#f8fafc',
+            borderLeft: '1px solid',
+            borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
+            boxShadow: isDark ? '-8px 0 32px rgba(0,0,0,0.6)' : '-8px 0 24px rgba(0,0,0,0.12)',
+            display: 'flex',
+            flexDirection: 'column',
+          },
+        },
+      }}
+    >
+      {bodyContent}
     </Drawer>
   );
 }

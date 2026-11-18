@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import {
   Drawer,
+  Paper,
   Box,
   Typography,
   IconButton,
@@ -50,6 +51,7 @@ export interface CostAllocationDrawerProps {
   open: boolean;
   onClose: () => void;
   clusterId: string;
+  embedded?: boolean;
   onSuccessPatch?: (msg: string) => void;
 }
 
@@ -57,6 +59,7 @@ export default function CostAllocationDrawer({
   open,
   onClose,
   clusterId,
+  embedded = false,
   onSuccessPatch,
 }: CostAllocationDrawerProps) {
   const muiTheme = useTheme();
@@ -81,7 +84,7 @@ export default function CostAllocationDrawer({
     isLoading,
     isRefetching,
     refetch,
-  } = useClusterFinOps(clusterId, customRates, { enabled: open });
+  } = useClusterFinOps(clusterId, customRates, { enabled: open || embedded });
 
   // Filtered workloads
   const filteredWorkloads = useMemo(() => {
@@ -144,31 +147,10 @@ export default function CostAllocationDrawer({
     document.body.removeChild(link);
   };
 
-  return (
-    <Drawer
-      anchor="right"
-      open={open}
-      onClose={onClose}
-      slotProps={{
-        backdrop: {
-          sx: {
-            bgcolor: 'rgba(0, 0, 0, 0.4)',
-            backdropFilter: 'blur(3px)',
-          },
-        },
-        paper: {
-          sx: {
-            width: { xs: '100%', sm: 750, md: 900 },
-            bgcolor: isDark ? '#090d16' : '#f8fafc',
-            borderLeft: '1px solid',
-            borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
-            boxShadow: isDark ? '-8px 0 32px rgba(0,0,0,0.6)' : '-8px 0 24px rgba(0,0,0,0.12)',
-            display: 'flex',
-            flexDirection: 'column',
-          },
-        },
-      }}
-    >
+  if (!open && !embedded) return null;
+
+  const bodyContent = (
+    <>
       {/* Drawer Header */}
       <Box
         sx={{
@@ -243,9 +225,11 @@ export default function CostAllocationDrawer({
               <FileDownloadRoundedIcon fontSize="small" />
             </IconButton>
           </Tooltip>
-          <IconButton size="small" onClick={onClose} sx={{ border: '1px solid', borderColor: 'divider' }}>
-            <CloseRoundedIcon fontSize="small" />
-          </IconButton>
+          {!embedded && (
+            <IconButton size="small" onClick={onClose} sx={{ border: '1px solid', borderColor: 'divider' }}>
+              <CloseRoundedIcon fontSize="small" />
+            </IconButton>
+          )}
         </Box>
       </Box>
 
@@ -706,24 +690,76 @@ export default function CostAllocationDrawer({
       </Box>
 
       {/* Drawer Footer */}
-      <Box
+      {!embedded && (
+        <Box
+          sx={{
+            p: 2,
+            borderTop: '1px solid',
+            borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
+            bgcolor: isDark ? '#0f172a' : '#ffffff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+            Rates: ${customRates.cpuPerCoreHour}/vCPU-hr · ${customRates.memoryPerGiBHour}/GiB-hr
+          </Typography>
+          <Button size="small" variant="outlined" onClick={onClose} sx={{ textTransform: 'none' }}>
+            Close
+          </Button>
+        </Box>
+      )}
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <Paper
+        elevation={0}
         sx={{
-          p: 2,
-          borderTop: '1px solid',
-          borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
-          bgcolor: isDark ? '#0f172a' : '#ffffff',
+          flexGrow: 1,
+          height: '100%',
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
+          flexDirection: 'column',
+          bgcolor: isDark ? 'rgba(15, 23, 42, 0.6)' : '#ffffff',
+          borderRadius: 2.5,
+          border: '1px solid',
+          borderColor: 'divider',
+          overflow: 'hidden',
         }}
       >
-        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-          Rates: ${customRates.cpuPerCoreHour}/vCPU-hr · ${customRates.memoryPerGiBHour}/GiB-hr
-        </Typography>
-        <Button size="small" variant="outlined" onClick={onClose} sx={{ textTransform: 'none' }}>
-          Close
-        </Button>
-      </Box>
+        {bodyContent}
+      </Paper>
+    );
+  }
+
+  return (
+    <Drawer
+      anchor="right"
+      open={open}
+      onClose={onClose}
+      slotProps={{
+        backdrop: {
+          sx: {
+            bgcolor: 'rgba(0, 0, 0, 0.4)',
+            backdropFilter: 'blur(3px)',
+          },
+        },
+        paper: {
+          sx: {
+            width: { xs: '100%', sm: 750, md: 900 },
+            bgcolor: isDark ? '#090d16' : '#f8fafc',
+            borderLeft: '1px solid',
+            borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
+            boxShadow: isDark ? '-8px 0 32px rgba(0,0,0,0.6)' : '-8px 0 24px rgba(0,0,0,0.12)',
+            display: 'flex',
+            flexDirection: 'column',
+          },
+        },
+      }}
+    >
+      {bodyContent}
     </Drawer>
   );
 }

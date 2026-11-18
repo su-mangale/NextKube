@@ -43,6 +43,7 @@ export interface PortForwardDrawerProps {
   onClose: () => void;
   clusterId: string;
   namespaces?: string[];
+  embedded?: boolean;
   initialTarget?: {
     targetType: 'pod' | 'service';
     targetName: string;
@@ -56,6 +57,7 @@ export function PortForwardDrawer({
   onClose,
   clusterId,
   namespaces = ['default'],
+  embedded = false,
   initialTarget = null,
 }: PortForwardDrawerProps) {
   const theme = useTheme();
@@ -165,26 +167,10 @@ export function PortForwardDrawer({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   };
 
-  return (
-    <Drawer
-      anchor="right"
-      open={open}
-      onClose={onClose}
-      slotProps={{
-        paper: {
-          sx: {
-            width: { xs: '100%', sm: 540 },
-            bgcolor: isDark ? '#0b0f19' : '#ffffff',
-            backgroundImage: 'none',
-            display: 'flex',
-            flexDirection: 'column',
-            boxShadow: isDark
-              ? '-8px 0 32px rgba(0, 0, 0, 0.7)'
-              : '-8px 0 32px rgba(0, 0, 0, 0.1)',
-          },
-        },
-      }}
-    >
+  if (!open && !embedded) return null;
+
+  const bodyContent = (
+    <>
       {/* Header */}
       <Box
         sx={{
@@ -255,9 +241,11 @@ export function PortForwardDrawer({
             </Button>
           )}
 
-          <IconButton onClick={onClose} size="small" sx={{ color: 'text.secondary' }}>
-            <CloseRoundedIcon fontSize="small" />
-          </IconButton>
+          {!embedded && (
+            <IconButton onClick={onClose} size="small" sx={{ color: 'text.secondary' }}>
+              <CloseRoundedIcon fontSize="small" />
+            </IconButton>
+          )}
         </Box>
       </Box>
 
@@ -643,6 +631,51 @@ export function PortForwardDrawer({
           </Box>
         )}
       </Box>
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <Paper
+        elevation={0}
+        sx={{
+          flexGrow: 1,
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          bgcolor: isDark ? 'rgba(15, 23, 42, 0.6)' : '#ffffff',
+          borderRadius: 2.5,
+          border: '1px solid',
+          borderColor: 'divider',
+          overflow: 'hidden',
+        }}
+      >
+        {bodyContent}
+      </Paper>
+    );
+  }
+
+  return (
+    <Drawer
+      anchor="right"
+      open={open}
+      onClose={onClose}
+      slotProps={{
+        paper: {
+          sx: {
+            width: { xs: '100%', sm: 540 },
+            bgcolor: isDark ? '#0b0f19' : '#ffffff',
+            backgroundImage: 'none',
+            display: 'flex',
+            flexDirection: 'column',
+            boxShadow: isDark
+              ? '-8px 0 32px rgba(0, 0, 0, 0.7)'
+              : '-8px 0 32px rgba(0, 0, 0, 0.1)',
+          },
+        },
+      }}
+    >
+      {bodyContent}
     </Drawer>
   );
 }
