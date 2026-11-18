@@ -63,6 +63,14 @@ Persistent theme toggling (Dark & Light modes), multi-session window management,
 Enterprise login protected by signed JWT session tokens:
 ![Login Screen](docs/images/07-login-screen.png)
 
+### 11. Interactive Visual Topology & Dependency Graph ("Kubernetes Mind Map")
+End-to-end visual dependency and live traffic map connecting Ingresses $\to$ Services $\to$ Workloads $\to$ Pods $\to$ Nodes & Storage:
+- 60FPS fluid canvas with pan, zoom, auto-fit, and minimap radar.
+- Flowing animated traffic particles on active routes.
+- Pod replica grouping to eliminate clutter in large deployments.
+- Node Inspector with 1-click Logs, Exec Shell, YAML editor, and scale/restart controls.
+- Accessible via shortcut (`Alt+T`), the ActionDock, and the Overview Observability matrix.
+
 ---
 
 ## 🏗️ How NextKube Works

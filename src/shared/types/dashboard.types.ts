@@ -605,4 +605,68 @@ export interface ClusterHealthReport {
   };
 }
 
+// ==========================================
+// Visual Topology Graph Types
+// ==========================================
+
+export type TopologyKind =
+  | 'Ingress'
+  | 'Gateway'
+  | 'Service'
+  | 'Deployment'
+  | 'DaemonSet'
+  | 'StatefulSet'
+  | 'Job'
+  | 'Pod'
+  | 'Node'
+  | 'PVC'
+  | 'ConfigMap'
+  | 'Secret';
+
+export interface TopologyNode {
+  id: string;
+  kind: TopologyKind;
+  name: string;
+  namespace: string;
+  status: 'Healthy' | 'Warning' | 'Error' | 'Pending' | 'Terminating' | string;
+  detail?: string;
+  restarts?: number;
+  ip?: string;
+  nodeName?: string;
+  image?: string;
+  containers?: string[];
+  labels?: Record<string, string>;
+  tier: number; // 0: Ingress/Gateway, 1: Service, 2: Workload, 3: Pod, 4: Infra (Node, PVC)
+  podCount?: number;
+  readyReplicas?: number;
+  desiredReplicas?: number;
+}
+
+export interface TopologyEdge {
+  id: string;
+  source: string;
+  target: string;
+  relation: 'routes-to' | 'selects' | 'manages' | 'runs-on' | 'claims' | 'exposes';
+  label?: string;
+  status?: 'active' | 'warning' | 'error';
+}
+
+export interface ClusterTopology {
+  nodes: TopologyNode[];
+  edges: TopologyEdge[];
+  summary: {
+    totalNodes: number;
+    totalEdges: number;
+    ingressCount: number;
+    serviceCount: number;
+    workloadCount: number;
+    podCount: number;
+    infraCount: number;
+    healthyCount: number;
+    warningCount: number;
+    errorCount: number;
+  };
+}
+
+
 

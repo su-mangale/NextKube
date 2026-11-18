@@ -22,6 +22,7 @@ export { SettingsDialog, type SettingsDialogProps } from './components/SettingsD
 export { KeyboardShortcutsSettings } from './components/KeyboardShortcutsSettings';
 export { SwitchClusterDialog, type SwitchClusterDialogProps } from './components/SwitchClusterDialog';
 export { ClusterOverviewObservability, type ClusterOverviewObservabilityProps } from './components/ClusterOverviewObservability';
+export { default as ClusterTopologyGraph, type ClusterTopologyGraphProps } from './components/ClusterTopologyGraph';
 export { AddClusterDialog, type AddClusterDialogProps } from './components/AddClusterDialog';
 export { DraggablePaper, type DraggablePaperProps } from './components/DraggablePaper';
 export { NoClusterView } from './components/NoClusterView';

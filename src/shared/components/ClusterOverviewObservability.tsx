@@ -28,6 +28,7 @@ import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
+import HubIcon from '@mui/icons-material/Hub';
 import {
   K8sPod,
   K8sDeployment,
@@ -285,9 +286,25 @@ export function ClusterOverviewObservability({
           bgcolor: isDark ? 'rgba(30, 41, 59, 0.3)' : '#ffffff',
         }}
       >
-        <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 2, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.75rem' }}>
-          Workload Fleet Observability Matrix
-        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 800, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.75rem' }}>
+            Workload Fleet Observability Matrix
+          </Typography>
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<HubIcon sx={{ fontSize: 16 }} />}
+            onClick={() => onNavigateTab(26)}
+            sx={{
+              borderRadius: 2,
+              textTransform: 'none',
+              fontWeight: 700,
+              fontSize: '0.75rem',
+            }}
+          >
+            Visual Topology Map
+          </Button>
+        </Box>
 
         <Grid container spacing={2}>
           {/* Deployments */}

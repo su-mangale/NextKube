@@ -17,6 +17,7 @@ import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded';
 import CloudUploadRoundedIcon from '@mui/icons-material/CloudUploadRounded';
 import SwapHorizRoundedIcon from '@mui/icons-material/SwapHorizRounded';
+import HubRoundedIcon from '@mui/icons-material/HubRounded';
 import { useShortcuts } from '../utils/shortcuts';
 
 export interface ExecSessionItem {
@@ -34,6 +35,8 @@ export interface ActionDockProps {
   isConsoleConnected?: boolean;
   isConsoleMinimized?: boolean;
   onCreateResource: () => void;
+  onToggleTopology?: () => void;
+  isTopologyActive?: boolean;
   onAddCluster?: () => void;
   onSwitchCluster?: () => void;
   onOpenSettings: () => void;
@@ -55,6 +58,8 @@ export function ActionDock({
   isConsoleConnected = false,
   isConsoleMinimized = false,
   onCreateResource,
+  onToggleTopology,
+  isTopologyActive = false,
   onAddCluster,
   onSwitchCluster,
   onOpenSettings,
@@ -432,6 +437,41 @@ export function ActionDock({
             </Box>
           </Tooltip>
         ) : null}
+
+        {/* Visual Topology Map */}
+        {onToggleTopology && (
+          <Tooltip title={`Visual Topology Map (${getShortcutKey('topology') || 'Alt+T'})`} placement="left" arrow>
+            <IconButton
+              onClick={onToggleTopology}
+              sx={{
+                width: 42,
+                height: 42,
+                borderRadius: '50%',
+                bgcolor: isTopologyActive
+                  ? isDark ? 'rgba(59, 130, 246, 0.3)' : 'rgba(59, 130, 246, 0.22)'
+                  : isDark ? 'rgba(59, 130, 246, 0.15)' : 'rgba(59, 130, 246, 0.1)',
+                color: isDark ? '#60a5fa' : '#2563eb',
+                border: '1px solid',
+                borderColor: isTopologyActive
+                  ? isDark ? '#60a5fa' : '#2563eb'
+                  : isDark ? 'rgba(59, 130, 246, 0.3)' : 'rgba(59, 130, 246, 0.22)',
+                boxShadow: isTopologyActive ? '0 0 10px rgba(59, 130, 246, 0.4)' : undefined,
+                transition: 'all 0.24s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                '&:hover': {
+                  transform: 'scale(1.15)',
+                  bgcolor: isDark ? 'rgba(59, 130, 246, 0.28)' : 'rgba(59, 130, 246, 0.2)',
+                  borderColor: isDark ? '#60a5fa' : '#2563eb',
+                  boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)',
+                },
+                '&:active': {
+                  transform: 'scale(0.95)',
+                },
+              }}
+            >
+              <HubRoundedIcon sx={{ fontSize: 22 }} />
+            </IconButton>
+          </Tooltip>
+        )}
 
         {/* 3. Apply / Create Resource Manifest */}
         <Tooltip title={`Apply / Create Resource Manifest (${getShortcutKey('create') || 'Alt+A'})`} placement="left" arrow>

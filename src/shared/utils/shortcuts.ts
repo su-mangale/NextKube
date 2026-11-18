@@ -68,6 +68,14 @@ export const DEFAULT_SHORTCUTS: ShortcutItem[] = [
     key: 'Alt+R',
     category: 'Navigation',
   },
+  {
+    id: 'topology',
+    label: 'Visual Topology Map',
+    description: 'Open interactive resource dependency and traffic topology map',
+    defaultKey: 'Alt+T',
+    key: 'Alt+T',
+    category: 'Navigation',
+  },
 ];
 
 const STORAGE_KEY = 'nextkube-keyboard-shortcuts';

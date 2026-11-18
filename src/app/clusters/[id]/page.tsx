@@ -122,6 +122,7 @@ import {
   AddClusterDialog,
   SwitchClusterDialog,
   ClusterOverviewObservability,
+  ClusterTopologyGraph,
   useShortcuts,
   matchesShortcut,
   DraggablePaper,
@@ -526,6 +527,7 @@ spec:
       const settingsSc = shortcuts.find((s) => s.id === 'settings')?.key;
       const refreshSc = shortcuts.find((s) => s.id === 'refresh')?.key;
       const toggleDockSc = shortcuts.find((s) => s.id === 'toggleDock')?.key;
+      const topologySc = shortcuts.find((s) => s.id === 'topology')?.key;
 
       if (consoleSc && matchesShortcut(e, consoleSc)) {
         e.preventDefault();
@@ -534,6 +536,12 @@ spec:
       }
 
       if (isInput) return;
+
+      if (topologySc && matchesShortcut(e, topologySc)) {
+        e.preventDefault();
+        setActiveTab((prev) => (prev === 26 ? 0 : 26));
+        return;
+      }
 
       if (createSc && matchesShortcut(e, createSc)) {
         e.preventDefault();
@@ -1670,6 +1678,7 @@ spec:
     if (activeTab === 23) return [...filteredGateways, ...filteredHTTPRoutes];
     if (activeTab === 24) return filteredAuditLogs;
     if (activeTab === 25) return filteredHelmReleases;
+    if (activeTab === 26) return [];
     return [];
   };
 
@@ -2369,6 +2378,7 @@ spec:
             <Tab label="Gateway API" />
             <Tab label="Audit Trail" />
             <Tab label="Helm Releases" />
+            <Tab label="Topology Map" />
           </Tabs>
         </Box>
 
@@ -2481,7 +2491,7 @@ spec:
               </Box>
             </Paper>
           )}
-          {activeTab !== 0 && (
+          {activeTab !== 0 && activeTab !== 26 && (
             <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
               <TextField
                 placeholder="Search resources by name..."
@@ -3620,11 +3630,27 @@ spec:
                 </Box>
               )}
 
+              {/* TAB 26: VISUAL TOPOLOGY GRAPH */}
+              {activeTab === 26 && (
+                <Box sx={{ width: '100%', height: 'calc(100vh - 145px)', minHeight: 640 }}>
+                  <ClusterTopologyGraph
+                    clusterId={effectiveClusterId}
+                    initialNamespace={selectedNamespace}
+                    availableNamespaces={namespaces}
+                    onOpenLogs={(res, kind) => handleOpenLogs(res, kind)}
+                    onOpenExec={(res) => handleOpenExec(res)}
+                    onViewYaml={(res) => handleOpenYaml(res)}
+                    onScale={(res) => handleOpenScale(res)}
+                    onRestart={(res) => handleOpenRollout(res)}
+                  />
+                </Box>
+              )}
+
             </Box>
           )}
 
           {/* MUI TablePagination Footer */}
-          {activeTab !== 0 && (
+          {activeTab !== 0 && activeTab !== 26 && (
             <TablePagination
               rowsPerPageOptions={[10, 25, 50, 100]}
               component="div"
@@ -5129,6 +5155,8 @@ spec:
         isConsoleConnected={kubectlShellOpen}
         isConsoleMinimized={kubectlShellOpen && kubectlShellMinimized}
         onToggleConsole={handleToggleConsole}
+        onToggleTopology={() => setActiveTab((prev) => (prev === 26 ? 0 : 26))}
+        isTopologyActive={activeTab === 26}
         onCreateResource={() => {
           setCreateDialogOpen(true);
           setTopWindow('yamlCreate');

@@ -31,6 +31,9 @@ import {
   K8sHelmRelease,
   K8sHelmRevision,
   DashboardQueryResult,
+  ClusterTopology,
+  TopologyNode,
+  TopologyEdge,
 } from '@/shared/types/dashboard.types';
 
 export interface ClusterApiClients {
@@ -2093,4 +2096,478 @@ export function getMockHelmReleases(namespace?: string): K8sHelmRelease[] {
   if (!namespace || namespace === 'all') return all;
   return all.filter((r) => r.namespace === namespace);
 }
+
+export async function fetchClusterTopology(clusterId: string, namespace?: string): Promise<ClusterTopology> {
+  const clients = getClusterApiClients(clusterId);
+  if (!clients) {
+    return {
+      nodes: [],
+      edges: [],
+      summary: {
+        totalNodes: 0,
+        totalEdges: 0,
+        ingressCount: 0,
+        serviceCount: 0,
+        workloadCount: 0,
+        podCount: 0,
+        infraCount: 0,
+        healthyCount: 0,
+        warningCount: 0,
+        errorCount: 0,
+      },
+    };
+  }
+
+  const isAll = !namespace || namespace === 'all';
+
+  try {
+    const [
+      ingressesRes,
+      servicesRes,
+      deploymentsRes,
+      daemonSetsRes,
+      statefulSetsRes,
+      podsRes,
+      pvcsRes,
+      nodesRes,
+    ] = await Promise.allSettled([
+      isAll ? clients.networkingApi.listIngressForAllNamespaces({}) : clients.networkingApi.listNamespacedIngress({ namespace }),
+      isAll ? clients.coreApi.listServiceForAllNamespaces({}) : clients.coreApi.listNamespacedService({ namespace }),
+      isAll ? clients.appsApi.listDeploymentForAllNamespaces({}) : clients.appsApi.listNamespacedDeployment({ namespace }),
+      isAll ? clients.appsApi.listDaemonSetForAllNamespaces({}) : clients.appsApi.listNamespacedDaemonSet({ namespace }),
+      isAll ? clients.appsApi.listStatefulSetForAllNamespaces({}) : clients.appsApi.listNamespacedStatefulSet({ namespace }),
+      isAll ? clients.coreApi.listPodForAllNamespaces({}) : clients.coreApi.listNamespacedPod({ namespace }),
+      isAll ? clients.coreApi.listPersistentVolumeClaimForAllNamespaces({}) : clients.coreApi.listNamespacedPersistentVolumeClaim({ namespace }),
+      clients.coreApi.listNode({}),
+    ]);
+
+    const ingresses = ingressesRes.status === 'fulfilled' ? ingressesRes.value.items || [] : [];
+    const services = servicesRes.status === 'fulfilled' ? servicesRes.value.items || [] : [];
+    const deployments = deploymentsRes.status === 'fulfilled' ? deploymentsRes.value.items || [] : [];
+    const daemonSets = daemonSetsRes.status === 'fulfilled' ? daemonSetsRes.value.items || [] : [];
+    const statefulSets = statefulSetsRes.status === 'fulfilled' ? statefulSetsRes.value.items || [] : [];
+    const pods = podsRes.status === 'fulfilled' ? podsRes.value.items || [] : [];
+    const pvcs = pvcsRes.status === 'fulfilled' ? pvcsRes.value.items || [] : [];
+    const nodesList = nodesRes.status === 'fulfilled' ? nodesRes.value.items || [] : [];
+
+    const nodes: TopologyNode[] = [];
+    const edges: TopologyEdge[] = [];
+    const nodeMap = new Map<string, TopologyNode>();
+    const edgeSet = new Set<string>();
+
+    const addNode = (n: TopologyNode) => {
+      if (!nodeMap.has(n.id)) {
+        nodeMap.set(n.id, n);
+        nodes.push(n);
+      }
+    };
+
+    const addEdge = (edge: TopologyEdge) => {
+      const key = `${edge.source}->${edge.target}`;
+      if (!edgeSet.has(key)) {
+        edgeSet.add(key);
+        edges.push(edge);
+      }
+    };
+
+    // 1. Tier 0: Ingresses
+    for (const ing of ingresses) {
+      const name = ing.metadata?.name || 'unknown';
+      const ns = ing.metadata?.namespace || 'default';
+      const hosts = (ing.spec?.rules || []).map((r) => r.host).filter(Boolean).join(', ') || '*';
+      const id = `ingress:${ns}:${name}`;
+      addNode({
+        id,
+        kind: 'Ingress',
+        name,
+        namespace: ns,
+        status: 'Healthy',
+        detail: hosts,
+        labels: ing.metadata?.labels,
+        tier: 0,
+      });
+
+      // Link Ingress -> Services
+      for (const rule of ing.spec?.rules || []) {
+        for (const p of rule.http?.paths || []) {
+          const backendSvc = p.backend?.service?.name;
+          if (backendSvc) {
+            const svcId = `service:${ns}:${backendSvc}`;
+            addEdge({
+              id: `edge:${id}->${svcId}`,
+              source: id,
+              target: svcId,
+              relation: 'routes-to',
+              label: p.path || '/',
+              status: 'active',
+            });
+          }
+        }
+      }
+    }
+
+    // 2. Tier 1: Services
+    for (const svc of services) {
+      const name = svc.metadata?.name || 'unknown';
+      const ns = svc.metadata?.namespace || 'default';
+      const id = `service:${ns}:${name}`;
+      const type = svc.spec?.type || 'ClusterIP';
+      const ports = (svc.spec?.ports || []).map((p) => `${p.port}${p.nodePort ? `:${p.nodePort}` : ''}/${p.protocol || 'TCP'}`).join(', ');
+      const selector = svc.spec?.selector;
+
+      addNode({
+        id,
+        kind: 'Service',
+        name,
+        namespace: ns,
+        status: 'Healthy',
+        detail: `${type} · ${ports || '<none>'}`,
+        ip: svc.spec?.clusterIP,
+        labels: svc.metadata?.labels,
+        tier: 1,
+      });
+
+      // Match Service -> Workloads (Deployment, StatefulSet, DaemonSet)
+      if (selector && Object.keys(selector).length > 0) {
+        for (const dep of deployments) {
+          if (dep.metadata?.namespace === ns) {
+            const tplLabels = dep.spec?.template?.metadata?.labels;
+            const matchLabels = dep.spec?.selector?.matchLabels;
+            const matches = Object.entries(selector).every(
+              ([k, v]) => (tplLabels && tplLabels[k] === v) || (matchLabels && matchLabels[k] === v)
+            );
+            if (matches) {
+              const depId = `workload:${ns}:dep:${dep.metadata?.name}`;
+              addEdge({
+                id: `edge:${id}->${depId}`,
+                source: id,
+                target: depId,
+                relation: 'routes-to',
+                label: ports.split(',')[0]?.trim(),
+                status: 'active',
+              });
+            }
+          }
+        }
+        for (const sts of statefulSets) {
+          if (sts.metadata?.namespace === ns) {
+            const tplLabels = sts.spec?.template?.metadata?.labels;
+            const matchLabels = sts.spec?.selector?.matchLabels;
+            const matches = Object.entries(selector).every(
+              ([k, v]) => (tplLabels && tplLabels[k] === v) || (matchLabels && matchLabels[k] === v)
+            );
+            if (matches) {
+              const stsId = `workload:${ns}:sts:${sts.metadata?.name}`;
+              addEdge({
+                id: `edge:${id}->${stsId}`,
+                source: id,
+                target: stsId,
+                relation: 'routes-to',
+                label: ports.split(',')[0]?.trim(),
+                status: 'active',
+              });
+            }
+          }
+        }
+      }
+    }
+
+    // 3. Tier 2: Workloads (Deployments, StatefulSets, DaemonSets)
+    for (const dep of deployments) {
+      const name = dep.metadata?.name || 'unknown';
+      const ns = dep.metadata?.namespace || 'default';
+      const id = `workload:${ns}:dep:${name}`;
+      const replicas = dep.spec?.replicas || 0;
+      const readyReplicas = dep.status?.readyReplicas || 0;
+      const status = readyReplicas === replicas && replicas > 0 ? 'Healthy' : readyReplicas === 0 ? 'Error' : 'Warning';
+      const image = dep.spec?.template?.spec?.containers?.[0]?.image;
+      const containers = (dep.spec?.template?.spec?.containers || []).map((c) => c.name);
+
+      addNode({
+        id,
+        kind: 'Deployment',
+        name,
+        namespace: ns,
+        status,
+        detail: `${readyReplicas}/${replicas} Replicas`,
+        readyReplicas,
+        desiredReplicas: replicas,
+        image,
+        containers,
+        labels: dep.metadata?.labels,
+        tier: 2,
+      });
+    }
+
+    for (const sts of statefulSets) {
+      const name = sts.metadata?.name || 'unknown';
+      const ns = sts.metadata?.namespace || 'default';
+      const id = `workload:${ns}:sts:${name}`;
+      const replicas = sts.spec?.replicas || 0;
+      const readyReplicas = sts.status?.readyReplicas || 0;
+      const status = readyReplicas === replicas && replicas > 0 ? 'Healthy' : readyReplicas === 0 ? 'Error' : 'Warning';
+      const image = sts.spec?.template?.spec?.containers?.[0]?.image;
+
+      addNode({
+        id,
+        kind: 'StatefulSet',
+        name,
+        namespace: ns,
+        status,
+        detail: `${readyReplicas}/${replicas} Replicas`,
+        readyReplicas,
+        desiredReplicas: replicas,
+        image,
+        labels: sts.metadata?.labels,
+        tier: 2,
+      });
+    }
+
+    for (const ds of daemonSets) {
+      const name = ds.metadata?.name || 'unknown';
+      const ns = ds.metadata?.namespace || 'default';
+      const id = `workload:${ns}:ds:${name}`;
+      const desired = ds.status?.desiredNumberScheduled || 0;
+      const ready = ds.status?.numberReady || 0;
+      const status = ready === desired && desired > 0 ? 'Healthy' : ready === 0 ? 'Error' : 'Warning';
+      const image = ds.spec?.template?.spec?.containers?.[0]?.image;
+
+      addNode({
+        id,
+        kind: 'DaemonSet',
+        name,
+        namespace: ns,
+        status,
+        detail: `${ready}/${desired} Scheduled`,
+        readyReplicas: ready,
+        desiredReplicas: desired,
+        image,
+        labels: ds.metadata?.labels,
+        tier: 2,
+      });
+    }
+
+    // 4. Tier 3: Pods
+    for (const pod of pods) {
+      const name = pod.metadata?.name || 'unknown';
+      const ns = pod.metadata?.namespace || 'default';
+      const id = `pod:${ns}:${name}`;
+      const containerStatuses = pod.status?.containerStatuses || [];
+      const totalContainers = pod.spec?.containers?.length || 0;
+      const readyContainers = containerStatuses.filter((c) => c.ready).length;
+      const restarts = containerStatuses.reduce((acc, c) => acc + c.restartCount, 0);
+      const isCrashLoop = containerStatuses.some(
+        (c) => c.state?.waiting?.reason === 'CrashLoopBackOff' || c.state?.waiting?.reason === 'ImagePullBackOff'
+      );
+      const phase = pod.status?.phase || 'Unknown';
+
+      let status = 'Healthy';
+      if (isCrashLoop || restarts > 10 || phase === 'Failed') {
+        status = 'Error';
+      } else if (phase === 'Pending' || readyContainers < totalContainers) {
+        status = 'Warning';
+      }
+
+      const image = pod.spec?.containers?.[0]?.image;
+      const containers = (pod.spec?.containers || []).map((c) => c.name);
+      const nodeName = pod.spec?.nodeName;
+
+      addNode({
+        id,
+        kind: 'Pod',
+        name,
+        namespace: ns,
+        status,
+        detail: `${readyContainers}/${totalContainers} Ready · ${restarts} Restarts`,
+        restarts,
+        ip: pod.status?.podIP,
+        nodeName,
+        image,
+        containers,
+        labels: pod.metadata?.labels,
+        tier: 3,
+      });
+
+      // Link Workload -> Pod
+      const owners = pod.metadata?.ownerReferences || [];
+      let linkedToWorkload = false;
+      for (const owner of owners) {
+        if (owner.kind === 'ReplicaSet') {
+          const matchDep = deployments.find((d) => d.metadata?.namespace === ns && owner.name.startsWith(d.metadata?.name || ''));
+          if (matchDep) {
+            const depId = `workload:${ns}:dep:${matchDep.metadata?.name}`;
+            addEdge({
+              id: `edge:${depId}->${id}`,
+              source: depId,
+              target: id,
+              relation: 'manages',
+              status: status === 'Error' ? 'error' : status === 'Warning' ? 'warning' : 'active',
+            });
+            linkedToWorkload = true;
+          }
+        } else if (owner.kind === 'StatefulSet') {
+          const stsId = `workload:${ns}:sts:${owner.name}`;
+          addEdge({
+            id: `edge:${stsId}->${id}`,
+            source: stsId,
+            target: id,
+            relation: 'manages',
+            status: status === 'Error' ? 'error' : status === 'Warning' ? 'warning' : 'active',
+          });
+          linkedToWorkload = true;
+        } else if (owner.kind === 'DaemonSet') {
+          const dsId = `workload:${ns}:ds:${owner.name}`;
+          addEdge({
+            id: `edge:${dsId}->${id}`,
+            source: dsId,
+            target: id,
+            relation: 'manages',
+            status: status === 'Error' ? 'error' : status === 'Warning' ? 'warning' : 'active',
+          });
+          linkedToWorkload = true;
+        }
+      }
+
+      if (!linkedToWorkload) {
+        const matchDep = deployments.find((d) => d.metadata?.namespace === ns && name.startsWith(d.metadata?.name || ''));
+        if (matchDep) {
+          const depId = `workload:${ns}:dep:${matchDep.metadata?.name}`;
+          addEdge({
+            id: `edge:${depId}->${id}`,
+            source: depId,
+            target: id,
+            relation: 'manages',
+            status: status === 'Error' ? 'error' : 'active',
+          });
+        }
+      }
+
+      // Link Pod -> Node (Tier 4)
+      if (nodeName) {
+        const nodeId = `node:${nodeName}`;
+        if (!nodeMap.has(nodeId)) {
+          addNode({
+            id: nodeId,
+            kind: 'Node',
+            name: nodeName,
+            namespace: '',
+            status: 'Healthy',
+            detail: 'Cluster Node',
+            tier: 4,
+          });
+        }
+        addEdge({
+          id: `edge:${id}->${nodeId}`,
+          source: id,
+          target: nodeId,
+          relation: 'runs-on',
+          label: 'runs-on',
+          status: 'active',
+        });
+      }
+
+      // Link Pod -> PVCs (Tier 4)
+      for (const vol of pod.spec?.volumes || []) {
+        const pvcName = vol.persistentVolumeClaim?.claimName;
+        if (pvcName) {
+          const pvcId = `pvc:${ns}:${pvcName}`;
+          if (!nodeMap.has(pvcId)) {
+            addNode({
+              id: pvcId,
+              kind: 'PVC',
+              name: pvcName,
+              namespace: ns,
+              status: 'Healthy',
+              detail: 'Storage Claim',
+              tier: 4,
+            });
+          }
+          addEdge({
+            id: `edge:${id}->${pvcId}`,
+            source: id,
+            target: pvcId,
+            relation: 'claims',
+            label: 'mount',
+            status: 'active',
+          });
+        }
+      }
+    }
+
+    // 5. Tier 4: Registered Nodes
+    for (const node of nodesList) {
+      const name = node.metadata?.name || 'unknown';
+      const nodeId = `node:${name}`;
+      if (!nodeMap.has(nodeId)) {
+        const isReady = node.status?.conditions?.some((c) => c.type === 'Ready' && c.status === 'True');
+        addNode({
+          id: nodeId,
+          kind: 'Node',
+          name,
+          namespace: '',
+          status: isReady ? 'Healthy' : 'Error',
+          detail: 'Cluster Node',
+          tier: 4,
+        });
+      }
+    }
+
+    // 6. Tier 4: PVCs
+    for (const pvc of pvcs) {
+      const name = pvc.metadata?.name || 'unknown';
+      const ns = pvc.metadata?.namespace || 'default';
+      const pvcId = `pvc:${ns}:${name}`;
+      if (!nodeMap.has(pvcId)) {
+        const isBound = pvc.status?.phase === 'Bound';
+        addNode({
+          id: pvcId,
+          kind: 'PVC',
+          name,
+          namespace: ns,
+          status: isBound ? 'Healthy' : 'Warning',
+          detail: `${pvc.spec?.resources?.requests?.['storage'] || ''} · ${pvc.status?.phase || 'Pending'}`,
+          tier: 4,
+        });
+      }
+    }
+
+    const summary = {
+      totalNodes: nodes.length,
+      totalEdges: edges.length,
+      ingressCount: nodes.filter((n) => n.kind === 'Ingress').length,
+      serviceCount: nodes.filter((n) => n.kind === 'Service').length,
+      workloadCount: nodes.filter((n) => ['Deployment', 'StatefulSet', 'DaemonSet'].includes(n.kind)).length,
+      podCount: nodes.filter((n) => n.kind === 'Pod').length,
+      infraCount: nodes.filter((n) => ['Node', 'PVC'].includes(n.kind)).length,
+      healthyCount: nodes.filter((n) => n.status === 'Healthy').length,
+      warningCount: nodes.filter((n) => n.status === 'Warning').length,
+      errorCount: nodes.filter((n) => n.status === 'Error').length,
+    };
+
+    return {
+      nodes,
+      edges,
+      summary,
+    };
+  } catch (err) {
+    console.error(`[K8sClient] fetchClusterTopology failed for ${clusterId}:`, err);
+    return {
+      nodes: [],
+      edges: [],
+      summary: {
+        totalNodes: 0,
+        totalEdges: 0,
+        ingressCount: 0,
+        serviceCount: 0,
+        workloadCount: 0,
+        podCount: 0,
+        infraCount: 0,
+        healthyCount: 0,
+        warningCount: 0,
+        errorCount: 0,
+      },
+    };
+  }
+}
+
 

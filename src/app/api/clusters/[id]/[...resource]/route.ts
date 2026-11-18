@@ -39,6 +39,7 @@ import {
   fetchWorkloadLogsContent,
   fetchResourceYamlContent,
   applyManifestYaml,
+  fetchClusterTopology,
 } from '@/server/k8s-client';
 import { recordAuditEvent, getAuditLogs } from '@/server/audit';
 import { AUTH_COOKIE_NAME, verifySessionToken } from '@/server/jwt';
@@ -78,6 +79,12 @@ export async function GET(
     if (segment0 === 'audit') {
       const logs = await getAuditLogs(clusterId);
       return NextResponse.json(logs);
+    }
+
+    // Visual Topology Graph
+    if (segment0 === 'topology' || segment0 === 'graph') {
+      const topology = await fetchClusterTopology(clusterId, namespace);
+      return NextResponse.json(topology);
     }
 
     // 1. Namespaces

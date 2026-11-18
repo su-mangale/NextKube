@@ -92,3 +92,18 @@ NextKube equips operators and platform teams with a modern dashboard that replac
 ![Login Screen](images/07-login-screen.png)
 - **JWT Session Protection**: High-security, encrypted session tokens stored in HTTP-only cookies.
 - **Role-Based Access Control**: Pre-configured operator profiles (`admin`, `operator`, `viewer`) preventing unauthorized resource destruction.
+
+---
+
+### 11. Interactive Visual Topology & Dependency Graph ("Kubernetes Mind Map")
+- **End-to-End Architecture Flow**: Renders live relationships from edge routing to physical compute:
+  - $\text{Ingress / Gateway} \longrightarrow \text{Services} \longrightarrow \text{Workloads (Deployments / DaemonSets / StatefulSets)} \longrightarrow \text{Pods} \longrightarrow \text{Nodes \& Storage (PVCs)}$
+- **Smooth 60FPS Pan & Zoom Canvas**: Drag-to-pan, wheel zoom, auto-fit to screen, and real-time minimap radar.
+- **Animated Traffic Particles**: Active connections display flowing glowing particles with color-coded status rings (🟢 Healthy, 🟠 Degraded, 🔴 Error).
+- **Replica Consolidation Toggle**: Combines replica pods into clean parent nodes (e.g., `web-service (5 Replicas)`) to eliminate visual clutter in large deployments, with click-to-expand inspector.
+- **Interactive Inspector Drawer**: Click any node on the graph to inspect labels, container images, IP addresses, node placements, and trigger instant actions:
+  - 📜 **View Logs** (Pods, Deployments, DaemonSets, StatefulSets)
+  - 💻 **Open Shell (Exec)** (Pods)
+  - 📄 **View / Edit YAML** (All resources)
+  - ⚖️ **Scale Replicas** & 🔄 **Rollout Restart**
+- **Action Dock & Global Shortcut**: Instantly accessible via `Alt+T`, the floating Action Dock, or the Overview Observability matrix.

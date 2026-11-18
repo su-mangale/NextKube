@@ -114,6 +114,7 @@ import {
   PlatformAppInfo,
   AuditLogEntry,
   ClusterHealthReport,
+  ClusterTopology,
 } from '../types/dashboard.types';
 
 // Fetch Namespaces
@@ -1540,4 +1541,22 @@ export const useClusterHealth = (clusterId: string) => {
     refetchInterval: 15000,
   });
 };
+
+export const fetchClusterTopology = async (clusterId: string, namespace?: string): Promise<ClusterTopology> => {
+  const baseUrl = getBackendUrl();
+  const nsQuery = namespace && namespace !== 'all' ? `?namespace=${namespace}` : '';
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/topology${nsQuery}`);
+  if (!res.ok) throw new Error('Failed to fetch cluster topology graph');
+  return res.json();
+};
+
+export const useClusterTopology = (clusterId: string, namespace?: string) => {
+  return useQuery<ClusterTopology>({
+    queryKey: ['clusterTopology', clusterId, namespace],
+    queryFn: () => fetchClusterTopology(clusterId, namespace),
+    enabled: !!clusterId,
+    refetchInterval: 12000,
+  });
+};
+
 
