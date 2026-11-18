@@ -134,3 +134,18 @@ Enterprise-grade cloud-native application management:
 - **Interactive Visual Config Mode**: Form-driven parameter configuration with real-time toggle switches, replica counts, and ingress hosts.
 - **Raw YAML values.yaml Editor**: Direct in-browser YAML preview with syntax highlighting and instant sync with visual controls.
 - **Release Lifecycle Management**: Inspect installed releases, app versions, revision counters, status indicators, and 1-click rollback or uninstallation.
+
+---
+
+### 18. Structured Hierarchical Sidebar Navigation & Footer Settings
+Operator-first left sidebar replacing flat tabs with domain-driven collapsible groups:
+- **Logical Domain Groups**:
+  - ⚡ **Workloads**: `Deployments`, `Pods`, `StatefulSets`, `DaemonSets`, `ReplicaSets`, `Jobs`, `CronJobs`.
+  - 🌐 **Networking**: `Services`, `Ingresses`, `Gateway API`, `Network Policies`.
+  - 🗄️ **Config & Storage**: `ConfigMaps`, `Secrets`, `PVCs`, `Persistent Volumes`, `Storage Classes`.
+  - 🏢 **Cluster & Access**: `Nodes`, `Service Accounts`, `Roles`, `Role Bindings`, `HPAs`, `CRDs`, `Events`.
+- **Top Platform Anchors**: Direct access to `Overview` and `Topology Map`.
+- **Ecosystem Tools**: Direct access to `Helm App Store` and `Audit Trail`.
+- **Live Counter Badges**: Real-time workload & object count pills alongside every resource.
+- **Auto-Expansion & Persistence**: Automatically expands the corresponding group when jumping to an object via Command Palette or URL, with group states remembered across browser sessions via `localStorage`.
+- **Pinned Sidebar Footer**: Pinned **Settings** (`Alt+,`) and **Command Palette** launcher (`⌘K`) right at the bottom of the navigation bar, removing clutter from floating tools.

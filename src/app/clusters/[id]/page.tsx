@@ -12,8 +12,6 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
-  Tabs,
-  Tab,
   TextField,
   Table,
   TableHead,
@@ -125,6 +123,7 @@ import {
   SwitchClusterDialog,
   ClusterOverviewObservability,
   ClusterTopologyGraph,
+  ClusterSidebarNav,
   PodDiagnosticDialog,
   CommandPalette,
   HelmAppStore,
@@ -1709,6 +1708,63 @@ spec:
     return [];
   };
 
+  const resourceCounts = useMemo<Record<number, number>>(() => {
+    return {
+      1: (filteredPods || []).length,
+      2: (filteredDeployments || []).length,
+      3: (filteredDaemonSets || []).length,
+      4: (filteredStatefulSets || []).length,
+      5: (filteredReplicaSets || []).length,
+      6: (filteredJobs || []).length,
+      7: (filteredCronJobs || []).length,
+      8: (filteredServices || []).length,
+      9: (filteredIngresses || []).length,
+      10: (filteredNetworkPolicies || []).length,
+      11: (filteredConfigMaps || []).length,
+      12: (filteredSecrets || []).length,
+      13: (filteredPVCs || []).length,
+      14: (filteredStorageClasses || []).length,
+      15: (filteredNodes || []).length,
+      16: (filteredServiceAccounts || []).length,
+      17: (filteredRoles || []).length,
+      18: (filteredRoleBindings || []).length,
+      19: (filteredCRDs || []).length,
+      20: (filteredEvents || []).length,
+      21: (filteredHPAs || []).length,
+      22: (filteredPVs || []).length,
+      23: (filteredGateways?.length || 0) + (filteredHTTPRoutes?.length || 0),
+      24: (filteredAuditLogs || []).length,
+      25: (filteredHelmReleases || []).length,
+    };
+  }, [
+    filteredPods,
+    filteredDeployments,
+    filteredDaemonSets,
+    filteredStatefulSets,
+    filteredReplicaSets,
+    filteredJobs,
+    filteredCronJobs,
+    filteredServices,
+    filteredIngresses,
+    filteredNetworkPolicies,
+    filteredConfigMaps,
+    filteredSecrets,
+    filteredPVCs,
+    filteredStorageClasses,
+    filteredNodes,
+    filteredServiceAccounts,
+    filteredRoles,
+    filteredRoleBindings,
+    filteredCRDs,
+    filteredEvents,
+    filteredHPAs,
+    filteredPVs,
+    filteredGateways,
+    filteredHTTPRoutes,
+    filteredAuditLogs,
+    filteredHelmReleases,
+  ]);
+
   const paginate = <T,>(items: T[]): T[] => {
     const start = page * rowsPerPage;
     return items.slice(start, start + rowsPerPage);
@@ -2329,99 +2385,22 @@ spec:
           width: '100%',
         }}
       >
-        {/* Left Vertical Navigation Sidebar - Docked Edge to Edge */}
-        <Box
-          sx={{
-            width: 240,
-            minWidth: 240,
-            borderRight: '1px solid',
-            borderColor: 'divider',
-            bgcolor: 'action.hover',
-            py: 1,
-            display: 'flex',
-            flexDirection: 'column',
-            height: '100%',
-            overflow: 'hidden',
+        {/* Left Vertical Grouped Navigation Sidebar */}
+        <ClusterSidebarNav
+          activeTab={activeTab}
+          onSelectTab={(val) => {
+            setActiveTab(val);
+            setSearchQuery('');
+            setPage(0);
           }}
-        >
-          <Tabs
-            orientation="vertical"
-            variant="scrollable"
-            scrollButtons="auto"
-            value={activeTab}
-            onChange={(e, val) => { setActiveTab(val); setSearchQuery(''); setPage(0); }}
-            sx={{
-              flexGrow: 1,
-              height: '100%',
-              '& .MuiTabs-scroller': {
-                overflowY: 'auto !important',
-                scrollbarWidth: 'thin',
-                scrollbarColor: 'rgba(148, 163, 184, 0.4) transparent',
-                '&::-webkit-scrollbar': {
-                  width: '6px',
-                },
-                '&::-webkit-scrollbar-track': {
-                  background: 'transparent',
-                },
-                '&::-webkit-scrollbar-thumb': {
-                  backgroundColor: 'rgba(148, 163, 184, 0.35)',
-                  borderRadius: '6px',
-                  border: '1px solid transparent',
-                  backgroundClip: 'content-box',
-                  transition: 'background-color 0.2s ease',
-                },
-                '&::-webkit-scrollbar-thumb:hover': {
-                  backgroundColor: 'rgba(148, 163, 184, 0.65)',
-                },
-              },
-              '& .MuiTab-root': {
-                alignItems: 'flex-start',
-                textAlign: 'left',
-                fontWeight: 650,
-                fontSize: '0.82rem',
-                py: 1,
-                px: 2.5,
-                minHeight: 'auto',
-                borderRadius: 1.5,
-                mx: 1,
-                my: 0.2,
-                transition: 'all 0.15s ease',
-                '&.Mui-selected': {
-                  bgcolor: 'action.selected',
-                  fontWeight: 750,
-                }
-              }
-            }}
-          >
-            <Tab label="Overview" />
-            <Tab label="Pods" />
-            <Tab label="Deployments" />
-            <Tab label="DaemonSets" />
-            <Tab label="StatefulSets" />
-            <Tab label="ReplicaSets" />
-            <Tab label="Jobs" />
-            <Tab label="CronJobs" />
-            <Tab label="Services" />
-            <Tab label="Ingresses" />
-            <Tab label="NetworkPolicies" />
-            <Tab label="ConfigMaps" />
-            <Tab label="Secrets" />
-            <Tab label="PersistentVolumeClaims" />
-            <Tab label="StorageClasses" />
-            <Tab label="Nodes" />
-            <Tab label="ServiceAccounts" />
-            <Tab label="Roles" />
-            <Tab label="RoleBindings" />
-            <Tab label="Custom Resource Definitions" />
-            <Tab label="Events" />
-            <Tab label="HorizontalPodAutoscalers" />
-            <Tab label="PersistentVolumes" />
-            <Tab label="Gateway API" />
-            <Tab label="Audit Trail" />
-            <Tab label="Helm Releases" />
-            <Tab label="Topology Map" />
-          </Tabs>
-        </Box>
+          onOpenSettings={() => {
+            setSettingsDialogOpen(true);
+            setTopWindow('settings');
+          }}
+          onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+          resourceCounts={resourceCounts}
+          shortcutSettingsKey={shortcuts.find((s) => s.id === 'settings')?.key || 'Alt+,'}
+        />
 
         {/* Right Main Resource Content Panel */}
         <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', p: 3 }}>
@@ -5301,18 +5280,6 @@ spec:
         }}
         onAddCluster={() => setAddClusterOpen(true)}
         onSwitchCluster={() => setSwitchClusterOpen(true)}
-        onOpenSettings={() => {
-          if (!settingsDialogOpen) {
-            setSettingsDialogOpen(true);
-            setTopWindow('settings');
-          } else {
-            if (topWindow !== 'settings') {
-              setTopWindow('settings');
-            } else {
-              setSettingsDialogOpen(false);
-            }
-          }
-        }}
         onLogout={() => logout()}
         execSessions={execSessions}
         onToggleSession={(sessionId) => {

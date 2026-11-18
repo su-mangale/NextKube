@@ -41,7 +41,7 @@ export interface ActionDockProps {
   isTopologyActive?: boolean;
   onAddCluster?: () => void;
   onSwitchCluster?: () => void;
-  onOpenSettings: () => void;
+  onOpenSettings?: () => void;
   onLogout: () => void;
   // Multi-session Exec Support
   execSessions?: ExecSessionItem[];
@@ -595,32 +595,34 @@ export function ActionDock({
         )}
 
         {/* 6. Workspace & System Settings */}
-        <Tooltip title={`System & Workspace Settings (${getShortcutKey('settings') || 'Alt+,'})`} placement="left" arrow>
-          <IconButton
-            onClick={onOpenSettings}
-            sx={{
-              width: 42,
-              height: 42,
-              borderRadius: '50%',
-              bgcolor: isDark ? 'rgba(192, 132, 252, 0.15)' : 'rgba(147, 51, 234, 0.12)',
-              color: isDark ? '#c084fc' : '#9333ea',
-              border: '1px solid',
-              borderColor: isDark ? 'rgba(192, 132, 252, 0.28)' : 'rgba(147, 51, 234, 0.22)',
-              transition: 'all 0.24s cubic-bezier(0.34, 1.56, 0.64, 1)',
-              '&:hover': {
-                transform: 'scale(1.15) rotate(45deg)',
-                bgcolor: isDark ? 'rgba(192, 132, 252, 0.25)' : 'rgba(147, 51, 234, 0.22)',
-                borderColor: isDark ? '#c084fc' : '#9333ea',
-                boxShadow: '0 4px 14px rgba(147, 51, 234, 0.35)',
-              },
-              '&:active': {
-                transform: 'scale(0.95)',
-              },
-            }}
-          >
-            <SettingsRoundedIcon sx={{ fontSize: 21 }} />
-          </IconButton>
-        </Tooltip>
+        {onOpenSettings && (
+          <Tooltip title={`System & Workspace Settings (${getShortcutKey('settings') || 'Alt+,'})`} placement="left" arrow>
+            <IconButton
+              onClick={onOpenSettings}
+              sx={{
+                width: 42,
+                height: 42,
+                borderRadius: '50%',
+                bgcolor: isDark ? 'rgba(192, 132, 252, 0.15)' : 'rgba(147, 51, 234, 0.12)',
+                color: isDark ? '#c084fc' : '#9333ea',
+                border: '1px solid',
+                borderColor: isDark ? 'rgba(192, 132, 252, 0.28)' : 'rgba(147, 51, 234, 0.22)',
+                transition: 'all 0.24s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                '&:hover': {
+                  transform: 'scale(1.15) rotate(45deg)',
+                  bgcolor: isDark ? 'rgba(192, 132, 252, 0.25)' : 'rgba(147, 51, 234, 0.22)',
+                  borderColor: isDark ? '#c084fc' : '#9333ea',
+                  boxShadow: '0 4px 14px rgba(147, 51, 234, 0.35)',
+                },
+                '&:active': {
+                  transform: 'scale(0.95)',
+                },
+              }}
+            >
+              <SettingsRoundedIcon sx={{ fontSize: 21 }} />
+            </IconButton>
+          </Tooltip>
+        )}
 
         {/* Separator Divider */}
         <Divider

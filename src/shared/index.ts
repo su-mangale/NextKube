@@ -18,6 +18,7 @@ export { default as YamlEditorDialog, type YamlEditorDialogProps } from './compo
 export { TerminalWindow, type TerminalWindowProps } from './components/TerminalWindow';
 export { KubectlTerminalDrawer, KubeConsoleDrawer, type KubectlTerminalDrawerProps } from './components/KubectlTerminalDrawer';
 export { ActionDock, type ActionDockProps } from './components/ActionDock';
+export { ClusterSidebarNav, type ClusterSidebarNavProps } from './components/ClusterSidebarNav';
 export { SettingsDialog, type SettingsDialogProps } from './components/SettingsDialog';
 export { KeyboardShortcutsSettings } from './components/KeyboardShortcutsSettings';
 export { SwitchClusterDialog, type SwitchClusterDialogProps } from './components/SwitchClusterDialog';
