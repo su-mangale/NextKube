@@ -1,4 +1,4 @@
-name: Build Kubernetes Dashboard App
+name: Build NextKube App
 
 on:
   push:
@@ -15,7 +15,7 @@ on:
       - 'tsconfig.json'
       - 'Dockerfile'
       - '.dockerignore'
-      - '.github/workflows/build-k8s-dashboard.yml'
+      - '.github/workflows/build-nextkube.yml'
       - '.github/workflows/_reusable-build.yml'
       - '!**/*.md'
       - '!docs/**'
@@ -34,7 +34,7 @@ on:
       - 'tsconfig.json'
       - 'Dockerfile'
       - '.dockerignore'
-      - '.github/workflows/build-k8s-dashboard.yml'
+      - '.github/workflows/build-nextkube.yml'
       - '.github/workflows/_reusable-build.yml'
       - '!**/*.md'
       - '!docs/**'
@@ -47,8 +47,8 @@ jobs:
   build-and-push:
     uses: ./.github/workflows/_reusable-build.yml
     with:
-      app_name: k8s-dashboard
+      app_name: nextkube
       dockerfile_path: Dockerfile
-      image_name: ykp-k8s-dashboard
+      image_name: nextkube
       platforms: "linux/arm64"
     secrets: inherit
