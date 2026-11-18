@@ -135,7 +135,7 @@ import {
   setDeploymentImage,
   useRolloutHistory,
   fetchPodLogs,
-  fetchDeploymentLogs,
+  fetchWorkloadLogs,
   applyResourceYaml,
   YamlIdeEditor,
   YamlEditorDialog,
@@ -1104,11 +1104,12 @@ users:
           since: !isPre && logsTimeFrame !== 'all' ? logsTimeFrame : undefined,
           container: initialContainer || undefined,
         });
-      } else if (rType === 'deployments') {
+      } else if (isWorkload) {
         try {
-          data = await fetchDeploymentLogs(id, resource.name, namespace, {
+          data = await fetchWorkloadLogs(id, rType, resource.name, namespace, {
             previous: isPre,
             since: !isPre && logsTimeFrame !== 'all' ? logsTimeFrame : undefined,
+            container: initialContainer || undefined,
           });
         } catch {
           const matchingPods = pods.filter((p) => (namespace === 'all' || p.namespace === namespace) && p.name.startsWith(resource.name));
@@ -1118,6 +1119,7 @@ users:
                 const pData = await fetchPodLogs(id, p.name, p.namespace, {
                   previous: isPre,
                   since: !isPre && logsTimeFrame !== 'all' ? logsTimeFrame : undefined,
+                  container: initialContainer || undefined,
                 });
                 return `==================== [POD: ${p.name}] ====================\n${pData.logs || 'No logs recorded.'}`;
               } catch (err: any) {
@@ -1127,7 +1129,7 @@ users:
             const allLogs = await Promise.all(podLogsPromises);
             data = { logs: allLogs.join('\n\n') };
           } else {
-            data = { logs: `No active replica pods found for deployment "${resource.name}" in namespace "${namespace}".` };
+            data = { logs: `No active replica pods found for ${rType.slice(0, -1)} "${resource.name}" in namespace "${namespace}".` };
           }
         }
       } else {
@@ -1138,6 +1140,7 @@ users:
               const pData = await fetchPodLogs(id, p.name, p.namespace, {
                 previous: isPre,
                 since: !isPre && logsTimeFrame !== 'all' ? logsTimeFrame : undefined,
+                container: initialContainer || undefined,
               });
               return `==================== [POD: ${p.name}] ====================\n${pData.logs || 'No logs recorded.'}`;
             } catch (err: any) {
@@ -1177,11 +1180,12 @@ users:
           since: !isPre && tf !== 'all' ? tf : undefined,
           container: cont || undefined,
         });
-      } else if (rType === 'deployments') {
+      } else if (isWorkload) {
         try {
-          data = await fetchDeploymentLogs(id, resource.name, namespace, {
+          data = await fetchWorkloadLogs(id, rType, resource.name, namespace, {
             previous: isPre,
             since: !isPre && tf !== 'all' ? tf : undefined,
+            container: cont || undefined,
           });
         } catch {
           const matchingPods = pods.filter((p) => (namespace === 'all' || p.namespace === namespace) && p.name.startsWith(resource.name));
@@ -1191,6 +1195,7 @@ users:
                 const pData = await fetchPodLogs(id, p.name, p.namespace, {
                   previous: isPre,
                   since: !isPre && tf !== 'all' ? tf : undefined,
+                  container: cont || undefined,
                 });
                 return `==================== [POD: ${p.name}] ====================\n${pData.logs || 'No logs recorded.'}`;
               } catch (err: any) {
@@ -1200,7 +1205,7 @@ users:
             const allLogs = await Promise.all(podLogsPromises);
             data = { logs: allLogs.join('\n\n') };
           } else {
-            data = { logs: `No active replica pods found for deployment "${resource.name}" in namespace "${namespace}".` };
+            data = { logs: `No active replica pods found for ${rType.slice(0, -1)} "${resource.name}" in namespace "${namespace}".` };
           }
         }
       } else {
@@ -1211,6 +1216,7 @@ users:
               const pData = await fetchPodLogs(id, p.name, p.namespace, {
                 previous: isPre,
                 since: !isPre && tf !== 'all' ? tf : undefined,
+                container: cont || undefined,
               });
               return `==================== [POD: ${p.name}] ====================\n${pData.logs || 'No logs recorded.'}`;
             } catch (err: any) {
@@ -4159,7 +4165,7 @@ users:
         loading={yamlLoading}
         filename={selectedResource?.name || 'manifest'}
         saveButtonText="Save Manifest"
-        showSecretToggle={activeTab === 12 || selectedResource?.kind === 'Secret' || (selectedResource && 'dataCount' in selectedResource)}
+        showSecretToggle={activeTab === 12 || selectedResource?.kind === 'Secret'}
         secretDecoded={secretDecoded}
         onToggleSecretDecode={handleToggleSecretDecode}
         zIndex={topWindow === 'yamlEditor' ? 1330 : 1315}

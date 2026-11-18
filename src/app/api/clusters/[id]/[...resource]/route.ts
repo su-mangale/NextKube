@@ -36,6 +36,7 @@ import {
   deleteResourceObject,
   evaluateClusterHealth,
   fetchPodLogsContent,
+  fetchWorkloadLogsContent,
   fetchResourceYamlContent,
   applyManifestYaml,
 } from '@/server/k8s-client';
@@ -60,6 +61,11 @@ export async function GET(
     const url = new URL(req.url);
     const namespace = url.searchParams.get('namespace') || undefined;
     const container = url.searchParams.get('container') || undefined;
+    const previous = url.searchParams.get('previous') === 'true';
+    const tailLinesStr = url.searchParams.get('tailLines');
+    const tailLines = tailLinesStr ? parseInt(tailLinesStr, 10) : 200;
+    const sinceSecondsStr = url.searchParams.get('sinceSeconds');
+    const sinceSeconds = sinceSecondsStr ? parseInt(sinceSecondsStr, 10) : undefined;
 
     const segment0 = resource[0]?.toLowerCase();
 
@@ -85,7 +91,15 @@ export async function GET(
       // Subpath: /pods/[name]/logs
       if (resource.length >= 3 && resource[2] === 'logs') {
         const podName = resource[1];
-        const logs = await fetchPodLogsContent(clusterId, namespace || 'default', podName, container);
+        const logs = await fetchPodLogsContent(
+          clusterId,
+          namespace || 'default',
+          podName,
+          container,
+          tailLines,
+          previous,
+          sinceSeconds
+        );
         return NextResponse.json({ logs });
       }
       const data = await fetchPods(clusterId, namespace);
@@ -97,7 +111,16 @@ export async function GET(
       // Subpath: /deployments/[name]/logs
       if (resource.length >= 3 && resource[2] === 'logs') {
         const depName = resource[1];
-        const logs = await fetchPodLogsContent(clusterId, namespace || 'default', depName, container);
+        const logs = await fetchWorkloadLogsContent(
+          clusterId,
+          namespace || 'default',
+          'deployment',
+          depName,
+          container,
+          tailLines,
+          previous,
+          sinceSeconds
+        );
         return NextResponse.json({ logs });
       }
       const data = await fetchDeployments(clusterId, namespace);
@@ -166,11 +189,39 @@ export async function GET(
 
     // 12. Native Kubernetes Workloads & Resources
     if (segment0 === 'daemonsets' || segment0 === 'daemonset' || segment0 === 'daemon-sets' || segment0 === 'daemon-set') {
+      if (resource.length >= 3 && resource[2] === 'logs') {
+        const dsName = resource[1];
+        const logs = await fetchWorkloadLogsContent(
+          clusterId,
+          namespace || 'default',
+          'daemonset',
+          dsName,
+          container,
+          tailLines,
+          previous,
+          sinceSeconds
+        );
+        return NextResponse.json({ logs });
+      }
       const data = await fetchDaemonSets(clusterId, namespace);
       return NextResponse.json(data);
     }
 
     if (segment0 === 'statefulsets' || segment0 === 'statefulset' || segment0 === 'stateful-sets' || segment0 === 'stateful-set') {
+      if (resource.length >= 3 && resource[2] === 'logs') {
+        const stsName = resource[1];
+        const logs = await fetchWorkloadLogsContent(
+          clusterId,
+          namespace || 'default',
+          'statefulset',
+          stsName,
+          container,
+          tailLines,
+          previous,
+          sinceSeconds
+        );
+        return NextResponse.json({ logs });
+      }
       const data = await fetchStatefulSets(clusterId, namespace);
       return NextResponse.json(data);
     }
@@ -181,6 +232,20 @@ export async function GET(
     }
 
     if (segment0 === 'jobs' || segment0 === 'job') {
+      if (resource.length >= 3 && resource[2] === 'logs') {
+        const jobName = resource[1];
+        const logs = await fetchWorkloadLogsContent(
+          clusterId,
+          namespace || 'default',
+          'job',
+          jobName,
+          container,
+          tailLines,
+          previous,
+          sinceSeconds
+        );
+        return NextResponse.json({ logs });
+      }
       const data = await fetchJobs(clusterId, namespace);
       return NextResponse.json(data);
     }

@@ -175,7 +175,8 @@ export async function fetchDeployments(clusterId: string, namespace?: string): P
       : await clients.appsApi.listNamespacedDeployment({ namespace });
 
     return res.items.map((dep) => {
-      const image = dep.spec?.template.spec?.containers[0]?.image;
+      const image = dep.spec?.template?.spec?.containers?.[0]?.image;
+      const containers = (dep.spec?.template?.spec?.containers || []).map((c) => c.name);
       return {
         name: dep.metadata?.name || 'unknown',
         namespace: dep.metadata?.namespace || 'default',
@@ -185,6 +186,7 @@ export async function fetchDeployments(clusterId: string, namespace?: string): P
         availableReplicas: dep.status?.availableReplicas || 0,
         age: formatAge(dep.metadata?.creationTimestamp),
         image,
+        containers,
       };
     });
   } catch (err) {
@@ -207,6 +209,7 @@ export async function fetchDaemonSets(clusterId: string, namespace?: string): Pr
 
     return res.items.map((ds) => {
       const image = ds.spec?.template?.spec?.containers?.[0]?.image;
+      const containers = (ds.spec?.template?.spec?.containers || []).map((c) => c.name);
       const nodeSelector = ds.spec?.template?.spec?.nodeSelector
         ? Object.entries(ds.spec.template.spec.nodeSelector).map(([k, v]) => `${k}=${v}`).join(', ')
         : '<none>';
@@ -222,6 +225,7 @@ export async function fetchDaemonSets(clusterId: string, namespace?: string): Pr
         nodeSelector,
         age: formatAge(ds.metadata?.creationTimestamp),
         image,
+        containers,
       };
     });
   } catch (err) {
@@ -250,6 +254,7 @@ export async function fetchStatefulSets(clusterId: string, namespace?: string): 
       serviceName: sts.spec?.serviceName || '<none>',
       age: formatAge(sts.metadata?.creationTimestamp),
       image: sts.spec?.template?.spec?.containers?.[0]?.image,
+      containers: (sts.spec?.template?.spec?.containers || []).map((c) => c.name),
     }));
   } catch (err) {
     console.warn(`[K8sClient] fetchStatefulSets failed for ${clusterId}:`, err);
@@ -1498,7 +1503,9 @@ export async function fetchPodLogsContent(
   namespace: string,
   name: string,
   container?: string,
-  tailLines = 200
+  tailLines = 200,
+  previous = false,
+  sinceSeconds?: number
 ): Promise<string> {
   const clients = getClusterApiClients(clusterId);
 
@@ -1509,20 +1516,117 @@ export async function fetchPodLogsContent(
         namespace,
         container: container || undefined,
         tailLines,
+        previous: previous || undefined,
+        sinceSeconds: sinceSeconds || undefined,
         timestamps: true,
       });
-      if (res) {
+      if (res !== undefined && res !== null) {
         return typeof res === 'string' ? res : String(res);
       }
-    } catch {
-      // Fallback
+    } catch (err: any) {
+      const errorDetails = err?.body?.message || err?.message || 'Pod logs not available';
+      return `Failed to fetch logs for pod "${name}" in namespace "${namespace}": ${errorDetails}`;
     }
   }
 
-  return `[${new Date().toISOString()}] INFO Starting container for ${name} in namespace ${namespace}
-[${new Date().toISOString()}] INFO Listening on 0.0.0.0:8080 (http)
-[${new Date().toISOString()}] INFO Ready for incoming traffic. Healthcheck status: 200 OK
-[${new Date().toISOString()}] INFO Initialized worker pool with 4 threads.`;
+  return `Cluster ${clusterId} is not connected or offline.`;
+}
+
+export async function fetchWorkloadLogsContent(
+  clusterId: string,
+  namespace: string,
+  workloadType: 'deployment' | 'daemonset' | 'statefulset' | 'job' | string,
+  workloadName: string,
+  container?: string,
+  tailLines = 200,
+  previous = false,
+  sinceSeconds?: number
+): Promise<string> {
+  const clients = getClusterApiClients(clusterId);
+  if (!clients) {
+    return `Cluster ${clusterId} is not connected or offline.`;
+  }
+
+  try {
+    const norm = workloadType.toLowerCase();
+    let labelSelector: string | undefined;
+
+    if (norm.includes('deployment')) {
+      const dep = await clients.appsApi.readNamespacedDeployment({ name: workloadName, namespace });
+      const matchLabels = dep.spec?.selector?.matchLabels;
+      if (matchLabels && Object.keys(matchLabels).length > 0) {
+        labelSelector = Object.entries(matchLabels).map(([k, v]) => `${k}=${v}`).join(',');
+      }
+    } else if (norm.includes('daemonset')) {
+      const ds = await clients.appsApi.readNamespacedDaemonSet({ name: workloadName, namespace });
+      const matchLabels = ds.spec?.selector?.matchLabels;
+      if (matchLabels && Object.keys(matchLabels).length > 0) {
+        labelSelector = Object.entries(matchLabels).map(([k, v]) => `${k}=${v}`).join(',');
+      }
+    } else if (norm.includes('statefulset')) {
+      const sts = await clients.appsApi.readNamespacedStatefulSet({ name: workloadName, namespace });
+      const matchLabels = sts.spec?.selector?.matchLabels;
+      if (matchLabels && Object.keys(matchLabels).length > 0) {
+        labelSelector = Object.entries(matchLabels).map(([k, v]) => `${k}=${v}`).join(',');
+      }
+    } else if (norm.includes('job')) {
+      labelSelector = `job-name=${workloadName}`;
+    }
+
+    let podItems: k8s.V1Pod[] = [];
+    if (labelSelector) {
+      const res = await clients.coreApi.listNamespacedPod({ namespace, labelSelector });
+      podItems = res.items;
+    }
+
+    // Fallback if labelSelector didn't match: search pods by prefix
+    if (podItems.length === 0) {
+      const res = await clients.coreApi.listNamespacedPod({ namespace });
+      podItems = res.items.filter((p) => p.metadata?.name?.startsWith(workloadName));
+    }
+
+    if (podItems.length === 0) {
+      return `No active replica pods found for ${workloadType} "${workloadName}" in namespace "${namespace}".`;
+    }
+
+    // Sort: newest pods first
+    podItems.sort((a, b) => {
+      const timeA = new Date(a.metadata?.creationTimestamp || 0).getTime();
+      const timeB = new Date(b.metadata?.creationTimestamp || 0).getTime();
+      return timeB - timeA;
+    });
+
+    const targetPods = podItems.slice(0, 5);
+    const logsPromises = targetPods.map(async (pod) => {
+      const podName = pod.metadata?.name || 'unknown';
+      try {
+        const podLogs = await clients.coreApi.readNamespacedPodLog({
+          name: podName,
+          namespace,
+          container: container || undefined,
+          tailLines,
+          previous: previous || undefined,
+          sinceSeconds: sinceSeconds || undefined,
+          timestamps: true,
+        });
+        const logText = typeof podLogs === 'string' ? podLogs : String(podLogs || '');
+        if (targetPods.length === 1) {
+          return logText;
+        }
+        return `==================== [POD: ${podName}] ====================\n${logText || 'No logs recorded.'}`;
+      } catch (err: any) {
+        const errMsg = err?.body?.message || err?.message || 'Error fetching pod logs';
+        return `==================== [POD: ${podName}] ====================\nFailed to retrieve logs: ${errMsg}`;
+      }
+    });
+
+    const results = await Promise.all(logsPromises);
+    return results.join('\n\n');
+  } catch (err: any) {
+    const errorDetails = err?.body?.message || err?.message || 'Failed to fetch workload logs';
+    console.warn(`[K8sClient] fetchWorkloadLogsContent failed for ${workloadType}/${workloadName}:`, errorDetails);
+    return `Failed to fetch logs for ${workloadType} "${workloadName}": ${errorDetails}`;
+  }
 }
 
 export async function fetchResourceYamlContent(

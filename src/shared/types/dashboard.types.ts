@@ -128,6 +128,7 @@ export interface K8sDeployment {
   availableReplicas: number;
   age: string;
   image?: string;
+  containers?: string[];
 }
 
 export interface K8sService {
@@ -295,6 +296,7 @@ export interface K8sDaemonSet {
   nodeSelector?: string;
   age: string;
   image?: string;
+  containers?: string[];
 }
 
 export interface K8sStatefulSet {
@@ -305,6 +307,7 @@ export interface K8sStatefulSet {
   serviceName: string;
   age: string;
   image?: string;
+  containers?: string[];
 }
 
 export interface K8sReplicaSet {
@@ -340,6 +343,7 @@ export interface K8sJob {
   failed?: number;
   age: string;
   image?: string;
+  containers?: string[];
 }
 
 export interface K8sNetworkPolicy {

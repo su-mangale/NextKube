@@ -749,9 +749,10 @@ export const fetchPodLogs = async (
   return res.json();
 };
 
-// Fetch Deployment Logs
-export const fetchDeploymentLogs = async (
+// Fetch Workload Logs (Deployments, DaemonSets, StatefulSets, Jobs)
+export const fetchWorkloadLogs = async (
   clusterId: string,
+  workloadType: string,
   name: string,
   namespace: string,
   options?: LogOptions
@@ -772,9 +773,19 @@ export const fetchDeploymentLogs = async (
   if (options?.timestamps !== false) params.append('timestamps', 'true');
 
   const queryString = params.toString() ? `?${params.toString()}` : '';
-  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/deployments/${name}/logs${queryString}`);
-  if (!res.ok) throw new Error('Failed to retrieve logs from deployment');
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/${workloadType}/${name}/logs${queryString}`);
+  if (!res.ok) throw new Error(`Failed to retrieve logs from ${workloadType}`);
   return res.json();
+};
+
+// Fetch Deployment Logs
+export const fetchDeploymentLogs = async (
+  clusterId: string,
+  name: string,
+  namespace: string,
+  options?: LogOptions
+): Promise<K8sPodLogs> => {
+  return fetchWorkloadLogs(clusterId, 'deployments', name, namespace, options);
 };
 
 export const usePodLogs = (
