@@ -29,6 +29,7 @@ import StorageIcon from '@mui/icons-material/Storage';
 import AltRouteIcon from '@mui/icons-material/AltRouteRounded';
 import CompareArrowsIcon from '@mui/icons-material/CompareArrowsRounded';
 import AutoModeIcon from '@mui/icons-material/AutoModeRounded';
+import MonetizationOnIcon from '@mui/icons-material/MonetizationOnRounded';
 import { useColorMode } from '../theme/theme-registry';
 
 export interface CommandPaletteProps {
@@ -45,6 +46,7 @@ export interface CommandPaletteProps {
   onOpenPortForward?: () => void;
   onOpenDiff?: () => void;
   onOpenConfigDrift?: () => void;
+  onOpenCostAllocation?: () => void;
   onOpenSettings?: () => void;
   onRefresh?: () => void;
   customItems?: Array<{
@@ -81,6 +83,7 @@ export function CommandPalette({
   onOpenPortForward,
   onOpenDiff,
   onOpenConfigDrift,
+  onOpenCostAllocation,
   onOpenSettings,
   onRefresh,
   customItems = [],
@@ -197,6 +200,19 @@ export function CommandPalette({
     });
 
     list.push({
+      id: 'action-finops-cost',
+      title: 'Cost Allocation & Right-Sizing Advisor',
+      subtitle: 'Analyze monthly Kubernetes spend, wasted allocation & 1-click resource tuning',
+      category: 'Actions',
+      shortcut: 'Alt+$',
+      icon: <MonetizationOnIcon fontSize="small" sx={{ color: '#10b981' }} />,
+      action: () => {
+        onClose();
+        onOpenCostAllocation?.();
+      },
+    });
+
+    list.push({
       id: 'action-theme',
       title: `Switch to ${isDark ? 'Light' : 'Dark'} Mode`,
       subtitle: 'Toggle theme display appearance',
@@ -296,6 +312,7 @@ export function CommandPalette({
     onOpenPortForward,
     onOpenDiff,
     onOpenConfigDrift,
+    onOpenCostAllocation,
     onOpenSettings,
     onRefresh,
     onSelectNamespace,

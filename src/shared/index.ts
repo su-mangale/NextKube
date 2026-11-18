@@ -32,6 +32,7 @@ export { PortForwardDrawer, type PortForwardDrawerProps } from './components/Por
 export { default as YamlDiffViewerDialog, type YamlDiffViewerDialogProps } from './components/YamlDiffViewerDialog';
 export { default as ConfigDriftDrawer, type ConfigDriftDrawerProps } from './components/ConfigDriftDrawer';
 export { default as NodeDrainDialog, type NodeDrainDialogProps } from './components/NodeDrainDialog';
+export { default as CostAllocationDrawer, type CostAllocationDrawerProps } from './components/CostAllocationDrawer';
 export { DraggablePaper, type DraggablePaperProps } from './components/DraggablePaper';
 export { NoClusterView } from './components/NoClusterView';
 export * from './components/QueryProvider';

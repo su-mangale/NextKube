@@ -21,6 +21,7 @@ import HubRoundedIcon from '@mui/icons-material/HubRounded';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import AltRouteRoundedIcon from '@mui/icons-material/AltRouteRounded';
 import AutoModeRoundedIcon from '@mui/icons-material/AutoModeRounded';
+import MonetizationOnRoundedIcon from '@mui/icons-material/MonetizationOnRounded';
 import { useShortcuts } from '../utils/shortcuts';
 
 export interface ExecSessionItem {
@@ -45,6 +46,7 @@ export interface ActionDockProps {
   activePortForwardsCount?: number;
   onToggleConfigDrift?: () => void;
   driftedCount?: number;
+  onToggleCostAllocation?: () => void;
   onAddCluster?: () => void;
   onSwitchCluster?: () => void;
   onOpenSettings?: () => void;
@@ -73,6 +75,7 @@ export function ActionDock({
   activePortForwardsCount = 0,
   onToggleConfigDrift,
   driftedCount = 0,
+  onToggleCostAllocation,
   onAddCluster,
   onSwitchCluster,
   onOpenSettings,
@@ -635,6 +638,36 @@ export function ActionDock({
                 </Box>
               )}
             </Box>
+          </Tooltip>
+        )}
+
+        {/* FinOps Cost Allocation & Right-Sizing Advisor */}
+        {onToggleCostAllocation && (
+          <Tooltip title="FinOps Cost Allocation & Right-Sizing Advisor" placement="left" arrow>
+            <IconButton
+              onClick={onToggleCostAllocation}
+              sx={{
+                width: 42,
+                height: 42,
+                borderRadius: '50%',
+                bgcolor: isDark ? 'rgba(16, 185, 129, 0.15)' : 'rgba(5, 150, 105, 0.12)',
+                color: isDark ? '#34d399' : '#059669',
+                border: '1px solid',
+                borderColor: isDark ? 'rgba(16, 185, 129, 0.28)' : 'rgba(5, 150, 105, 0.22)',
+                transition: 'all 0.24s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                '&:hover': {
+                  transform: 'scale(1.15)',
+                  bgcolor: isDark ? 'rgba(16, 185, 129, 0.25)' : 'rgba(5, 150, 105, 0.2)',
+                  borderColor: isDark ? '#34d399' : '#059669',
+                  boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)',
+                },
+                '&:active': {
+                  transform: 'scale(0.95)',
+                },
+              }}
+            >
+              <MonetizationOnRoundedIcon sx={{ fontSize: 21 }} />
+            </IconButton>
           </Tooltip>
         )}
 

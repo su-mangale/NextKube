@@ -869,6 +869,88 @@ export interface PortForwardTargetOption {
   status?: string;
 }
 
+// ==========================================
+// Phase 4: FinOps Cost Allocation & Right-Sizing Types
+// ==========================================
+
+export interface ResourceCostRates {
+  cpuPerCoreHour: number; // e.g. 0.0316
+  memoryPerGiBHour: number; // e.g. 0.0042
+  storagePerGiBMonth: number; // e.g. 0.10
+}
+
+export interface WorkloadCostBreakdown {
+  name: string;
+  namespace: string;
+  kind: 'Deployment' | 'StatefulSet' | 'DaemonSet' | 'Pod';
+  replicas: number;
+  cpuRequestedCores: number;
+  cpuUsedCores: number;
+  memoryRequestedGiB: number;
+  memoryUsedGiB: number;
+  monthlyCost: number;
+  wastedMonthlyCost: number;
+  efficiencyScore: number; // 0 - 100%
+  status: 'optimal' | 'overprovisioned' | 'underprovisioned' | 'unbounded';
+}
+
+export interface NamespaceCostBreakdown {
+  namespace: string;
+  workloadCount: number;
+  monthlyCost: number;
+  wastedMonthlyCost: number;
+  cpuRequestedCores: number;
+  memoryRequestedGiB: number;
+  sharePercentage: number;
+}
+
+export interface RightSizingRecommendation {
+  id: string;
+  workloadName: string;
+  namespace: string;
+  kind: 'Deployment' | 'StatefulSet' | 'DaemonSet';
+  containerName: string;
+  currentCpuRequest: string;
+  currentMemoryRequest: string;
+  currentCpuLimit?: string;
+  currentMemoryLimit?: string;
+  recommendedCpuRequest: string;
+  recommendedMemoryRequest: string;
+  recommendedCpuLimit: string;
+  recommendedMemoryLimit: string;
+  estimatedMonthlySavings: number;
+  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH';
+  reason: string;
+  confidenceScore: number; // 0 - 100
+}
+
+export interface ClusterFinOpsSummary {
+  clusterId: string;
+  currency: string;
+  estimatedMonthlySpend: number;
+  estimatedMonthlyWaste: number;
+  efficiencyPercentage: number;
+  rates: ResourceCostRates;
+  namespaces: NamespaceCostBreakdown[];
+  topCostlyWorkloads: WorkloadCostBreakdown[];
+  recommendations: RightSizingRecommendation[];
+  totalCpuRequested: number;
+  totalMemoryRequestedGiB: number;
+  totalStorageAllocatedGiB: number;
+  updatedAt: string;
+}
+
+export interface ApplyRightSizingRequest {
+  namespace: string;
+  kind: 'Deployment' | 'StatefulSet' | 'DaemonSet';
+  name: string;
+  containerName: string;
+  cpuRequest: string;
+  memoryRequest: string;
+  cpuLimit: string;
+  memoryLimit: string;
+}
+
 
 
 

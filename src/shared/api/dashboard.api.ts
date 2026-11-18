@@ -124,6 +124,9 @@ import {
   NodeDrainOptions,
   NodeDrainResult,
   NodeDrainPreview,
+  ClusterFinOpsSummary,
+  ResourceCostRates,
+  ApplyRightSizingRequest,
 } from '../types/dashboard.types';
 
 // Fetch Namespaces
@@ -1865,6 +1868,54 @@ export const stopPortForward = async (
   }
   return res.json();
 };
+
+// ==========================================
+// Phase 4: FinOps Cost Allocation & Right-Sizing API
+// ==========================================
+
+export const fetchClusterFinOpsSummary = async (
+  clusterId: string,
+  rates?: Partial<ResourceCostRates>
+): Promise<ClusterFinOpsSummary> => {
+  const baseUrl = getBackendUrl();
+  const query = rates
+    ? `?cpuRate=${rates.cpuPerCoreHour ?? ''}&memRate=${rates.memoryPerGiBHour ?? ''}&storageRate=${rates.storagePerGiBMonth ?? ''}`
+    : '';
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/cost${query}`);
+  if (!res.ok) throw new Error('Failed to retrieve cluster FinOps summary');
+  return res.json();
+};
+
+export const useClusterFinOps = (
+  clusterId: string,
+  rates?: Partial<ResourceCostRates>,
+  options?: { enabled?: boolean }
+) => {
+  return useQuery({
+    queryKey: ['clusterFinOps', clusterId, rates?.cpuPerCoreHour, rates?.memoryPerGiBHour, rates?.storagePerGiBMonth],
+    queryFn: () => fetchClusterFinOpsSummary(clusterId, rates),
+    enabled: options?.enabled !== undefined ? options.enabled && !!clusterId : !!clusterId,
+    staleTime: 60000,
+  });
+};
+
+export const applyRightSizingRecommendation = async (
+  clusterId: string,
+  req: ApplyRightSizingRequest
+): Promise<{ success: boolean; message: string }> => {
+  const baseUrl = getBackendUrl();
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/cost/right-size`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || data.message || 'Failed to apply right-sizing patch');
+  }
+  return res.json();
+};
+
 
 
 

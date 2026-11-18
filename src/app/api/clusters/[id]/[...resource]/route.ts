@@ -50,6 +50,8 @@ import {
   cordonNodeResource,
   fetchNodeDrainPreview,
   drainNodeResource,
+  fetchClusterFinOpsSummary,
+  applyWorkloadRightSizing,
 } from '@/server/k8s-client';
 import {
   startPortForwardSession,
@@ -385,6 +387,19 @@ export async function GET(
       return NextResponse.json(data);
     }
 
+    // Phase 4: FinOps Cost Allocation & Right-Sizing: /cost or /cost/allocation
+    if (segment0 === 'cost') {
+      const cpuRate = url.searchParams.get('cpuRate') ? parseFloat(url.searchParams.get('cpuRate')!) : undefined;
+      const memRate = url.searchParams.get('memRate') ? parseFloat(url.searchParams.get('memRate')!) : undefined;
+      const storageRate = url.searchParams.get('storageRate') ? parseFloat(url.searchParams.get('storageRate')!) : undefined;
+      const data = await fetchClusterFinOpsSummary(clusterId, {
+        cpuPerCoreHour: cpuRate,
+        memoryPerGiBHour: memRate,
+        storagePerGiBMonth: storageRate,
+      });
+      return NextResponse.json(data);
+    }
+
     return NextResponse.json({ error: `Unhandled resource path: ${resource.join('/')}` }, { status: 404 });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
@@ -529,6 +544,23 @@ export async function POST(
         resourceName: nodeName,
         namespace: '-',
         details: `Drained node: ${res.evictedPods} evicted, ${res.skippedPods} skipped`,
+        status: res.success ? 'SUCCESS' : 'FAILED',
+        errorMessage: res.success ? undefined : res.message,
+      });
+      return NextResponse.json(res, { status: res.success ? 200 : 400 });
+    }
+
+    // Phase 4: FinOps Right-Sizing Patch: /cost/right-size
+    if (segment0 === 'cost' && resource.length >= 2 && (resource[1] === 'right-size' || resource[1] === 'apply')) {
+      const res = await applyWorkloadRightSizing(clusterId, body);
+      await recordAuditEvent({
+        clusterId,
+        user,
+        action: 'CUSTOM_OPERATION',
+        resourceType: body.kind || 'Deployment',
+        resourceName: body.name || 'unknown',
+        namespace: body.namespace || namespace,
+        details: `Applied right-sizing patch: CPU ${body.cpuRequest}, Mem ${body.memoryRequest}`,
         status: res.success ? 'SUCCESS' : 'FAILED',
         errorMessage: res.success ? undefined : res.message,
       });

@@ -42,6 +42,7 @@ import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import TerminalRoundedIcon from '@mui/icons-material/TerminalRounded';
 import AutoModeRoundedIcon from '@mui/icons-material/AutoModeRounded';
 import CompareArrowsRoundedIcon from '@mui/icons-material/CompareArrowsRounded';
+import MonetizationOnRoundedIcon from '@mui/icons-material/MonetizationOnRounded';
 
 export interface ClusterSidebarNavProps {
   activeTab: number;
@@ -51,6 +52,7 @@ export interface ClusterSidebarNavProps {
   onOpenPortForward?: () => void;
   onOpenConfigDrift?: () => void;
   onOpenDiff?: () => void;
+  onOpenCostAllocation?: () => void;
   resourceCounts?: Partial<Record<number, number>>;
   shortcutSettingsKey?: string;
   activePortForwardsCount?: number;
@@ -77,6 +79,7 @@ export function ClusterSidebarNav({
   onOpenPortForward,
   onOpenConfigDrift,
   onOpenDiff,
+  onOpenCostAllocation,
   resourceCounts = {},
   shortcutSettingsKey = 'Alt+,',
   activePortForwardsCount = 0,
@@ -532,6 +535,36 @@ export function ClusterSidebarNav({
               </Typography>
             </Box>
             <Chip label="Diff" size="small" sx={{ height: 16, fontSize: '0.62rem', fontWeight: 700 }} />
+          </Box>
+        )}
+
+        {onOpenCostAllocation && (
+          <Box
+            onClick={onOpenCostAllocation}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              px: 1.5,
+              py: 0.7,
+              mx: 0.8,
+              borderRadius: 1.8,
+              cursor: 'pointer',
+              color: 'text.secondary',
+              transition: 'all 0.15s ease',
+              '&:hover': {
+                bgcolor: isDark ? 'rgba(16, 185, 129, 0.1)' : 'rgba(16, 185, 129, 0.08)',
+                color: isDark ? '#34d399' : '#059669',
+              },
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2 }}>
+              <MonetizationOnRoundedIcon sx={{ fontSize: 18, color: '#10b981' }} />
+              <Typography variant="body2" sx={{ fontSize: '0.81rem', fontWeight: 600 }}>
+                Cost & Right-Sizing
+              </Typography>
+            </Box>
+            <Chip label="FinOps" size="small" color="success" variant="outlined" sx={{ height: 16, fontSize: '0.62rem', fontWeight: 700 }} />
           </Box>
         )}
       </Box>

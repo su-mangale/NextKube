@@ -144,6 +144,7 @@ import {
   ConfigDriftItem,
   cordonNode,
   NodeDrainDialog,
+  CostAllocationDrawer,
   useShortcuts,
   matchesShortcut,
   DraggablePaper,
@@ -276,6 +277,9 @@ spec:
   const [drainDialogOpen, setDrainDialogOpen] = useState<boolean>(false);
   const [drainNodeTarget, setDrainNodeTarget] = useState<any | null>(null);
   const [cordonLoading, setCordonLoading] = useState<Record<string, boolean>>({});
+
+  // Phase 4: FinOps Cost Allocation & Right-Sizing state
+  const [costAllocationOpen, setCostAllocationOpen] = useState<boolean>(false);
 
   // Logs states
   const [logsDialogOpen, setLogsDialogOpen] = useState<boolean>(false);
@@ -2617,6 +2621,7 @@ spec:
           onOpenPortForward={() => setPortForwardOpen(true)}
           onOpenConfigDrift={() => setConfigDriftOpen(true)}
           onOpenDiff={() => handleOpenDiff(selectedResource || (deployments.length > 0 ? deployments[0] : null))}
+          onOpenCostAllocation={() => setCostAllocationOpen(true)}
           resourceCounts={resourceCounts}
           shortcutSettingsKey={shortcuts.find((s) => s.id === 'settings')?.key || 'Alt+,'}
           activePortForwardsCount={activePortForwards.length}
@@ -5661,6 +5666,7 @@ spec:
         activePortForwardsCount={activePortForwards.length}
         onToggleConfigDrift={() => setConfigDriftOpen((prev) => !prev)}
         driftedCount={driftedCount}
+        onToggleCostAllocation={() => setCostAllocationOpen((prev) => !prev)}
         onCreateResource={() => {
           setCreateDialogOpen(true);
           setTopWindow('yamlCreate');
@@ -5723,6 +5729,7 @@ spec:
           }
         }}
         onOpenConfigDrift={() => setConfigDriftOpen(true)}
+        onOpenCostAllocation={() => setCostAllocationOpen(true)}
         onOpenSettings={() => {
           setSettingsDialogOpen(true);
           setTopWindow('settings');
@@ -5774,6 +5781,20 @@ spec:
         isCordoned={Boolean(drainNodeTarget?.unschedulable)}
         onSuccess={() => {
           refetchNodes();
+        }}
+      />
+
+      {/* Phase 4: FinOps Cost Allocation & Right-Sizing Drawer */}
+      <CostAllocationDrawer
+        open={costAllocationOpen}
+        onClose={() => setCostAllocationOpen(false)}
+        clusterId={effectiveClusterId}
+        onSuccessPatch={(msg) => {
+          setToastSeverity('success');
+          setToastMessage(msg);
+          refetchDeployments();
+          refetchStatefulSets();
+          refetchDaemonSets();
         }}
       />
 
