@@ -81,7 +81,7 @@ export function ClusterSidebarNav({
   onOpenDiff,
   onOpenCostAllocation,
   onOpenSecurityPosture,
-  resourceCounts = {},
+  resourceCounts: _resourceCounts = {},
   shortcutSettingsKey: _shortcutSettingsKey = 'Alt+,',
   activePortForwardsCount = 0,
 }: ClusterSidebarNavProps) {
@@ -333,7 +333,6 @@ export function ClusterSidebarNav({
         {/* Categorized Collapsible Groups */}
         {groups.map((group) => {
           const isExpanded = Boolean(expandedGroups[group.id]);
-          const groupCount = group.items.reduce((acc, curr) => acc + (resourceCounts[curr.tabIndex] || 0), 0);
 
           return (
             <Box key={group.id} sx={{ mb: 0.8 }}>
@@ -369,19 +368,7 @@ export function ClusterSidebarNav({
                 >
                   {group.label}
                 </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  {groupCount > 0 && (
-                    <Typography
-                      variant="caption"
-                      sx={{
-                        fontSize: '0.65rem',
-                        fontWeight: 700,
-                        color: 'text.disabled',
-                      }}
-                    >
-                      {groupCount}
-                    </Typography>
-                  )}
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
                   {isExpanded ? (
                     <ExpandMoreRoundedIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
                   ) : (
