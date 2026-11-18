@@ -138,6 +138,7 @@ import {
   PortForwardDrawer,
   usePortForwards,
   YamlDiffViewerDialog,
+  GitOpsDashboard,
   ConfigDriftDrawer,
   useConfigDrift,
   rollbackWorkload,
@@ -146,7 +147,6 @@ import {
   ConfigDriftItem,
   cordonNode,
   NodeDrainDialog,
-  CostAllocationDrawer,
   SecurityPostureDrawer,
   NamespaceClonerDialog,
   useShortcuts,
@@ -322,9 +322,6 @@ spec:
   const [drainDialogOpen, setDrainDialogOpen] = useState<boolean>(false);
   const [drainNodeTarget, setDrainNodeTarget] = useState<any | null>(null);
   const [cordonLoading, setCordonLoading] = useState<Record<string, boolean>>({});
-
-  // Phase 4: FinOps Cost Allocation & Right-Sizing state
-  const [costAllocationOpen, setCostAllocationOpen] = useState<boolean>(false);
 
   // Phase 5: Security Posture, CIS Benchmark & RBAC Matrix state
   const [securityPostureOpen, setSecurityPostureOpen] = useState<boolean>(false);
@@ -1864,6 +1861,8 @@ spec:
         !searchQuery ||
         (log.resourceName && log.resourceName.toLowerCase().includes(q)) ||
         (log.user && log.user.toLowerCase().includes(q)) ||
+        (log.ip && log.ip.toLowerCase().includes(q)) ||
+        (log.device && log.device.toLowerCase().includes(q)) ||
         (log.action && log.action.toLowerCase().includes(q)) ||
         (log.details && log.details.toLowerCase().includes(q));
       const matchesAction = auditActionFilter === 'all' || log.action === auditActionFilter;
@@ -2638,47 +2637,6 @@ spec:
               </Button>
             </Tooltip>
           </Box>
-
-          {/* Omnibar Search Trigger Pill */}
-          <Box
-            onClick={() => setCommandPaletteOpen(true)}
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1.2,
-              px: 1.8,
-              py: 0.6,
-              borderRadius: 2,
-              bgcolor: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.03)',
-              border: '1px solid',
-              borderColor: 'divider',
-              cursor: 'pointer',
-              color: 'text.secondary',
-              transition: 'all 0.16s ease',
-              '&:hover': {
-                bgcolor: isDark ? 'rgba(56, 189, 248, 0.08)' : 'rgba(2, 132, 199, 0.06)',
-                borderColor: 'primary.main',
-                color: 'text.primary',
-              },
-            }}
-          >
-            <SearchIcon sx={{ fontSize: 17, color: 'primary.main' }} />
-            <Typography variant="body2" sx={{ fontSize: '0.8rem', fontWeight: 600, userSelect: 'none' }}>
-              Switch object or view...
-            </Typography>
-            <Chip
-              label="⌘K"
-              size="small"
-              sx={{
-                height: 18,
-                fontSize: '0.62rem',
-                fontWeight: 800,
-                borderRadius: 1,
-                bgcolor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
-                pointerEvents: 'none',
-              }}
-            />
-          </Box>
         </Box>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, ml: 'auto' }}>
@@ -2771,10 +2729,6 @@ spec:
                 });
               }
               setActiveTab(30);
-              setSearchQuery('');
-            }}
-            onOpenCostAllocation={() => {
-              setActiveTab(31);
               setSearchQuery('');
             }}
             onOpenSecurityPosture={() => {
@@ -3891,17 +3845,20 @@ spec:
                       </Typography>
                       <Chip label={`${filteredAuditLogs.length} Records`} size="small" variant="outlined" sx={{ fontSize: '0.68rem', fontWeight: 700 }} />
                     </Box>
-                    <FormControl size="small" sx={{ minWidth: 160 }}>
+                    <FormControl size="small" sx={{ minWidth: 180 }}>
                       <Select
                         value={auditActionFilter}
                         onChange={(e) => setAuditActionFilter(e.target.value)}
                         sx={{ height: 32, fontSize: '0.78rem', borderRadius: 1.5 }}
                       >
                         <MenuItem value="all">All Operations</MenuItem>
+                        <MenuItem value="USER_LOGIN">User Logins</MenuItem>
+                        <MenuItem value="USER_LOGIN_FAILED">Failed Logins</MenuItem>
                         <MenuItem value="SCALE_REPLICAS">Scale Replicas</MenuItem>
                         <MenuItem value="ROLLOUT_RESTART">Rollout Restart</MenuItem>
                         <MenuItem value="APPLY_MANIFEST">Apply Manifest</MenuItem>
                         <MenuItem value="DELETE_RESOURCE">Delete Resource</MenuItem>
+                        <MenuItem value="GITOPS_SYNC">GitOps Sync</MenuItem>
                         <MenuItem value="CUSTOM_OPERATION">Custom Operations</MenuItem>
                       </Select>
                     </FormControl>
@@ -3911,7 +3868,9 @@ spec:
                     <TableHead sx={{ bgcolor: 'action.hover' }}>
                       <TableRow>
                         <TableCell>Timestamp</TableCell>
-                        <TableCell>Operator</TableCell>
+                        <TableCell>User / Operator</TableCell>
+                        <TableCell>Client IP</TableCell>
+                        <TableCell>Device Details</TableCell>
                         <TableCell>Action</TableCell>
                         <TableCell>Resource</TableCell>
                         <TableCell>Namespace</TableCell>
@@ -3923,7 +3882,7 @@ spec:
                     <TableBody>
                       {filteredAuditLogs.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={8} sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>
+                          <TableCell colSpan={10} sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>
                             No audit records found matching query.
                           </TableCell>
                         </TableRow>
@@ -3944,25 +3903,46 @@ spec:
                             </TableCell>
                             <TableCell>
                               <Chip
+                                label={entry.ip || '127.0.0.1'}
+                                size="small"
+                                sx={{
+                                  fontFamily: 'monospace',
+                                  fontSize: '0.68rem',
+                                  fontWeight: 700,
+                                  borderRadius: 1,
+                                  bgcolor: 'action.hover',
+                                  color: 'text.primary',
+                                }}
+                              />
+                            </TableCell>
+                            <TableCell sx={{ fontSize: '0.74rem', color: 'text.secondary', whiteSpace: 'nowrap' }}>
+                              {entry.device || 'Web Console'}
+                            </TableCell>
+                            <TableCell>
+                              <Chip
                                 label={entry.action}
                                 size="small"
                                 color={
-                                  entry.action === 'DELETE_RESOURCE'
+                                  entry.action === 'DELETE_RESOURCE' || entry.action === 'USER_LOGIN_FAILED'
                                     ? 'error'
-                                    : entry.action === 'SCALE_REPLICAS'
-                                      ? 'primary'
-                                      : entry.action === 'ROLLOUT_RESTART'
-                                        ? 'warning'
-                                        : 'info'
+                                    : entry.action === 'USER_LOGIN'
+                                      ? 'success'
+                                      : entry.action === 'SCALE_REPLICAS'
+                                        ? 'primary'
+                                        : entry.action === 'ROLLOUT_RESTART'
+                                          ? 'warning'
+                                          : entry.action === 'GITOPS_SYNC'
+                                            ? 'secondary'
+                                            : 'info'
                                 }
                                 sx={{ fontSize: '0.65rem', fontWeight: 800, borderRadius: 1 }}
                               />
                             </TableCell>
                             <TableCell sx={{ fontWeight: 700, color: 'primary.main', fontSize: '0.8rem' }}>
-                              {entry.resourceType}/{entry.resourceName}
+                              {entry.resourceType ? `${entry.resourceType}/${entry.resourceName}` : entry.resourceName}
                             </TableCell>
                             <TableCell>
-                              <Chip label={entry.namespace || 'default'} size="small" sx={{ fontSize: '0.65rem', borderRadius: 1 }} />
+                              <Chip label={entry.namespace || 'system'} size="small" sx={{ fontSize: '0.65rem', borderRadius: 1 }} />
                             </TableCell>
                             <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem', color: 'text.secondary' }}>
                               {entry.details || '-'}
@@ -4180,40 +4160,14 @@ spec:
                 </Box>
               )}
 
-              {/* TAB 30: EMBEDDED GITOPS TIME MACHINE (YAML DIFF) */}
+              {/* TAB 30: EMBEDDED GITOPS ENGINE */}
               {activeTab === 30 && (
                 <Box sx={{ width: '100%', height: 'calc(100vh - 145px)', minHeight: 640 }}>
-                  <YamlDiffViewerDialog
-                    open={true}
-                    embedded={true}
-                    onClose={() => setActiveTab(0)}
-                    resourceName={diffResource?.name || deployments[0]?.name || 'workload'}
-                    resourceType={diffResource?.resourceType || 'Deployment'}
-                    namespace={diffResource?.namespace || (selectedNamespace !== 'all' ? selectedNamespace : 'default')}
-                    revisions={diffResource?.revisions || rolloutRevisions}
-                    currentYaml={diffResource?.currentYaml}
-                    previousYaml={diffResource?.previousYaml}
-                    onRollback={handleRollbackFromDiff}
-                    rollbackLoading={diffRollbackLoading}
-                  />
-                </Box>
-              )}
-
-              {/* TAB 31: EMBEDDED FINOPS COST ALLOCATION & RIGHT-SIZING */}
-              {activeTab === 31 && (
-                <Box sx={{ width: '100%', height: 'calc(100vh - 145px)', minHeight: 640 }}>
-                  <CostAllocationDrawer
-                    open={true}
-                    embedded={true}
-                    onClose={() => setActiveTab(0)}
+                  <GitOpsDashboard
                     clusterId={effectiveClusterId}
-                    onSuccessPatch={(msg) => {
-                      setToastSeverity('success');
-                      setToastMessage(msg);
-                      refetchDeployments();
-                      refetchStatefulSets();
-                      refetchDaemonSets();
-                    }}
+                    namespaces={namespaces}
+                    embedded={true}
+                    onClose={() => setActiveTab(0)}
                   />
                 </Box>
               )}
@@ -5916,7 +5870,8 @@ spec:
         activePortForwardsCount={activePortForwards.length}
         onToggleConfigDrift={() => setActiveTab((prev) => (prev === 29 ? 0 : 29))}
         driftedCount={driftedCount}
-        onToggleCostAllocation={() => setActiveTab((prev) => (prev === 31 ? 0 : 31))}
+        onToggleGitOps={() => setActiveTab((prev) => (prev === 30 ? 0 : 30))}
+        isGitOpsActive={activeTab === 30}
         onToggleSecurityPosture={() => setActiveTab((prev) => (prev === 32 ? 0 : 32))}
         onCreateResource={() => {
           setCreateDialogOpen(true);
@@ -5983,7 +5938,6 @@ spec:
           setActiveTab(30);
         }}
         onOpenConfigDrift={() => setActiveTab(29)}
-        onOpenCostAllocation={() => setActiveTab(31)}
         onOpenSecurityPosture={() => setActiveTab(32)}
         onOpenNamespaceCloner={() => setNamespaceClonerOpen(true)}
         onOpenSettings={() => setActiveTab(27)}
@@ -6034,20 +5988,6 @@ spec:
         isCordoned={Boolean(drainNodeTarget?.unschedulable)}
         onSuccess={() => {
           refetchNodes();
-        }}
-      />
-
-      {/* Phase 4: FinOps Cost Allocation & Right-Sizing Drawer */}
-      <CostAllocationDrawer
-        open={costAllocationOpen}
-        onClose={() => setCostAllocationOpen(false)}
-        clusterId={effectiveClusterId}
-        onSuccessPatch={(msg) => {
-          setToastSeverity('success');
-          setToastMessage(msg);
-          refetchDeployments();
-          refetchStatefulSets();
-          refetchDaemonSets();
         }}
       />
 

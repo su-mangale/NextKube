@@ -19,6 +19,8 @@ import {
   Divider,
   Switch,
   FormControlLabel,
+  ToggleButton,
+  ToggleButtonGroup,
   useTheme,
   alpha,
 } from '@mui/material';
@@ -41,8 +43,16 @@ import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
 import CloseIcon from '@mui/icons-material/Close';
 import HubIcon from '@mui/icons-material/Hub';
+import ViewColumnRoundedIcon from '@mui/icons-material/ViewColumnRounded';
+import GridViewRoundedIcon from '@mui/icons-material/GridViewRounded';
+import AccountTreeRoundedIcon from '@mui/icons-material/AccountTreeRounded';
+import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
+import LayersClearRoundedIcon from '@mui/icons-material/LayersClearRounded';
+import FilterAltRoundedIcon from '@mui/icons-material/FilterAltRounded';
 import { useClusterTopology } from '../api/dashboard.api';
 import { TopologyNode, TopologyEdge, TopologyKind } from '../types/dashboard.types';
+
+export type TopologyLayoutMode = 'tiered' | 'namespace-grid' | 'compact-tree';
 
 export interface ClusterTopologyGraphProps {
   clusterId: string;
@@ -63,10 +73,19 @@ interface LayoutNode extends TopologyNode {
   collapsedPods?: TopologyNode[];
 }
 
-const NODE_WIDTH = 230;
-const NODE_HEIGHT = 80;
-const TIER_SPACING_X = 320;
-const NODE_SPACING_Y = 100;
+interface NamespaceGroup {
+  name: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  count: number;
+  status: string;
+}
+
+const NODE_WIDTH = 224;
+const NODE_HEIGHT = 76;
+const NODE_SPACING_Y = 92;
 
 export default function ClusterTopologyGraph({
   clusterId,
@@ -86,7 +105,12 @@ export default function ClusterTopologyGraph({
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+
+  // Layout & Visibility Organization Modes
+  const [layoutMode, setLayoutMode] = useState<TopologyLayoutMode>('tiered');
   const [groupReplicas, setGroupReplicas] = useState<boolean>(true);
+  const [hidePods, setHidePods] = useState<boolean>(false);
+  const [showIssuesOnly, setShowIssuesOnly] = useState<boolean>(false);
 
   // Filter visibility toggles
   const [visibleKinds, setVisibleKinds] = useState<Record<TopologyKind, boolean>>({
@@ -143,7 +167,7 @@ export default function ClusterTopologyGraph({
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92;
-    const newK = Math.min(Math.max(transform.k * zoomFactor, 0.25), 2.5);
+    const newK = Math.min(Math.max(transform.k * zoomFactor, 0.22), 2.5);
 
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -162,7 +186,7 @@ export default function ClusterTopologyGraph({
   };
 
   const handleZoomOut = () => {
-    setTransform((prev) => ({ ...prev, k: Math.max(prev.k / 1.2, 0.25) }));
+    setTransform((prev) => ({ ...prev, k: Math.max(prev.k / 1.2, 0.22) }));
   };
 
   const handleResetZoom = () => {
@@ -173,44 +197,86 @@ export default function ClusterTopologyGraph({
     setVisibleKinds((prev) => ({ ...prev, [kind]: !prev[kind] }));
   };
 
-  // Compute Layout Positions
-  const { layoutNodes, layoutEdges, bounds } = useMemo(() => {
+  // Top issues count calculation
+  const issueCounts = useMemo(() => {
+    if (!topologyData) return 0;
+    return topologyData.nodes.filter(
+      (n) => n.status === 'Warning' || n.status === 'Error' || n.status === 'CrashLoop' || n.status === 'Pending'
+    ).length;
+  }, [topologyData]);
+
+  // Compute Layout Positions (with support for Tiered Multi-Column, Namespace Grid, and Compact Tree)
+  const { layoutNodes, layoutEdges, namespaceGroups, bounds } = useMemo(() => {
     if (!topologyData || !topologyData.nodes.length) {
-      return { layoutNodes: [], layoutEdges: [], bounds: { minX: 0, maxX: 1000, minY: 0, maxY: 600 } };
+      return {
+        layoutNodes: [],
+        layoutEdges: [],
+        namespaceGroups: [],
+        bounds: { minX: 0, maxX: 1000, minY: 0, maxY: 600 },
+      };
     }
 
-    const rawNodes = topologyData.nodes.filter((n) => visibleKinds[n.kind]);
+    // 1. Initial filter by kind and pod visibility
+    const filteredNodes = topologyData.nodes.filter((n) => visibleKinds[n.kind]);
     const rawEdges = topologyData.edges;
+
+    // Map pod owners
+    const podOwnerMap = new Map<string, string>();
+    const workloadToPods = new Map<string, TopologyNode[]>();
+    rawEdges.forEach((e) => {
+      if (e.relation === 'manages') {
+        podOwnerMap.set(e.target, e.source);
+      }
+    });
+
+    topologyData.nodes.forEach((node) => {
+      if (node.kind === 'Pod') {
+        const ownerId = podOwnerMap.get(node.id);
+        if (ownerId) {
+          const list = workloadToPods.get(ownerId) || [];
+          list.push(node);
+          workloadToPods.set(ownerId, list);
+        }
+      }
+    });
 
     let processedNodes: LayoutNode[] = [];
     const nodeLookup = new Map<string, LayoutNode>();
 
-    if (groupReplicas) {
-      const workloadToPods = new Map<string, TopologyNode[]>();
+    if (hidePods) {
+      // In Controller-Only mode, omit Pod nodes and enrich workload detail with replica badges
+      filteredNodes
+        .filter((n) => n.kind !== 'Pod')
+        .forEach((node) => {
+          const pods = workloadToPods.get(node.id) || [];
+          let detail = node.detail;
+          if (pods.length > 0) {
+            const healthyCount = pods.filter((p) => p.status === 'Healthy' || p.status === 'Running').length;
+            detail = `${healthyCount}/${pods.length} Pods Ready`;
+          }
+          const ln: LayoutNode = {
+            ...node,
+            detail,
+            collapsedPods: pods,
+            x: 0,
+            y: 0,
+            width: NODE_WIDTH,
+            height: NODE_HEIGHT,
+          };
+          processedNodes.push(ln);
+          nodeLookup.set(ln.id, ln);
+        });
+    } else if (groupReplicas) {
+      // Group Pod replicas into a single card per workload controller
       const standalonePods: TopologyNode[] = [];
 
-      const podOwnerMap = new Map<string, string>();
-      rawEdges.forEach((e) => {
-        if (e.relation === 'manages') {
-          podOwnerMap.set(e.target, e.source);
-        }
-      });
-
-      rawNodes.forEach((node) => {
+      filteredNodes.forEach((node) => {
         if (node.kind === 'Pod') {
-          const ownerWorkloadId = podOwnerMap.get(node.id);
-          if (ownerWorkloadId) {
-            const list = workloadToPods.get(ownerWorkloadId) || [];
-            list.push(node);
-            workloadToPods.set(ownerWorkloadId, list);
-          } else {
+          const ownerId = podOwnerMap.get(node.id);
+          if (!ownerId) {
             standalonePods.push(node);
           }
-        }
-      });
-
-      rawNodes.forEach((node) => {
-        if (node.kind !== 'Pod') {
+        } else {
           const ln: LayoutNode = {
             ...node,
             x: 0,
@@ -236,6 +302,7 @@ export default function ClusterTopologyGraph({
       });
 
       workloadToPods.forEach((pods, workloadId) => {
+        if (!visibleKinds['Pod']) return;
         if (pods.length === 1) {
           const ln: LayoutNode = {
             ...pods[0],
@@ -248,8 +315,8 @@ export default function ClusterTopologyGraph({
           nodeLookup.set(ln.id, ln);
         } else if (pods.length > 1) {
           const first = pods[0];
-          const hasError = pods.some((p) => p.status === 'Error');
-          const hasWarning = pods.some((p) => p.status === 'Warning');
+          const hasError = pods.some((p) => p.status === 'Error' || p.status === 'CrashLoop');
+          const hasWarning = pods.some((p) => p.status === 'Warning' || p.status === 'Pending');
           const status = hasError ? 'Error' : hasWarning ? 'Warning' : 'Healthy';
           const aggregatedId = `group:${workloadId}:pods`;
 
@@ -259,7 +326,7 @@ export default function ClusterTopologyGraph({
             name: `${first.name.replace(/-[a-z0-9]+-[a-z0-9]+$/, '')} (${pods.length} Replicas)`,
             namespace: first.namespace,
             status,
-            detail: `${pods.filter((p) => p.status === 'Healthy').length}/${pods.length} Healthy`,
+            detail: `${pods.filter((p) => p.status === 'Healthy' || p.status === 'Running').length}/${pods.length} Ready`,
             tier: 3,
             podCount: pods.length,
             collapsedPods: pods,
@@ -277,7 +344,8 @@ export default function ClusterTopologyGraph({
         }
       });
     } else {
-      processedNodes = rawNodes.map((n) => {
+      // Individual pods mode
+      processedNodes = filteredNodes.map((n) => {
         const ln: LayoutNode = {
           ...n,
           x: 0,
@@ -290,25 +358,30 @@ export default function ClusterTopologyGraph({
       });
     }
 
-    const tiers: LayoutNode[][] = [[], [], [], [], []];
-    processedNodes.forEach((n) => {
-      const t = Math.min(Math.max(n.tier, 0), 4);
-      tiers[t].push(n);
-    });
-
-    const maxTierCount = Math.max(...tiers.map((t) => t.length), 1);
-    const totalMaxHeight = maxTierCount * NODE_SPACING_Y;
-
-    tiers.forEach((tierNodes, tierIdx) => {
-      const tierHeight = tierNodes.length * NODE_SPACING_Y;
-      const startY = Math.max(0, (totalMaxHeight - tierHeight) / 2);
-
-      tierNodes.forEach((node, nodeIdx) => {
-        node.x = tierIdx * TIER_SPACING_X + 40;
-        node.y = startY + nodeIdx * NODE_SPACING_Y + 40;
+    // 2. Filter for "Issues Only" mode if requested
+    if (showIssuesOnly) {
+      const issueNodeIds = new Set<string>();
+      processedNodes.forEach((n) => {
+        if (n.status === 'Warning' || n.status === 'Error' || n.status === 'CrashLoop' || n.status === 'Pending') {
+          issueNodeIds.add(n.id);
+        }
       });
-    });
 
+      // Include 1-hop connected neighbors for contextual cause & effect
+      const directConnectedIds = new Set<string>(issueNodeIds);
+      rawEdges.forEach((e) => {
+        const src = nodeLookup.get(e.source)?.id;
+        const tgt = nodeLookup.get(e.target)?.id;
+        if (src && tgt) {
+          if (issueNodeIds.has(src)) directConnectedIds.add(tgt);
+          if (issueNodeIds.has(tgt)) directConnectedIds.add(src);
+        }
+      });
+
+      processedNodes = processedNodes.filter((n) => directConnectedIds.has(n.id));
+    }
+
+    // Prepare edges between the current processed nodes
     const processedEdges: (TopologyEdge & { sourceNode: LayoutNode; targetNode: LayoutNode })[] = [];
     const edgeKeySet = new Set<string>();
 
@@ -316,6 +389,8 @@ export default function ClusterTopologyGraph({
       const srcNode = nodeLookup.get(e.source);
       const tgtNode = nodeLookup.get(e.target);
       if (srcNode && tgtNode && srcNode.id !== tgtNode.id) {
+        // Skip edges to hidden pods
+        if (hidePods && (srcNode.kind === 'Pod' || tgtNode.kind === 'Pod')) return;
         const key = `${srcNode.id}->${tgtNode.id}`;
         if (!edgeKeySet.has(key)) {
           edgeKeySet.add(key);
@@ -328,6 +403,202 @@ export default function ClusterTopologyGraph({
       }
     });
 
+    const groups: NamespaceGroup[] = [];
+
+    // 3. EXECUTE POSITIONING BASED ON SELECTED LAYOUT MODE
+    if (layoutMode === 'namespace-grid') {
+      // === LAYOUT MODE: NAMESPACE CLUSTERS (BENTO BOX) ===
+      // Group nodes by namespace
+      const nsMap = new Map<string, LayoutNode[]>();
+      processedNodes.forEach((node) => {
+        const ns = node.namespace || 'cluster-scoped';
+        const list = nsMap.get(ns) || [];
+        list.push(node);
+        nsMap.set(ns, list);
+      });
+
+      const nsList = Array.from(nsMap.entries()).sort((a, b) => b[1].length - a[1].length);
+      const COLS = nsList.length > 3 ? 3 : nsList.length > 1 ? 2 : 1;
+      let colX = 60;
+      let rowY = 60;
+      let maxRowHeight = 0;
+      let colIndex = 0;
+
+      nsList.forEach(([nsName, nodes]) => {
+        // Layout nodes internally within this namespace box in mini-tiers
+        const internalTiers: LayoutNode[][] = [[], [], [], [], []];
+        nodes.forEach((n) => {
+          const t = Math.min(Math.max(n.tier, 0), 4);
+          internalTiers[t].push(n);
+        });
+
+        // Calculate mini-tier dimensions
+        let innerX = colX + 24;
+        let innerMaxHeight = 0;
+
+        internalTiers.forEach((tierNodes) => {
+          if (tierNodes.length === 0) return;
+          const tierCols = Math.max(1, Math.ceil(tierNodes.length / 5));
+          const tierHeight = Math.min(tierNodes.length, 5) * (NODE_HEIGHT + 18);
+          innerMaxHeight = Math.max(innerMaxHeight, tierHeight);
+
+          tierNodes.forEach((node, idx) => {
+            const c = Math.floor(idx / 5);
+            const r = idx % 5;
+            node.x = innerX + c * (NODE_WIDTH + 16);
+            node.y = rowY + 54 + r * (NODE_HEIGHT + 18);
+          });
+
+          innerX += tierCols * (NODE_WIDTH + 16) + 32;
+        });
+
+        const clusterWidth = Math.max(380, innerX - colX + 16);
+        const clusterHeight = Math.max(220, innerMaxHeight + 76);
+
+        // Determine group status
+        const hasError = nodes.some((n) => n.status === 'Error' || n.status === 'CrashLoop');
+        const hasWarning = nodes.some((n) => n.status === 'Warning' || n.status === 'Pending');
+        const groupStatus = hasError ? 'Error' : hasWarning ? 'Warning' : 'Healthy';
+
+        groups.push({
+          name: nsName,
+          x: colX,
+          y: rowY,
+          width: clusterWidth,
+          height: clusterHeight,
+          count: nodes.length,
+          status: groupStatus,
+        });
+
+        maxRowHeight = Math.max(maxRowHeight, clusterHeight);
+        colIndex++;
+
+        if (colIndex >= COLS) {
+          colIndex = 0;
+          colX = 60;
+          rowY += maxRowHeight + 50;
+          maxRowHeight = 0;
+        } else {
+          colX += clusterWidth + 50;
+        }
+      });
+    } else if (layoutMode === 'compact-tree') {
+      // === LAYOUT MODE: COMPACT PIPELINE FOREST ===
+      // Group into connected pipeline trees starting from Ingresses/Services
+      const visited = new Set<string>();
+      const pipelines: LayoutNode[][] = [];
+
+      // Find root edge nodes (Ingresses, Gateways, or Services without incoming managed links)
+      const rootCandidates = processedNodes.filter(
+        (n) => n.kind === 'Ingress' || n.kind === 'Gateway' || (n.kind === 'Service' && n.tier <= 1)
+      );
+
+      rootCandidates.forEach((root) => {
+        if (visited.has(root.id)) return;
+        const pipeline: LayoutNode[] = [];
+        const queue: LayoutNode[] = [root];
+        visited.add(root.id);
+
+        while (queue.length > 0) {
+          const current = queue.shift()!;
+          pipeline.push(current);
+
+          processedEdges.forEach((edge) => {
+            if (edge.sourceNode.id === current.id && !visited.has(edge.targetNode.id)) {
+              visited.add(edge.targetNode.id);
+              queue.push(edge.targetNode);
+            }
+          });
+        }
+        pipelines.push(pipeline);
+      });
+
+      // Remaining standalone nodes (Nodes, Storage, or isolated workloads)
+      const orphanNodes = processedNodes.filter((n) => !visited.has(n.id));
+
+      let currentPipelineY = 60;
+      pipelines.forEach((pipeline) => {
+        // Sort pipeline by tier
+        pipeline.sort((a, b) => a.tier - b.tier);
+        const pipelineTiers: LayoutNode[][] = [[], [], [], [], []];
+        pipeline.forEach((n) => {
+          const t = Math.min(Math.max(n.tier, 0), 4);
+          pipelineTiers[t].push(n);
+        });
+
+        let pMaxHeight = NODE_HEIGHT;
+        let pCurrentX = 60;
+
+        pipelineTiers.forEach((tierNodes) => {
+          if (tierNodes.length === 0) return;
+          const tierHeight = tierNodes.length * (NODE_HEIGHT + 16);
+          pMaxHeight = Math.max(pMaxHeight, tierHeight);
+
+          tierNodes.forEach((node, idx) => {
+            node.x = pCurrentX;
+            node.y = currentPipelineY + idx * (NODE_HEIGHT + 16);
+          });
+
+          pCurrentX += NODE_WIDTH + 70;
+        });
+
+        currentPipelineY += pMaxHeight + 48;
+      });
+
+      // Place orphan nodes at bottom shelf
+      if (orphanNodes.length > 0) {
+        const orphanX = 60;
+        const orphanY = currentPipelineY + 20;
+        orphanNodes.forEach((node, idx) => {
+          const c = idx % 5;
+          const r = Math.floor(idx / 5);
+          node.x = orphanX + c * (NODE_WIDTH + 24);
+          node.y = orphanY + r * (NODE_HEIGHT + 18);
+        });
+      }
+    } else {
+      // === LAYOUT MODE: TIERED FLOW WITH SMART MULTI-COLUMN WRAPPING ===
+      // Group into 5 tiers
+      const tiers: LayoutNode[][] = [[], [], [], [], []];
+      processedNodes.forEach((n) => {
+        const t = Math.min(Math.max(n.tier, 0), 4);
+        tiers[t].push(n);
+      });
+
+      const MAX_PER_COL = 6;
+      let currentTierX = 60;
+
+      // Find overall max tier height to center rows
+      let maxTierVisualHeight = 0;
+      tiers.forEach((tierNodes) => {
+        const rows = Math.min(tierNodes.length, MAX_PER_COL);
+        maxTierVisualHeight = Math.max(maxTierVisualHeight, rows * NODE_SPACING_Y);
+      });
+
+      tiers.forEach((tierNodes) => {
+        if (tierNodes.length === 0) {
+          currentTierX += 80;
+          return;
+        }
+
+        const cols = Math.max(1, Math.ceil(tierNodes.length / MAX_PER_COL));
+        const rows = Math.min(tierNodes.length, MAX_PER_COL);
+        const thisTierHeight = rows * NODE_SPACING_Y;
+        const startY = Math.max(60, (maxTierVisualHeight - thisTierHeight) / 2 + 60);
+
+        tierNodes.forEach((node, nodeIdx) => {
+          const colIndex = Math.floor(nodeIdx / MAX_PER_COL);
+          const rowIndex = nodeIdx % MAX_PER_COL;
+
+          node.x = currentTierX + colIndex * (NODE_WIDTH + 24);
+          node.y = startY + rowIndex * NODE_SPACING_Y;
+        });
+
+        currentTierX += cols * (NODE_WIDTH + 24) + 64;
+      });
+    }
+
+    // Calculate canvas bounding rectangle
     let minX = Infinity;
     let maxX = -Infinity;
     let minY = Infinity;
@@ -340,19 +611,27 @@ export default function ClusterTopologyGraph({
       maxY = Math.max(maxY, n.y + n.height);
     });
 
+    groups.forEach((g) => {
+      minX = Math.min(minX, g.x);
+      maxX = Math.max(maxX, g.x + g.width);
+      minY = Math.min(minY, g.y);
+      maxY = Math.max(maxY, g.y + g.height);
+    });
+
     if (minX === Infinity) {
       minX = 0;
-      maxX = 1000;
+      maxX = 1200;
       minY = 0;
-      maxY = 600;
+      maxY = 700;
     }
 
     return {
       layoutNodes: processedNodes,
       layoutEdges: processedEdges,
-      bounds: { minX, maxX: maxX + 100, minY, maxY: maxY + 100 },
+      namespaceGroups: groups,
+      bounds: { minX, maxX: maxX + 120, minY, maxY: maxY + 120 },
     };
-  }, [topologyData, visibleKinds, groupReplicas]);
+  }, [topologyData, visibleKinds, groupReplicas, hidePods, showIssuesOnly, layoutMode]);
 
   // Fit View
   const handleFitView = useCallback(() => {
@@ -368,7 +647,7 @@ export default function ClusterTopologyGraph({
 
     const scaleX = (width - 120) / graphWidth;
     const scaleY = (height - 120) / graphHeight;
-    const k = Math.min(Math.max(Math.min(scaleX, scaleY), 0.3), 1.2);
+    const k = Math.min(Math.max(Math.min(scaleX, scaleY), 0.25), 1.15);
 
     const x = (width - graphWidth * k) / 2 - bounds.minX * k;
     const y = (height - graphHeight * k) / 2 - bounds.minY * k;
@@ -380,10 +659,10 @@ export default function ClusterTopologyGraph({
     if (layoutNodes.length > 0) {
       const timer = setTimeout(() => {
         handleFitView();
-      }, 150);
+      }, 120);
       return () => clearTimeout(timer);
     }
-  }, [layoutNodes.length, selectedNamespace, handleFitView]);
+  }, [layoutNodes.length, selectedNamespace, layoutMode, hidePods, showIssuesOnly, handleFitView]);
 
   const selectedNode = useMemo(() => {
     if (!selectedNodeId) return null;
@@ -453,7 +732,7 @@ export default function ClusterTopologyGraph({
         right: isFullscreen ? 0 : 'auto',
         bottom: isFullscreen ? 0 : 'auto',
         width: '100%',
-        height: isFullscreen ? '100vh' : 'calc(100vh - 180px)',
+        height: isFullscreen ? '100vh' : 'calc(100vh - 145px)',
         minHeight: 640,
         zIndex: isFullscreen ? 9999 : 1,
         bgcolor: isDark ? '#0b1120' : '#f8fafc',
@@ -469,8 +748,8 @@ export default function ClusterTopologyGraph({
       <Paper
         elevation={0}
         sx={{
-          p: 1.5,
-          px: 2.5,
+          p: 1.2,
+          px: 2,
           borderBottom: `1px solid ${theme.palette.divider}`,
           bgcolor: isDark ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.95)',
           backdropFilter: 'blur(12px)',
@@ -483,23 +762,24 @@ export default function ClusterTopologyGraph({
         }}
       >
         {/* Left: Title & Namespace Selector */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <HubIcon sx={{ color: theme.palette.primary.main, fontSize: 24 }} />
-            <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: -0.2 }}>
-              Visual Topology Map
+            <HubIcon sx={{ color: theme.palette.primary.main, fontSize: 22 }} />
+            <Typography variant="subtitle2" sx={{ fontWeight: 800, letterSpacing: -0.2 }}>
+              Topology Graph
             </Typography>
           </Box>
 
           <Divider orientation="vertical" flexItem sx={{ height: 20, my: 'auto' }} />
 
-          <FormControl size="small" sx={{ minWidth: 170 }}>
+          <FormControl size="small" sx={{ minWidth: 160 }}>
             <Select
               value={selectedNamespace}
               onChange={(e) => setSelectedNamespace(e.target.value)}
               displayEmpty
               sx={{
-                fontSize: '0.8rem',
+                height: 32,
+                fontSize: '0.78rem',
                 borderRadius: 1.5,
                 bgcolor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)',
               }}
@@ -513,90 +793,192 @@ export default function ClusterTopologyGraph({
             </Select>
           </FormControl>
 
-          {topologyData?.summary && (
-            <Chip
-              size="small"
-              label={`${topologyData.summary.totalNodes} Nodes · ${topologyData.summary.totalEdges} Links`}
-              sx={{
-                fontSize: '0.72rem',
-                fontWeight: 600,
-                bgcolor: isDark ? 'rgba(59, 130, 246, 0.15)' : 'rgba(59, 130, 246, 0.08)',
-                color: theme.palette.primary.main,
-                border: `1px solid ${alpha(theme.palette.primary.main, 0.2)}`,
-              }}
-            />
-          )}
+          {/* Layout Mode Selector (Tiered Flow / Namespace Grid / Compact Tree) */}
+          <ToggleButtonGroup
+            value={layoutMode}
+            exclusive
+            onChange={(_, val) => val && setLayoutMode(val)}
+            size="small"
+            sx={{
+              height: 32,
+              bgcolor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
+              '& .MuiToggleButton-root': {
+                px: 1.2,
+                py: 0.4,
+                textTransform: 'none',
+                fontSize: '0.75rem',
+                fontWeight: 650,
+                gap: 0.6,
+              },
+            }}
+          >
+            <ToggleButton value="tiered">
+              <Tooltip title="Tiered Architectural Flow (Smart Multi-Column)">
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <ViewColumnRoundedIcon sx={{ fontSize: 16 }} />
+                  <span>Tiered</span>
+                </Box>
+              </Tooltip>
+            </ToggleButton>
+            <ToggleButton value="namespace-grid">
+              <Tooltip title="Namespace Clusters (Grouped Bento Boxes)">
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <GridViewRoundedIcon sx={{ fontSize: 16 }} />
+                  <span>Namespace Grid</span>
+                </Box>
+              </Tooltip>
+            </ToggleButton>
+            <ToggleButton value="compact-tree">
+              <Tooltip title="Compact Pipeline Tree (Linear Ingress to Workload)">
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <AccountTreeRoundedIcon sx={{ fontSize: 16 }} />
+                  <span>Pipelines</span>
+                </Box>
+              </Tooltip>
+            </ToggleButton>
+          </ToggleButtonGroup>
         </Box>
 
-        {/* Center: Search Box & Group Replicas Toggle */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+        {/* Center: Scalability Controls (Hide Pods, Issues Only, Search) */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2 }}>
+          {/* Controllers-Only / Hide Pods Toggle */}
+          <Tooltip title="Reduce visual noise by hiding individual pod boxes. Replicas and health are shown directly on controllers.">
+            <FormControlLabel
+              control={
+                <Switch
+                  size="small"
+                  checked={hidePods}
+                  onChange={(e) => setHidePods(e.target.checked)}
+                />
+              }
+              label={
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <LayersClearRoundedIcon sx={{ fontSize: 15, color: hidePods ? 'primary.main' : 'text.secondary' }} />
+                  <Typography variant="caption" sx={{ fontWeight: 700, fontSize: '0.72rem', color: hidePods ? 'primary.main' : 'text.secondary' }}>
+                    Controllers Only
+                  </Typography>
+                </Box>
+              }
+              sx={{ m: 0 }}
+            />
+          </Tooltip>
+
+          {/* Group Replicas Toggle (enabled when pods are visible) */}
+          {!hidePods && (
+            <Tooltip title="Combine identical pod replicas belonging to the same controller into a single node">
+              <FormControlLabel
+                control={
+                  <Switch
+                    size="small"
+                    checked={groupReplicas}
+                    onChange={(e) => setGroupReplicas(e.target.checked)}
+                  />
+                }
+                label={
+                  <Typography variant="caption" sx={{ fontWeight: 650, fontSize: '0.72rem', color: 'text.secondary' }}>
+                    Group Pods
+                  </Typography>
+                }
+                sx={{ m: 0 }}
+              />
+            </Tooltip>
+          )}
+
+          {/* Issues Only Filter Button */}
+          <Button
+            size="small"
+            variant={showIssuesOnly ? 'contained' : 'outlined'}
+            color={showIssuesOnly ? 'warning' : 'inherit'}
+            onClick={() => setShowIssuesOnly(!showIssuesOnly)}
+            startIcon={<WarningAmberRoundedIcon sx={{ fontSize: 16 }} />}
+            sx={{
+              height: 30,
+              fontSize: '0.73rem',
+              fontWeight: 750,
+              borderRadius: 1.5,
+              textTransform: 'none',
+              borderColor: showIssuesOnly ? undefined : theme.palette.divider,
+            }}
+          >
+            Issues Only
+            {issueCounts > 0 && (
+              <Chip
+                label={issueCounts}
+                size="small"
+                color={showIssuesOnly ? 'default' : 'warning'}
+                sx={{ ml: 0.8, height: 16, fontSize: '0.62rem', fontWeight: 800 }}
+              />
+            )}
+          </Button>
+
+          {/* Search Box */}
           <TextField
             size="small"
-            placeholder="Search resource or image..."
+            placeholder="Search resource..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             slotProps={{
               input: {
                 startAdornment: (
                   <InputAdornment position="start">
-                    <SearchIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+                    <SearchIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
                   </InputAdornment>
                 ),
               },
             }}
             sx={{
-              '& .MuiInputBase-root': { fontSize: '0.8rem', borderRadius: 1.5, width: 220 },
+              '& .MuiInputBase-root': { height: 32, fontSize: '0.78rem', borderRadius: 1.5, width: 170 },
             }}
-          />
-
-          <FormControlLabel
-            control={
-              <Switch
-                size="small"
-                checked={groupReplicas}
-                onChange={(e) => setGroupReplicas(e.target.checked)}
-              />
-            }
-            label={
-              <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
-                Group Replicas
-              </Typography>
-            }
           />
         </Box>
 
-        {/* Right: Actions & Zoom Controls */}
+        {/* Right: Summary Chip & Canvas Zoom Controls */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
+          <Chip
+            size="small"
+            label={`${layoutNodes.length} Nodes · ${layoutEdges.length} Links`}
+            sx={{
+              height: 24,
+              fontSize: '0.7rem',
+              fontWeight: 700,
+              bgcolor: isDark ? 'rgba(59, 130, 246, 0.14)' : 'rgba(59, 130, 246, 0.08)',
+              color: theme.palette.primary.main,
+              border: `1px solid ${alpha(theme.palette.primary.main, 0.2)}`,
+            }}
+          />
+
+          <Divider orientation="vertical" flexItem sx={{ height: 18, my: 'auto' }} />
+
           <Tooltip title="Zoom In (+)">
-            <IconButton size="small" onClick={handleZoomIn} sx={{ border: `1px solid ${theme.palette.divider}` }}>
-              <ZoomInIcon fontSize="small" />
+            <IconButton size="small" onClick={handleZoomIn} sx={{ border: `1px solid ${theme.palette.divider}`, width: 28, height: 28 }}>
+              <ZoomInIcon sx={{ fontSize: 16 }} />
             </IconButton>
           </Tooltip>
           <Tooltip title="Zoom Out (-)">
-            <IconButton size="small" onClick={handleZoomOut} sx={{ border: `1px solid ${theme.palette.divider}` }}>
-              <ZoomOutIcon fontSize="small" />
+            <IconButton size="small" onClick={handleZoomOut} sx={{ border: `1px solid ${theme.palette.divider}`, width: 28, height: 28 }}>
+              <ZoomOutIcon sx={{ fontSize: 16 }} />
             </IconButton>
           </Tooltip>
           <Tooltip title="Fit View to Screen">
-            <IconButton size="small" onClick={handleFitView} sx={{ border: `1px solid ${theme.palette.divider}` }}>
-              <FitScreenIcon fontSize="small" />
+            <IconButton size="small" onClick={handleFitView} sx={{ border: `1px solid ${theme.palette.divider}`, width: 28, height: 28 }}>
+              <FitScreenIcon sx={{ fontSize: 16 }} />
             </IconButton>
           </Tooltip>
           <Tooltip title="Reset Zoom (100%)">
-            <IconButton size="small" onClick={handleResetZoom} sx={{ border: `1px solid ${theme.palette.divider}` }}>
-              <RestartAltIcon fontSize="small" />
+            <IconButton size="small" onClick={handleResetZoom} sx={{ border: `1px solid ${theme.palette.divider}`, width: 28, height: 28 }}>
+              <RestartAltIcon sx={{ fontSize: 16 }} />
             </IconButton>
           </Tooltip>
 
-          <Divider orientation="vertical" flexItem sx={{ height: 20, my: 'auto' }} />
+          <Divider orientation="vertical" flexItem sx={{ height: 18, my: 'auto' }} />
 
           <Tooltip title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen Canvas'}>
             <IconButton
               size="small"
               onClick={() => setIsFullscreen(!isFullscreen)}
-              sx={{ border: `1px solid ${theme.palette.divider}` }}
+              sx={{ border: `1px solid ${theme.palette.divider}`, width: 28, height: 28 }}
             >
-              {isFullscreen ? <FullscreenExitIcon fontSize="small" /> : <FullscreenIcon fontSize="small" />}
+              {isFullscreen ? <FullscreenExitIcon sx={{ fontSize: 16 }} /> : <FullscreenIcon sx={{ fontSize: 16 }} />}
             </IconButton>
           </Tooltip>
         </Box>
@@ -605,22 +987,26 @@ export default function ClusterTopologyGraph({
       {/* FILTER CHIPS ROW */}
       <Box
         sx={{
-          px: 2.5,
-          py: 0.8,
+          px: 2,
+          py: 0.6,
           borderBottom: `1px solid ${theme.palette.divider}`,
           bgcolor: isDark ? 'rgba(15, 23, 42, 0.6)' : 'rgba(255, 255, 255, 0.6)',
           display: 'flex',
           alignItems: 'center',
-          gap: 1,
+          gap: 0.8,
           overflowX: 'auto',
           zIndex: 9,
         }}
       >
-        <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase', mr: 0.5, fontSize: '0.65rem' }}>
-          Layers:
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.4, mr: 0.5 }}>
+          <FilterAltRoundedIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+          <Typography variant="caption" sx={{ fontWeight: 800, color: 'text.secondary', textTransform: 'uppercase', fontSize: '0.62rem' }}>
+            Layers:
+          </Typography>
+        </Box>
 
         {(['Ingress', 'Service', 'Deployment', 'DaemonSet', 'StatefulSet', 'Pod', 'Node', 'PVC'] as TopologyKind[]).map((kind) => {
+          if (hidePods && kind === 'Pod') return null;
           const isVisible = visibleKinds[kind];
           return (
             <Chip
@@ -631,8 +1017,9 @@ export default function ClusterTopologyGraph({
               onClick={() => toggleKind(kind)}
               variant={isVisible ? 'filled' : 'outlined'}
               sx={{
-                fontSize: '0.7rem',
-                fontWeight: 600,
+                height: 22,
+                fontSize: '0.68rem',
+                fontWeight: 650,
                 opacity: isVisible ? 1 : 0.45,
                 borderColor: isVisible ? 'transparent' : theme.palette.divider,
                 bgcolor: isVisible
@@ -652,16 +1039,16 @@ export default function ClusterTopologyGraph({
         {/* Legend status dots */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#10b981' }} />
-            <Typography variant="caption" sx={{ fontSize: '0.68rem', color: 'text.secondary' }}>Healthy</Typography>
+            <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: '#10b981' }} />
+            <Typography variant="caption" sx={{ fontSize: '0.66rem', color: 'text.secondary' }}>Healthy</Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#f59e0b' }} />
-            <Typography variant="caption" sx={{ fontSize: '0.68rem', color: 'text.secondary' }}>Degraded</Typography>
+            <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: '#f59e0b' }} />
+            <Typography variant="caption" sx={{ fontSize: '0.66rem', color: 'text.secondary' }}>Degraded</Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#ef4444' }} />
-            <Typography variant="caption" sx={{ fontSize: '0.68rem', color: 'text.secondary' }}>Error</Typography>
+            <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: '#ef4444' }} />
+            <Typography variant="caption" sx={{ fontSize: '0.66rem', color: 'text.secondary' }}>Error</Typography>
           </Box>
         </Box>
       </Box>
@@ -719,11 +1106,22 @@ export default function ClusterTopologyGraph({
           >
             <HubIcon sx={{ fontSize: 54, color: 'text.disabled' }} />
             <Typography variant="h6" color="text.secondary">
-              No resources found in namespace &ldquo;{selectedNamespace}&rdquo;
+              No matching resources found
             </Typography>
-            <Button variant="outlined" size="small" onClick={() => setSelectedNamespace('all')}>
-              View All Namespaces
-            </Button>
+            <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 400, textAlign: 'center' }}>
+              {showIssuesOnly
+                ? 'All resources in this scope are running healthy! Turn off "Issues Only" to see all cluster workloads.'
+                : `No resources found in namespace "${selectedNamespace}".`}
+            </Typography>
+            {showIssuesOnly ? (
+              <Button variant="outlined" size="small" onClick={() => setShowIssuesOnly(false)}>
+                Show All Workloads
+              </Button>
+            ) : (
+              <Button variant="outlined" size="small" onClick={() => setSelectedNamespace('all')}>
+                View All Namespaces
+              </Button>
+            )}
           </Box>
         )}
 
@@ -740,14 +1138,14 @@ export default function ClusterTopologyGraph({
             pointerEvents: 'none',
           }}
         >
-          {/* SVG Connection Lines */}
+          {/* SVG Canvas for Namespace Clusters & Links */}
           <svg
             style={{
               position: 'absolute',
               top: 0,
               left: 0,
-              width: bounds.maxX + 400,
-              height: bounds.maxY + 400,
+              width: bounds.maxX + 600,
+              height: bounds.maxY + 600,
               overflow: 'visible',
               pointerEvents: 'none',
             }}
@@ -780,6 +1178,77 @@ export default function ClusterTopologyGraph({
               </marker>
             </defs>
 
+            {/* Namespace Cluster Bento Box Cards (Rendered in namespace-grid mode) */}
+            {layoutMode === 'namespace-grid' &&
+              namespaceGroups.map((g) => (
+                <g key={g.name}>
+                  {/* Outer cluster container box */}
+                  <rect
+                    x={g.x}
+                    y={g.y}
+                    width={g.width}
+                    height={g.height}
+                    rx={14}
+                    fill={isDark ? 'rgba(30, 41, 59, 0.45)' : 'rgba(241, 245, 249, 0.75)'}
+                    stroke={
+                      g.status === 'Error'
+                        ? 'rgba(239, 68, 68, 0.5)'
+                        : g.status === 'Warning'
+                        ? 'rgba(245, 158, 11, 0.5)'
+                        : isDark
+                        ? 'rgba(71, 85, 105, 0.35)'
+                        : 'rgba(203, 213, 225, 0.7)'
+                    }
+                    strokeWidth={1.6}
+                    strokeDasharray={g.status !== 'Healthy' ? '4,4' : undefined}
+                  />
+
+                  {/* Header strip */}
+                  <rect
+                    x={g.x}
+                    y={g.y}
+                    width={g.width}
+                    height={36}
+                    rx={14}
+                    fill={isDark ? 'rgba(51, 65, 85, 0.6)' : 'rgba(226, 232, 240, 0.85)'}
+                  />
+
+                  {/* Status dot */}
+                  <circle
+                    cx={g.x + 18}
+                    cy={g.y + 18}
+                    r={5}
+                    fill={getStatusColor(g.status)}
+                  />
+
+                  {/* Namespace title */}
+                  <text
+                    x={g.x + 32}
+                    y={g.y + 22}
+                    fill={isDark ? '#f1f5f9' : '#0f172a'}
+                    fontSize={12.5}
+                    fontWeight={750}
+                    fontFamily="system-ui, -apple-system, sans-serif"
+                  >
+                    Namespace: {g.name}
+                  </text>
+
+                  {/* Resource count badge text */}
+                  <text
+                    x={g.x + g.width - 16}
+                    y={g.y + 22}
+                    textAnchor="end"
+                    fill={isDark ? '#94a3b8' : '#64748b'}
+                    fontSize={11}
+                    fontWeight={650}
+                    fontFamily="system-ui, -apple-system, sans-serif"
+                  >
+                    {g.count} resources
+                  </text>
+                </g>
+              ))}
+
+            {/* Connecting Bezier Edges */}
             {layoutEdges.map((edge) => {
               const src = edge.sourceNode;
               const tgt = edge.targetNode;
@@ -789,7 +1258,7 @@ export default function ClusterTopologyGraph({
               const x2 = tgt.x;
               const y2 = tgt.y + tgt.height / 2;
 
-              const dx = Math.max(Math.abs(x2 - x1) * 0.5, 40);
+              const dx = Math.max(Math.abs(x2 - x1) * 0.45, 36);
               const cx1 = x1 + dx;
               const cy1 = y1;
               const cx2 = x2 - dx;
@@ -825,8 +1294,8 @@ export default function ClusterTopologyGraph({
                     d={pathD}
                     fill="none"
                     stroke={strokeColor}
-                    strokeWidth={isHighlighted && (hoveredNodeId || selectedNodeId) ? 2.8 : 1.8}
-                    strokeDasharray={isError ? '5,5' : 'none'}
+                    strokeWidth={isHighlighted && (hoveredNodeId || selectedNodeId) ? 2.6 : 1.6}
+                    strokeDasharray={isError ? '5,5' : undefined}
                     markerEnd={marker}
                   />
 
@@ -879,16 +1348,16 @@ export default function ClusterTopologyGraph({
                   sx={{
                     width: '100%',
                     height: '100%',
-                    p: 1.2,
+                    p: 1.1,
                     boxSizing: 'border-box',
                     borderRadius: 2,
                     bgcolor: isDark
                       ? isSelected
                         ? 'rgba(30, 41, 59, 0.98)'
-                        : 'rgba(15, 23, 42, 0.9)'
+                        : 'rgba(15, 23, 42, 0.92)'
                       : isSelected
                       ? '#ffffff'
-                      : 'rgba(255, 255, 255, 0.9)',
+                      : 'rgba(255, 255, 255, 0.94)',
                     backdropFilter: 'blur(8px)',
                     border: `1.5px solid ${
                       isSelected
@@ -908,13 +1377,13 @@ export default function ClusterTopologyGraph({
                 >
                   {/* Card Header: Icon + Kind + Status Pulse */}
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, minWidth: 0 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.7, minWidth: 0 }}>
                       {getKindIcon(node.kind)}
                       <Typography
                         variant="caption"
                         sx={{
-                          fontWeight: 700,
-                          fontSize: '0.65rem',
+                          fontWeight: 750,
+                          fontSize: '0.64rem',
                           color: 'text.secondary',
                           textTransform: 'uppercase',
                           letterSpacing: 0.5,
@@ -943,7 +1412,7 @@ export default function ClusterTopologyGraph({
                       variant="body2"
                       sx={{
                         fontWeight: 700,
-                        fontSize: '0.82rem',
+                        fontSize: '0.8rem',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
@@ -955,16 +1424,17 @@ export default function ClusterTopologyGraph({
                   </Tooltip>
 
                   {/* Card Footer: Detail / Metrics + Namespace */}
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.7rem' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.68rem' }}>
                     <Typography
                       variant="caption"
                       sx={{
-                        fontSize: '0.68rem',
+                        fontSize: '0.67rem',
                         color: 'text.secondary',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
-                        maxWidth: 130,
+                        maxWidth: 125,
+                        fontWeight: 600,
                       }}
                     >
                       {node.detail || '-'}
@@ -976,8 +1446,8 @@ export default function ClusterTopologyGraph({
                         label={node.namespace}
                         sx={{
                           height: 16,
-                          fontSize: '0.62rem',
-                          fontWeight: 600,
+                          fontSize: '0.6rem',
+                          fontWeight: 650,
                           borderRadius: 0.8,
                           bgcolor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
                         }}
@@ -999,7 +1469,7 @@ export default function ClusterTopologyGraph({
             right: 16,
             width: 140,
             height: 90,
-            bgcolor: isDark ? 'rgba(15, 23, 42, 0.85)' : 'rgba(255, 255, 255, 0.85)',
+            bgcolor: isDark ? 'rgba(15, 23, 42, 0.88)' : 'rgba(255, 255, 255, 0.88)',
             backdropFilter: 'blur(8px)',
             borderRadius: 1.5,
             border: `1px solid ${theme.palette.divider}`,
@@ -1019,7 +1489,7 @@ export default function ClusterTopologyGraph({
                 width={n.width}
                 height={n.height}
                 fill={getStatusColor(n.status)}
-                rx={4}
+                rx={3}
                 opacity={0.7}
               />
             ))}
@@ -1128,7 +1598,7 @@ export default function ClusterTopologyGraph({
                   <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary' }}>
                     Replica Pods ({selectedNode.collapsedPods.length})
                   </Typography>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.6 }}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.6, maxHeight: 220, overflowY: 'auto' }}>
                     {selectedNode.collapsedPods.map((cp) => (
                       <Paper
                         key={cp.id}

@@ -21,7 +21,7 @@ import HubRoundedIcon from '@mui/icons-material/HubRounded';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import AltRouteRoundedIcon from '@mui/icons-material/AltRouteRounded';
 import AutoModeRoundedIcon from '@mui/icons-material/AutoModeRounded';
-import MonetizationOnRoundedIcon from '@mui/icons-material/MonetizationOnRounded';
+import CompareArrowsRoundedIcon from '@mui/icons-material/CompareArrowsRounded';
 import ShieldRoundedIcon from '@mui/icons-material/ShieldRounded';
 import { useShortcuts } from '../utils/shortcuts';
 
@@ -47,7 +47,8 @@ export interface ActionDockProps {
   activePortForwardsCount?: number;
   onToggleConfigDrift?: () => void;
   driftedCount?: number;
-  onToggleCostAllocation?: () => void;
+  onToggleGitOps?: () => void;
+  isGitOpsActive?: boolean;
   onToggleSecurityPosture?: () => void;
   onAddCluster?: () => void;
   onSwitchCluster?: () => void;
@@ -77,7 +78,8 @@ export function ActionDock({
   activePortForwardsCount = 0,
   onToggleConfigDrift,
   driftedCount = 0,
-  onToggleCostAllocation,
+  onToggleGitOps,
+  isGitOpsActive = false,
   onToggleSecurityPosture,
   onAddCluster,
   onSwitchCluster,
@@ -644,32 +646,37 @@ export function ActionDock({
           </Tooltip>
         )}
 
-        {/* FinOps Cost Allocation & Right-Sizing Advisor */}
-        {onToggleCostAllocation && (
-          <Tooltip title="FinOps Cost Allocation & Right-Sizing Advisor" placement="left" arrow>
+        {/* GitOps Engine Reconciliation & Sync */}
+        {onToggleGitOps && (
+          <Tooltip title={`GitOps Engine (${getShortcutKey('gitops') || 'Alt+G'})`} placement="left" arrow>
             <IconButton
-              onClick={onToggleCostAllocation}
+              onClick={onToggleGitOps}
               sx={{
                 width: 42,
                 height: 42,
                 borderRadius: '50%',
-                bgcolor: isDark ? 'rgba(16, 185, 129, 0.15)' : 'rgba(5, 150, 105, 0.12)',
-                color: isDark ? '#34d399' : '#059669',
+                bgcolor: isGitOpsActive
+                  ? isDark ? 'rgba(168, 85, 247, 0.35)' : 'rgba(168, 85, 247, 0.28)'
+                  : isDark ? 'rgba(168, 85, 247, 0.15)' : 'rgba(147, 51, 234, 0.12)',
+                color: isDark ? '#c084fc' : '#a855f7',
                 border: '1px solid',
-                borderColor: isDark ? 'rgba(16, 185, 129, 0.28)' : 'rgba(5, 150, 105, 0.22)',
+                borderColor: isGitOpsActive
+                  ? '#c084fc'
+                  : isDark ? 'rgba(168, 85, 247, 0.28)' : 'rgba(147, 51, 234, 0.22)',
+                boxShadow: isGitOpsActive ? '0 0 12px rgba(168, 85, 247, 0.45)' : 'none',
                 transition: 'all 0.24s cubic-bezier(0.34, 1.56, 0.64, 1)',
                 '&:hover': {
                   transform: 'scale(1.15)',
-                  bgcolor: isDark ? 'rgba(16, 185, 129, 0.25)' : 'rgba(5, 150, 105, 0.2)',
-                  borderColor: isDark ? '#34d399' : '#059669',
-                  boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)',
+                  bgcolor: isDark ? 'rgba(168, 85, 247, 0.25)' : 'rgba(147, 51, 234, 0.2)',
+                  borderColor: isDark ? '#c084fc' : '#a855f7',
+                  boxShadow: '0 4px 14px rgba(168, 85, 247, 0.35)',
                 },
                 '&:active': {
                   transform: 'scale(0.95)',
                 },
               }}
             >
-              <MonetizationOnRoundedIcon sx={{ fontSize: 21 }} />
+              <CompareArrowsRoundedIcon sx={{ fontSize: 21 }} />
             </IconButton>
           </Tooltip>
         )}

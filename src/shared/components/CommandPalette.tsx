@@ -29,7 +29,6 @@ import StorageIcon from '@mui/icons-material/Storage';
 import AltRouteIcon from '@mui/icons-material/AltRouteRounded';
 import CompareArrowsIcon from '@mui/icons-material/CompareArrowsRounded';
 import AutoModeIcon from '@mui/icons-material/AutoModeRounded';
-import MonetizationOnIcon from '@mui/icons-material/MonetizationOnRounded';
 import ShieldIcon from '@mui/icons-material/ShieldRounded';
 import DynamicFeedIcon from '@mui/icons-material/DynamicFeedRounded';
 import LayersIcon from '@mui/icons-material/LayersRounded';
@@ -65,7 +64,6 @@ export interface CommandPaletteProps {
   onOpenPortForward?: () => void;
   onOpenDiff?: () => void;
   onOpenConfigDrift?: () => void;
-  onOpenCostAllocation?: () => void;
   onOpenSecurityPosture?: () => void;
   onOpenNamespaceCloner?: () => void;
   onOpenSettings?: () => void;
@@ -104,7 +102,6 @@ export function CommandPalette({
   onOpenPortForward,
   onOpenDiff,
   onOpenConfigDrift,
-  onOpenCostAllocation,
   onOpenSecurityPosture,
   onOpenNamespaceCloner,
   onOpenSettings,
@@ -142,8 +139,7 @@ export function CommandPalette({
       { id: 'nav-settings', title: 'Workspace & System Settings', subtitle: 'Configure appearance, user profiles, and keyboard shortcuts', tab: 27, category: 'Platform Tools', shortcut: 'Alt+,', icon: <SettingsIcon fontSize="small" sx={{ color: '#94a3b8' }} /> },
       { id: 'nav-port-forward', title: 'Port-Forward Manager', subtitle: 'Active TCP/HTTP tunnels into private pods & services', tab: 28, category: 'Platform Tools', shortcut: 'Alt+P', icon: <AltRouteIcon fontSize="small" sx={{ color: '#38bdf8' }} /> },
       { id: 'nav-config-drift', title: 'Config Drift Detector', subtitle: 'Detect pods running outdated configurations after ConfigMap/Secret edits', tab: 29, category: 'Platform Tools', shortcut: 'Alt+C', icon: <AutoModeIcon fontSize="small" sx={{ color: '#f59e0b' }} /> },
-      { id: 'nav-gitops', title: 'GitOps Time Machine (YAML Diff)', subtitle: 'Compare rollout revisions, live vs applied manifests & environments', tab: 30, category: 'Platform Tools', shortcut: 'Alt+G', icon: <CompareArrowsIcon fontSize="small" sx={{ color: '#a855f7' }} /> },
-      { id: 'nav-cost', title: 'Cost Allocation & Right-Sizing', subtitle: 'Analyze monthly Kubernetes spend, wasted allocation & 1-click resource tuning', tab: 31, category: 'Platform Tools', shortcut: 'Alt+$', icon: <MonetizationOnIcon fontSize="small" sx={{ color: '#10b981' }} /> },
+      { id: 'nav-gitops', title: 'GitOps Engine (Reconciliation & Sync)', subtitle: 'Manage Git sources, automated sync policies, and cluster state diff', tab: 30, category: 'Platform Tools', shortcut: 'Alt+G', icon: <CompareArrowsIcon fontSize="small" sx={{ color: '#a855f7' }} /> },
       { id: 'nav-security', title: 'Security Posture & CIS Audit', subtitle: 'Audit Pod Security Standards (PSS), CIS benchmark & RBAC policies', tab: 32, category: 'Platform Tools', shortcut: 'Alt+S', icon: <ShieldIcon fontSize="small" sx={{ color: '#ef4444' }} /> },
 
       // Workloads
@@ -202,11 +198,6 @@ export function CommandPalette({
         resolvedAction = () => {
           onClose();
           onOpenDiff();
-        };
-      } else if (n.tab === 31 && onOpenCostAllocation) {
-        resolvedAction = () => {
-          onClose();
-          onOpenCostAllocation();
         };
       } else if (n.tab === 32 && onOpenSecurityPosture) {
         resolvedAction = () => {
@@ -353,7 +344,6 @@ export function CommandPalette({
     onOpenPortForward,
     onOpenDiff,
     onOpenConfigDrift,
-    onOpenCostAllocation,
     onOpenSecurityPosture,
     onOpenNamespaceCloner,
     onOpenSettings,

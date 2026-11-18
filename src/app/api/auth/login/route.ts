@@ -6,6 +6,7 @@ import {
   resetRateLimit,
 } from '@/server/auth';
 import { createSessionToken, AUTH_COOKIE_NAME } from '@/server/jwt';
+import { recordAuditEvent, parseUserAgent } from '@/server/audit';
 
 export async function POST(req: NextRequest) {
   try {
@@ -19,16 +20,33 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Resolve client identifier for rate-limiting (IP + username)
+    // Resolve client identifier and device metadata
     const ip =
       req.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
       req.headers.get('x-real-ip') ||
-      'unknown-ip';
+      '127.0.0.1';
+    const ua = req.headers.get('user-agent') || '';
+    const device = parseUserAgent(ua);
     const rateLimitKey = `${ip}:${username.trim()}`;
 
     // Check rate limit
     const rateCheck = checkRateLimit(rateLimitKey);
     if (!rateCheck.allowed) {
+      await recordAuditEvent({
+        clusterId: 'all',
+        user: username.trim(),
+        action: 'USER_LOGIN_FAILED',
+        resourceType: 'Auth',
+        resourceName: username.trim(),
+        namespace: 'system',
+        details: `Account temporarily locked due to excessive failed attempts from ${ip} (${device})`,
+        status: 'FAILED',
+        errorMessage: 'Account locked: Rate limit exceeded',
+        ip,
+        device,
+        userAgent: ua,
+      });
+
       return NextResponse.json(
         {
           error: `Too many failed attempts. Account locked. Please try again in ${rateCheck.retryAfter} seconds.`,
@@ -43,6 +61,21 @@ export async function POST(req: NextRequest) {
 
     if (!authResult.success || !authResult.user) {
       const lockResult = recordFailedAttempt(rateLimitKey);
+      await recordAuditEvent({
+        clusterId: 'all',
+        user: username.trim(),
+        action: 'USER_LOGIN_FAILED',
+        resourceType: 'Auth',
+        resourceName: username.trim(),
+        namespace: 'system',
+        details: `Failed authentication attempt from ${ip} using ${device}: ${authResult.error || 'Invalid credentials'}`,
+        status: 'FAILED',
+        errorMessage: authResult.error || 'Invalid credentials',
+        ip,
+        device,
+        userAgent: ua,
+      });
+
       if (lockResult.locked) {
         return NextResponse.json(
           {
@@ -61,6 +94,20 @@ export async function POST(req: NextRequest) {
 
     // Successful login: reset rate limiter
     resetRateLimit(rateLimitKey);
+
+    await recordAuditEvent({
+      clusterId: 'all',
+      user: authResult.user.username,
+      action: 'USER_LOGIN',
+      resourceType: 'Auth',
+      resourceName: authResult.user.username,
+      namespace: 'system',
+      details: `User authenticated successfully from ${ip} (${device})`,
+      status: 'SUCCESS',
+      ip,
+      device,
+      userAgent: ua,
+    });
 
     // Create signed JWT session
     const token = await createSessionToken(authResult.user);

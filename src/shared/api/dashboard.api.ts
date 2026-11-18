@@ -113,6 +113,7 @@ import {
   PlatformAppSpec,
   PlatformAppInfo,
   AuditLogEntry,
+  GitOpsApp,
   ClusterHealthReport,
   ClusterTopology,
   PodDiagnosticReport,
@@ -1702,6 +1703,75 @@ export const useAuditLogs = (clusterId: string) => {
     enabled: !!clusterId,
     refetchInterval: 10000,
   });
+};
+
+// ==========================================
+// GitOps Engine Management API
+// ==========================================
+
+export const fetchGitOpsApps = async (clusterId: string): Promise<GitOpsApp[]> => {
+  const baseUrl = getBackendUrl();
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/gitops`);
+  if (!res.ok) throw new Error('Failed to fetch GitOps applications');
+  return res.json();
+};
+
+export const useGitOpsApps = (clusterId: string) => {
+  return useQuery<GitOpsApp[]>({
+    queryKey: ['gitopsApps', clusterId],
+    queryFn: () => fetchGitOpsApps(clusterId),
+    enabled: !!clusterId,
+    refetchInterval: 8000,
+  });
+};
+
+export const syncGitOpsAppRequest = async (clusterId: string, appId: string): Promise<GitOpsApp> => {
+  const baseUrl = getBackendUrl();
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/gitops/sync`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ appId }),
+  });
+  if (!res.ok) throw new Error('Failed to synchronize GitOps application');
+  return res.json();
+};
+
+export const rollbackGitOpsAppRequest = async (
+  clusterId: string,
+  appId: string,
+  commitSha: string
+): Promise<GitOpsApp> => {
+  const baseUrl = getBackendUrl();
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/gitops/rollback`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ appId, commitSha }),
+  });
+  if (!res.ok) throw new Error('Failed to rollback GitOps application');
+  return res.json();
+};
+
+export const createGitOpsAppRequest = async (
+  clusterId: string,
+  data: Partial<GitOpsApp>
+): Promise<GitOpsApp> => {
+  const baseUrl = getBackendUrl();
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/gitops/create`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error('Failed to create GitOps application');
+  return res.json();
+};
+
+export const deleteGitOpsAppRequest = async (clusterId: string, appId: string): Promise<{ success: boolean }> => {
+  const baseUrl = getBackendUrl();
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/gitops/${appId}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw new Error('Failed to delete GitOps application');
+  return res.json();
 };
 
 export const fetchClusterHealth = async (clusterId: string): Promise<ClusterHealthReport> => {

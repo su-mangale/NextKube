@@ -1,12 +1,33 @@
 import fs from 'fs';
 import path from 'path';
 
+export type AuditActionType =
+  | 'USER_LOGIN'
+  | 'USER_LOGOUT'
+  | 'USER_LOGIN_FAILED'
+  | 'SCALE_REPLICAS'
+  | 'ROLLOUT_RESTART'
+  | 'ROLLBACK_WORKLOAD'
+  | 'SET_IMAGE'
+  | 'DELETE_RESOURCE'
+  | 'APPLY_MANIFEST'
+  | 'BULK_DELETE'
+  | 'EXEC_TERMINAL'
+  | 'PORT_FORWARD_START'
+  | 'PORT_FORWARD_STOP'
+  | 'NODE_CORDON'
+  | 'NODE_DRAIN'
+  | 'NAMESPACE_CLONE'
+  | 'GITOPS_SYNC'
+  | 'GITOPS_ROLLBACK'
+  | 'CUSTOM_OPERATION';
+
 export interface AuditLogEntry {
   id: string;
   timestamp: string; // ISO 8601
   clusterId: string;
   user: string;
-  action: 'SCALE_REPLICAS' | 'ROLLOUT_RESTART' | 'SET_IMAGE' | 'DELETE_RESOURCE' | 'APPLY_MANIFEST' | 'BULK_DELETE' | 'EXEC_TERMINAL' | 'CUSTOM_OPERATION';
+  action: AuditActionType | string;
   resourceType: string;
   resourceName: string;
   namespace: string;
@@ -14,6 +35,8 @@ export interface AuditLogEntry {
   status: 'SUCCESS' | 'FAILED';
   errorMessage?: string;
   ip?: string;
+  device?: string;
+  userAgent?: string;
 }
 
 const VAULT_DIR = path.join(process.cwd(), '.nextkube');
@@ -26,6 +49,34 @@ function ensureDir() {
 }
 
 /**
+ * Parses user-agent strings into friendly device/browser descriptions.
+ * e.g. "Chrome on macOS (Desktop)" or "Safari on iOS (Mobile)"
+ */
+export function parseUserAgent(ua?: string): string {
+  if (!ua || ua.trim() === '') return 'Web Console';
+
+  let os = 'Desktop';
+  if (/macintosh|mac os x/i.test(ua)) os = 'macOS';
+  else if (/windows nt/i.test(ua)) os = 'Windows';
+  else if (/android/i.test(ua)) os = 'Android';
+  else if (/iphone|ipad|ipod/i.test(ua)) os = 'iOS';
+  else if (/linux/i.test(ua)) os = 'Linux';
+
+  let browser = 'Browser';
+  if (/edg\//i.test(ua)) browser = 'Edge';
+  else if (/chrome|crios/i.test(ua) && !/opr|opera|edge|edg/i.test(ua)) browser = 'Chrome';
+  else if (/firefox|fxios/i.test(ua)) browser = 'Firefox';
+  else if (/safari/i.test(ua) && !/chrome|crios/i.test(ua)) browser = 'Safari';
+  else if (/curl/i.test(ua)) return `curl (${os})`;
+  else if (/postman/i.test(ua)) return `Postman (${os})`;
+
+  const isMobile = /mobile|android|iphone|ipad|ipod/i.test(ua);
+  const deviceType = isMobile ? 'Mobile' : 'Desktop';
+
+  return `${browser} on ${os} (${deviceType})`;
+}
+
+/**
  * Record an audit event into persistent storage (.nextkube/audit.jsonl)
  */
 export async function recordAuditEvent(entry: Omit<AuditLogEntry, 'id' | 'timestamp'>): Promise<AuditLogEntry> {
@@ -34,6 +85,7 @@ export async function recordAuditEvent(entry: Omit<AuditLogEntry, 'id' | 'timest
     id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
     timestamp: new Date().toISOString(),
     ...entry,
+    device: entry.device || (entry.userAgent ? parseUserAgent(entry.userAgent) : 'Web Console (Desktop)'),
   };
 
   try {
@@ -64,7 +116,7 @@ export async function getAuditLogs(clusterId?: string, limit = 100): Promise<Aud
     for (let i = lines.length - 1; i >= 0; i--) {
       try {
         const item = JSON.parse(lines[i]) as AuditLogEntry;
-        if (!clusterId || clusterId === 'all' || item.clusterId === clusterId) {
+        if (!clusterId || clusterId === 'all' || item.clusterId === clusterId || item.clusterId === 'all') {
           logs.push(item);
         }
         if (logs.length >= limit) break;
@@ -89,7 +141,21 @@ function getBootstrapAuditLogs(clusterId = 'default-local'): AuditLogEntry[] {
   return [
     {
       id: 'audit-boot-1',
-      timestamp: new Date(now - 1000 * 60 * 12).toISOString(),
+      timestamp: new Date(now - 1000 * 60 * 4).toISOString(),
+      clusterId,
+      user: 'admin',
+      action: 'USER_LOGIN',
+      resourceType: 'Auth',
+      resourceName: 'admin',
+      namespace: 'system',
+      details: 'User authenticated successfully via Web Console',
+      status: 'SUCCESS',
+      ip: '192.168.1.105',
+      device: 'Chrome on macOS (Desktop)',
+    },
+    {
+      id: 'audit-boot-2',
+      timestamp: new Date(now - 1000 * 60 * 18).toISOString(),
       clusterId,
       user: 'admin',
       action: 'SCALE_REPLICAS',
@@ -98,11 +164,12 @@ function getBootstrapAuditLogs(clusterId = 'default-local'): AuditLogEntry[] {
       namespace: 'default',
       details: 'Scaled replicas from 2 to 3',
       status: 'SUCCESS',
-      ip: '127.0.0.1',
+      ip: '192.168.1.105',
+      device: 'Chrome on macOS (Desktop)',
     },
     {
-      id: 'audit-boot-2',
-      timestamp: new Date(now - 1000 * 60 * 35).toISOString(),
+      id: 'audit-boot-3',
+      timestamp: new Date(now - 1000 * 60 * 42).toISOString(),
       clusterId,
       user: 'admin',
       action: 'ROLLOUT_RESTART',
@@ -111,11 +178,12 @@ function getBootstrapAuditLogs(clusterId = 'default-local'): AuditLogEntry[] {
       namespace: 'default',
       details: 'Triggered rolling restart annotation',
       status: 'SUCCESS',
-      ip: '127.0.0.1',
+      ip: '192.168.1.105',
+      device: 'Chrome on macOS (Desktop)',
     },
     {
-      id: 'audit-boot-3',
-      timestamp: new Date(now - 1000 * 60 * 85).toISOString(),
+      id: 'audit-boot-4',
+      timestamp: new Date(now - 1000 * 60 * 95).toISOString(),
       clusterId,
       user: 'admin',
       action: 'APPLY_MANIFEST',
@@ -124,7 +192,8 @@ function getBootstrapAuditLogs(clusterId = 'default-local'): AuditLogEntry[] {
       namespace: 'default',
       details: 'Applied declarative manifest YAML update',
       status: 'SUCCESS',
-      ip: '127.0.0.1',
+      ip: '192.168.1.105',
+      device: 'Chrome on macOS (Desktop)',
     },
   ];
 }

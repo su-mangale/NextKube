@@ -50,8 +50,6 @@ import {
   cordonNodeResource,
   fetchNodeDrainPreview,
   drainNodeResource,
-  fetchClusterFinOpsSummary,
-  applyWorkloadRightSizing,
   fetchClusterSecurityPosture,
   checkRbacPermission,
   fetchRbacMatrix,
@@ -65,7 +63,14 @@ import {
   listPortForwardSessions,
   fetchPortForwardTargets,
 } from '@/server/port-forward-manager';
-import { recordAuditEvent, getAuditLogs } from '@/server/audit';
+import { recordAuditEvent, getAuditLogs, parseUserAgent } from '@/server/audit';
+import {
+  getGitOpsApps,
+  saveGitOpsApps,
+  syncGitOpsApp,
+  rollbackGitOpsApp,
+  type GitOpsApp,
+} from '@/server/gitops';
 import { AUTH_COOKIE_NAME, verifySessionToken } from '@/server/jwt';
 
 async function extractUser(req: NextRequest): Promise<string> {
@@ -75,6 +80,29 @@ async function extractUser(req: NextRequest): Promise<string> {
     if (session?.username) return session.username;
   }
   return 'admin';
+}
+
+function extractClientMeta(req: NextRequest): { ip: string; device: string; userAgent: string } {
+  const ip =
+    req.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
+    req.headers.get('x-real-ip') ||
+    '127.0.0.1';
+  const userAgent = req.headers.get('user-agent') || '';
+  const device = parseUserAgent(userAgent);
+  return { ip, device, userAgent };
+}
+
+function logAudit(
+  req: NextRequest,
+  user: string,
+  entry: Omit<Parameters<typeof recordAuditEvent>[0], 'user' | 'ip' | 'device' | 'userAgent'> & { user?: string }
+) {
+  const clientMeta = extractClientMeta(req);
+  return recordAuditEvent({
+    ...entry,
+    user: entry.user || user,
+    ...clientMeta,
+  });
 }
 
 export async function GET(
@@ -103,6 +131,11 @@ export async function GET(
     if (segment0 === 'audit') {
       const logs = await getAuditLogs(clusterId);
       return NextResponse.json(logs);
+    }
+
+    if (segment0 === 'gitops') {
+      const apps = await getGitOpsApps(clusterId);
+      return NextResponse.json(apps);
     }
 
     // Visual Topology Graph
@@ -403,19 +436,6 @@ export async function GET(
       return NextResponse.json(data);
     }
 
-    // Phase 4: FinOps Cost Allocation & Right-Sizing: /cost or /cost/allocation
-    if (segment0 === 'cost') {
-      const cpuRate = url.searchParams.get('cpuRate') ? parseFloat(url.searchParams.get('cpuRate')!) : undefined;
-      const memRate = url.searchParams.get('memRate') ? parseFloat(url.searchParams.get('memRate')!) : undefined;
-      const storageRate = url.searchParams.get('storageRate') ? parseFloat(url.searchParams.get('storageRate')!) : undefined;
-      const data = await fetchClusterFinOpsSummary(clusterId, {
-        cpuPerCoreHour: cpuRate,
-        memoryPerGiBHour: memRate,
-        storagePerGiBMonth: storageRate,
-      });
-      return NextResponse.json(data);
-    }
-
     // Phase 5: Security Posture & CIS Benchmark: /security/posture
     if (segment0 === 'security') {
       const data = await fetchClusterSecurityPosture(clusterId);
@@ -578,21 +598,83 @@ export async function POST(
       return NextResponse.json(res, { status: res.success ? 200 : 400 });
     }
 
-    // Phase 4: FinOps Right-Sizing Patch: /cost/right-size
-    if (segment0 === 'cost' && resource.length >= 2 && (resource[1] === 'right-size' || resource[1] === 'apply')) {
-      const res = await applyWorkloadRightSizing(clusterId, body);
-      await recordAuditEvent({
-        clusterId,
-        user,
-        action: 'CUSTOM_OPERATION',
-        resourceType: body.kind || 'Deployment',
-        resourceName: body.name || 'unknown',
-        namespace: body.namespace || namespace,
-        details: `Applied right-sizing patch: CPU ${body.cpuRequest}, Mem ${body.memoryRequest}`,
-        status: res.success ? 'SUCCESS' : 'FAILED',
-        errorMessage: res.success ? undefined : res.message,
-      });
-      return NextResponse.json(res, { status: res.success ? 200 : 400 });
+    // GitOps Engine Management: /gitops/[subAction]
+    if (segment0 === 'gitops') {
+      const subAction = resource[1]?.toLowerCase();
+      if (subAction === 'sync') {
+        const { appId } = body;
+        const app = await syncGitOpsApp(appId);
+        await logAudit(req, user, {
+          clusterId,
+          action: 'GITOPS_SYNC',
+          resourceType: 'GitOpsApp',
+          resourceName: app?.name || appId,
+          namespace: app?.destinationNamespace || 'default',
+          details: `Reconciled and synced GitOps application with commit ${app?.lastSyncedCommit.sha}`,
+          status: app ? 'SUCCESS' : 'FAILED',
+        });
+        return NextResponse.json(app);
+      }
+      if (subAction === 'rollback') {
+        const { appId, commitSha } = body;
+        const app = await rollbackGitOpsApp(appId, commitSha);
+        await logAudit(req, user, {
+          clusterId,
+          action: 'GITOPS_ROLLBACK',
+          resourceType: 'GitOpsApp',
+          resourceName: app?.name || appId,
+          namespace: app?.destinationNamespace || 'default',
+          details: `Rolled back GitOps application to revision ${commitSha}`,
+          status: app ? 'SUCCESS' : 'FAILED',
+        });
+        return NextResponse.json(app);
+      }
+      if (subAction === 'create') {
+        const apps = await getGitOpsApps('all');
+        const newApp: GitOpsApp = {
+          id: `app-${Date.now()}`,
+          clusterId,
+          name: body.name || 'new-app',
+          repoUrl: body.repoUrl || 'https://github.com/my-org/manifests.git',
+          targetRevision: body.targetRevision || 'main',
+          path: body.path || 'manifests',
+          destinationNamespace: body.destinationNamespace || namespace || 'default',
+          syncStatus: 'Synced',
+          healthStatus: 'Healthy',
+          autoSync: Boolean(body.autoSync),
+          selfHeal: Boolean(body.selfHeal),
+          autoPrune: Boolean(body.autoPrune),
+          lastSyncedAt: new Date().toISOString(),
+          lastSyncedCommit: {
+            sha: Math.random().toString(16).substring(2, 9),
+            author: user,
+            message: 'Initial GitOps application registration',
+            date: new Date().toISOString(),
+          },
+          liveResourcesCount: 3,
+          syncHistory: [{
+            id: `sync-${Date.now()}`,
+            commitSha: Math.random().toString(16).substring(2, 9),
+            commitMessage: 'Initial GitOps application registration',
+            author: user,
+            syncedAt: new Date().toISOString(),
+            status: 'SUCCESS',
+            duration: '1.8s',
+          }],
+        };
+        apps.unshift(newApp);
+        await saveGitOpsApps(apps);
+        await logAudit(req, user, {
+          clusterId,
+          action: 'GITOPS_SYNC',
+          resourceType: 'GitOpsApp',
+          resourceName: newApp.name,
+          namespace: newApp.destinationNamespace,
+          details: `Created new GitOps application ${newApp.name} tracking ${newApp.repoUrl}`,
+          status: 'SUCCESS',
+        });
+        return NextResponse.json(newApp);
+      }
     }
 
     // Phase 5: RBAC "Can I do X?" Policy Check: /rbac/can-i
@@ -809,6 +891,24 @@ export async function DELETE(
         status: ok ? 'SUCCESS' : 'FAILED',
       });
       return NextResponse.json({ success: ok });
+    }
+
+    // 4. Delete GitOps App: /gitops/[appId]
+    if (segment0 === 'gitops' && resource.length >= 2) {
+      const appId = resource[1];
+      const apps = await getGitOpsApps('all');
+      const filtered = apps.filter((a) => a.id !== appId);
+      await saveGitOpsApps(filtered);
+      await logAudit(req, user, {
+        clusterId,
+        action: 'DELETE_RESOURCE',
+        resourceType: 'GitOpsApp',
+        resourceName: appId,
+        namespace: 'system',
+        details: `Deleted GitOps application ${appId}`,
+        status: 'SUCCESS',
+      });
+      return NextResponse.json({ success: true });
     }
 
     return NextResponse.json({ error: `Unhandled DELETE path: ${resource.join('/')}` }, { status: 404 });

@@ -41,7 +41,6 @@ import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import TerminalRoundedIcon from '@mui/icons-material/TerminalRounded';
 import AutoModeRoundedIcon from '@mui/icons-material/AutoModeRounded';
 import CompareArrowsRoundedIcon from '@mui/icons-material/CompareArrowsRounded';
-import MonetizationOnRoundedIcon from '@mui/icons-material/MonetizationOnRounded';
 
 export interface ClusterSidebarNavProps {
   activeTab: number;
@@ -51,7 +50,6 @@ export interface ClusterSidebarNavProps {
   onOpenPortForward?: () => void;
   onOpenConfigDrift?: () => void;
   onOpenDiff?: () => void;
-  onOpenCostAllocation?: () => void;
   onOpenSecurityPosture?: () => void;
   resourceCounts?: Partial<Record<number, number>>;
   shortcutSettingsKey?: string;
@@ -79,7 +77,6 @@ export function ClusterSidebarNav({
   onOpenPortForward,
   onOpenConfigDrift,
   onOpenDiff,
-  onOpenCostAllocation,
   onOpenSecurityPosture,
   resourceCounts: _resourceCounts = {},
   shortcutSettingsKey: _shortcutSettingsKey = 'Alt+,',
@@ -540,52 +537,7 @@ export function ClusterSidebarNav({
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2 }}>
               <CompareArrowsRoundedIcon sx={{ fontSize: 18, color: activeTab === 30 ? theme.palette.primary.main : '#a855f7' }} />
               <Typography variant="body2" sx={{ fontSize: '0.81rem', fontWeight: activeTab === 30 ? 750 : 600 }}>
-                GitOps Time Machine
-              </Typography>
-            </Box>
-          </Box>
-        )}
-
-        {onOpenCostAllocation && (
-          <Box
-            onClick={() => {
-              if (onOpenCostAllocation) onOpenCostAllocation();
-              else onSelectTab(31);
-            }}
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              px: 1.5,
-              py: 0.7,
-              mx: 0.8,
-              borderRadius: 1.8,
-              cursor: 'pointer',
-              bgcolor: activeTab === 31
-                ? isDark
-                  ? alpha(theme.palette.primary.main, 0.22)
-                  : alpha(theme.palette.primary.main, 0.12)
-                : 'transparent',
-              color: activeTab === 31
-                ? theme.palette.primary.main
-                : 'text.secondary',
-              transition: 'all 0.15s ease',
-              '&:hover': {
-                bgcolor: activeTab === 31
-                  ? isDark
-                    ? alpha(theme.palette.primary.main, 0.28)
-                    : alpha(theme.palette.primary.main, 0.18)
-                  : isDark
-                    ? 'rgba(16, 185, 129, 0.1)'
-                    : 'rgba(16, 185, 129, 0.08)',
-                color: isDark ? '#34d399' : '#059669',
-              },
-            }}
-          >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2 }}>
-              <MonetizationOnRoundedIcon sx={{ fontSize: 18, color: activeTab === 31 ? theme.palette.primary.main : '#10b981' }} />
-              <Typography variant="body2" sx={{ fontSize: '0.81rem', fontWeight: activeTab === 31 ? 750 : 600 }}>
-                Cost & Right-Sizing
+                GitOps Engine
               </Typography>
             </Box>
           </Box>

@@ -658,7 +658,7 @@ export interface AuditLogEntry {
   timestamp: string;
   clusterId: string;
   user: string;
-  action: 'SCALE_REPLICAS' | 'ROLLOUT_RESTART' | 'SET_IMAGE' | 'DELETE_RESOURCE' | 'APPLY_MANIFEST' | 'BULK_DELETE' | 'EXEC_TERMINAL' | 'CUSTOM_OPERATION';
+  action: string;
   resourceType: string;
   resourceName: string;
   namespace: string;
@@ -666,6 +666,40 @@ export interface AuditLogEntry {
   status: 'SUCCESS' | 'FAILED';
   errorMessage?: string;
   ip?: string;
+  device?: string;
+  userAgent?: string;
+}
+
+export interface GitOpsApp {
+  id: string;
+  name: string;
+  clusterId: string;
+  repoUrl: string;
+  targetRevision: string;
+  path: string;
+  destinationNamespace: string;
+  syncStatus: 'Synced' | 'OutOfSync' | 'Syncing' | 'Unknown';
+  healthStatus: 'Healthy' | 'Progressing' | 'Degraded' | 'Suspended';
+  autoSync: boolean;
+  selfHeal: boolean;
+  autoPrune: boolean;
+  lastSyncedAt: string;
+  lastSyncedCommit: {
+    sha: string;
+    author: string;
+    message: string;
+    date: string;
+  };
+  liveResourcesCount: number;
+  syncHistory: Array<{
+    id: string;
+    commitSha: string;
+    commitMessage: string;
+    author: string;
+    syncedAt: string;
+    status: 'SUCCESS' | 'FAILED';
+    duration: string;
+  }>;
 }
 
 export interface ClusterAnomaly {
