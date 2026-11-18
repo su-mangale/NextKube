@@ -18,6 +18,7 @@ import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded';
 import CloudUploadRoundedIcon from '@mui/icons-material/CloudUploadRounded';
 import SwapHorizRoundedIcon from '@mui/icons-material/SwapHorizRounded';
 import HubRoundedIcon from '@mui/icons-material/HubRounded';
+import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import { useShortcuts } from '../utils/shortcuts';
 
 export interface ExecSessionItem {
@@ -35,6 +36,7 @@ export interface ActionDockProps {
   isConsoleConnected?: boolean;
   isConsoleMinimized?: boolean;
   onCreateResource: () => void;
+  onOpenCommandPalette?: () => void;
   onToggleTopology?: () => void;
   isTopologyActive?: boolean;
   onAddCluster?: () => void;
@@ -58,6 +60,7 @@ export function ActionDock({
   isConsoleConnected = false,
   isConsoleMinimized = false,
   onCreateResource,
+  onOpenCommandPalette,
   onToggleTopology,
   isTopologyActive = false,
   onAddCluster,
@@ -469,6 +472,36 @@ export function ActionDock({
               }}
             >
               <HubRoundedIcon sx={{ fontSize: 22 }} />
+            </IconButton>
+          </Tooltip>
+        )}
+
+        {/* Universal Command Palette */}
+        {onOpenCommandPalette && (
+          <Tooltip title={`Command Palette Omnibar (${getShortcutKey('commandPalette') || 'Ctrl+K'})`} placement="left" arrow>
+            <IconButton
+              onClick={onOpenCommandPalette}
+              sx={{
+                width: 42,
+                height: 42,
+                borderRadius: '50%',
+                bgcolor: isDark ? 'rgba(168, 85, 247, 0.15)' : 'rgba(147, 51, 234, 0.12)',
+                color: isDark ? '#c084fc' : '#9333ea',
+                border: '1px solid',
+                borderColor: isDark ? 'rgba(168, 85, 247, 0.28)' : 'rgba(147, 51, 234, 0.22)',
+                transition: 'all 0.24s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                '&:hover': {
+                  transform: 'scale(1.15)',
+                  bgcolor: isDark ? 'rgba(168, 85, 247, 0.25)' : 'rgba(147, 51, 234, 0.2)',
+                  borderColor: isDark ? '#c084fc' : '#9333ea',
+                  boxShadow: '0 4px 14px rgba(147, 51, 234, 0.35)',
+                },
+                '&:active': {
+                  transform: 'scale(0.95)',
+                },
+              }}
+            >
+              <SearchRoundedIcon sx={{ fontSize: 22 }} />
             </IconButton>
           </Tooltip>
         )}

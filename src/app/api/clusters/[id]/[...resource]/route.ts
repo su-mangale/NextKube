@@ -40,6 +40,9 @@ import {
   fetchResourceYamlContent,
   applyManifestYaml,
   fetchClusterTopology,
+  diagnosePodResource,
+  fetchHelmCatalog,
+  installHelmChart,
 } from '@/server/k8s-client';
 import { recordAuditEvent, getAuditLogs } from '@/server/audit';
 import { AUTH_COOKIE_NAME, verifySessionToken } from '@/server/jwt';
@@ -95,6 +98,12 @@ export async function GET(
 
     // 2. Pods
     if (segment0 === 'pods') {
+      // Subpath: /pods/[name]/diagnose (AI-Powered Root-Cause Analysis)
+      if (resource.length >= 3 && resource[2] === 'diagnose') {
+        const podName = resource[1];
+        const report = await diagnosePodResource(clusterId, namespace || 'default', podName);
+        return NextResponse.json(report);
+      }
       // Subpath: /pods/[name]/logs
       if (resource.length >= 3 && resource[2] === 'logs') {
         const podName = resource[1];
@@ -175,8 +184,12 @@ export async function GET(
       return NextResponse.json(data);
     }
 
-    // 10. Helm Releases & Values
-    if (segment0 === 'helmreleases' || segment0 === 'helm') {
+    // 10. Helm Releases, Catalog & Values
+    if (segment0 === 'helmreleases' || segment0 === 'helm' || segment0 === 'catalog') {
+      if ((resource.length >= 2 && resource[1] === 'catalog') || segment0 === 'catalog') {
+        const catalog = await fetchHelmCatalog();
+        return NextResponse.json(catalog);
+      }
       if (resource.length >= 3 && resource[2] === 'values') {
         const name = resource[1];
         const values = await fetchHelmReleaseValues(clusterId, name, namespace || 'default');
@@ -386,6 +399,24 @@ export async function POST(
         resourceName: name,
         namespace,
         details: 'Triggered rolling update restart',
+        status: res.success ? 'SUCCESS' : 'FAILED',
+        errorMessage: res.success ? undefined : res.message,
+      });
+      return NextResponse.json(res, { status: res.success ? 200 : 400 });
+    }
+
+    // Helm Install from App Store: /helm/install
+    if (segment0 === 'helm' && resource.length >= 2 && resource[1] === 'install') {
+      const { chartName, releaseName, valuesYaml, targetNamespace } = body;
+      const res = await installHelmChart(clusterId, targetNamespace || namespace, releaseName, chartName, valuesYaml || '');
+      await recordAuditEvent({
+        clusterId,
+        user,
+        action: 'CUSTOM_OPERATION',
+        resourceType: 'HelmRelease',
+        resourceName: releaseName,
+        namespace: targetNamespace || namespace,
+        details: `Installed Helm chart '${chartName}'`,
         status: res.success ? 'SUCCESS' : 'FAILED',
         errorMessage: res.success ? undefined : res.message,
       });

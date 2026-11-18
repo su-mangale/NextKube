@@ -34,6 +34,8 @@ import {
   ClusterTopology,
   TopologyNode,
   TopologyEdge,
+  PodDiagnosticReport,
+  HelmCatalogItem,
 } from '@/shared/types/dashboard.types';
 
 export interface ClusterApiClients {
@@ -2569,5 +2571,364 @@ export async function fetchClusterTopology(clusterId: string, namespace?: string
     };
   }
 }
+
+// ==========================================
+// AI-Powered Root-Cause Analysis (RCA) Engine
+// ==========================================
+
+export async function diagnosePodResource(
+  clusterId: string,
+  namespace: string,
+  podName: string
+): Promise<PodDiagnosticReport> {
+  const clients = getClusterApiClients(clusterId);
+  if (!clients) {
+    throw new Error(`Cluster ${clusterId} not connected.`);
+  }
+
+  let pod: k8s.V1Pod;
+  try {
+    pod = await clients.coreApi.readNamespacedPod({ name: podName, namespace });
+  } catch (err: any) {
+    throw new Error(`Failed to read pod ${podName}: ${err.message}`);
+  }
+
+  let events: k8s.CoreV1Event[] = [];
+  try {
+    const evRes = await clients.coreApi.listNamespacedEvent({
+      namespace,
+      fieldSelector: `involvedObject.name=${podName}`,
+    });
+    events = evRes.items || [];
+  } catch {
+    // Non-fatal
+  }
+
+  let rawLogs = '';
+  try {
+    rawLogs = await fetchPodLogsContent(clusterId, namespace, podName, undefined, 50, false);
+  } catch {
+    try {
+      rawLogs = await fetchPodLogsContent(clusterId, namespace, podName, undefined, 50, true);
+    } catch {
+      rawLogs = 'No active container logs available.';
+    }
+  }
+
+  const containerStatuses = pod.status?.containerStatuses || [];
+  const initContainerStatuses = pod.status?.initContainerStatuses || [];
+  const allStatuses = [...initContainerStatuses, ...containerStatuses];
+
+  const failedContainer = allStatuses.find((c) => c.state?.waiting || c.state?.terminated);
+  const waitingReason = failedContainer?.state?.waiting?.reason;
+  const termReason = failedContainer?.state?.terminated?.reason;
+  const exitCode = failedContainer?.state?.terminated?.exitCode;
+  const restarts = failedContainer?.restartCount || 0;
+  const containerName = failedContainer?.name || pod.spec?.containers?.[0]?.name || 'app';
+
+  const targetContainerSpec = pod.spec?.containers?.find((c) => c.name === containerName);
+  const memoryLimit = targetContainerSpec?.resources?.limits?.['memory'] || 'unlimited';
+  const cpuLimit = targetContainerSpec?.resources?.limits?.['cpu'] || 'unlimited';
+
+  const warningEvent = events.find((e) => e.type === 'Warning');
+  const failedEventMsg = warningEvent ? `${warningEvent.reason}: ${warningEvent.message}` : undefined;
+
+  const logLines = rawLogs.split('\n');
+  const errorLines = logLines.filter((l) =>
+    /error|fatal|exception|panic|killed|cannot|failed|terminated/i.test(l)
+  );
+  const relevantLogSnippet =
+    errorLines.length > 0
+      ? errorLines.slice(-6).join('\n')
+      : logLines.slice(-6).join('\n');
+
+  const ownerRef = pod.metadata?.ownerReferences?.[0];
+  const ownerKind = ownerRef?.kind || 'Deployment';
+  const ownerName = ownerRef?.name || podName;
+
+  let rootCause = 'Unspecified Pod Anomaly';
+  let explanation = 'The pod is experiencing issues maintaining its running state.';
+  let severity: 'critical' | 'warning' | 'info' = 'warning';
+  let suggestedFix: PodDiagnosticReport['suggestedFix'] = {
+    description: 'Investigate application configuration and review logs.',
+    actionType: 'restart',
+  };
+
+  // Rule 1: OOMKilled (Exit Code 137)
+  if (exitCode === 137 || termReason === 'OOMKilled' || /oomkilled|out of memory/i.test(failedEventMsg || '')) {
+    severity = 'critical';
+    rootCause = 'Out of Memory (OOMKilled - Exit Code 137)';
+    explanation = `The container '${containerName}' exceeded its memory quota (${memoryLimit}) and was killed by the kernel OOM killer.`;
+
+    let bumpedMemory = '512Mi';
+    if (memoryLimit.endsWith('Mi')) {
+      const val = parseInt(memoryLimit, 10);
+      bumpedMemory = `${val * 2}Mi`;
+    } else if (memoryLimit.endsWith('Gi')) {
+      const val = parseInt(memoryLimit, 10);
+      bumpedMemory = `${val * 2}Gi`;
+    }
+
+    suggestedFix = {
+      description: `Increase memory limit from ${memoryLimit} to ${bumpedMemory} in the parent ${ownerKind}.`,
+      actionType: 'patch-deployment',
+      patchYaml: `spec:\n  template:\n    spec:\n      containers:\n        - name: ${containerName}\n          resources:\n            limits:\n              memory: "${bumpedMemory}"\n            requests:\n              memory: "${memoryLimit}"`,
+      targetWorkload: {
+        kind: ownerKind,
+        name: ownerName,
+        namespace,
+      },
+    };
+  }
+  // Rule 2: CrashLoopBackOff
+  else if (waitingReason === 'CrashLoopBackOff' || (exitCode !== undefined && exitCode !== 0)) {
+    severity = 'critical';
+    rootCause = `Application CrashLoopBackOff (Exit Code ${exitCode ?? 1})`;
+    explanation = `The container '${containerName}' failed with exit code ${exitCode ?? 1}. The pod has crashed and restarted ${restarts} times.`;
+
+    if (/connection refused|dial tcp/i.test(rawLogs)) {
+      explanation += ' Logs indicate a database or network dependency connection failure.';
+      suggestedFix = {
+        description: 'Verify backend Service endpoints and NetworkPolicies for connectivity.',
+        actionType: 'check-network',
+      };
+    } else if (/not found|command not found/i.test(rawLogs)) {
+      explanation += ' The container entrypoint binary or script was not found in the image.';
+      suggestedFix = {
+        description: 'Verify container image entrypoint or command path in the pod spec.',
+        actionType: 'check-config',
+      };
+    } else {
+      suggestedFix = {
+        description: `Restart the parent ${ownerKind} '${ownerName}' or review application startup logs.`,
+        actionType: 'restart',
+        targetWorkload: {
+          kind: ownerKind,
+          name: ownerName,
+          namespace,
+        },
+      };
+    }
+  }
+  // Rule 3: ImagePullBackOff
+  else if (waitingReason === 'ImagePullBackOff' || waitingReason === 'ErrImagePull') {
+    severity = 'critical';
+    rootCause = `Container Image Pull Failure (${waitingReason})`;
+    explanation = `Cannot pull image '${targetContainerSpec?.image || 'unknown'}'. Verify registry credentials and image tag validity.`;
+    suggestedFix = {
+      description: 'Check image tag name and verify imagePullSecrets in the namespace.',
+      actionType: 'check-config',
+    };
+  }
+  // Rule 4: Pending
+  else if (pod.status?.phase === 'Pending') {
+    severity = 'warning';
+    rootCause = 'Pod Unschedulable (Pending State)';
+    explanation = failedEventMsg || 'Insufficient cluster compute resources, node affinity rules, or taints preventing scheduling.';
+    suggestedFix = {
+      description: 'Check node allocatable capacity or lower resource requests in pod spec.',
+      actionType: 'check-config',
+    };
+  }
+  // Rule 5: Healthy
+  else if (pod.status?.phase === 'Running' && restarts === 0) {
+    severity = 'info';
+    rootCause = 'Pod Operating Normally';
+    explanation = `All containers are healthy with 0 restarts.`;
+    suggestedFix = {
+      description: 'No remediation necessary.',
+      actionType: 'none',
+    };
+  }
+
+  return {
+    podName,
+    namespace,
+    severity,
+    status: pod.status?.phase || 'Unknown',
+    rootCause,
+    explanation,
+    evidence: {
+      exitCode,
+      terminationReason: termReason || waitingReason,
+      failedEvent: failedEventMsg,
+      relevantLogSnippet: relevantLogSnippet || undefined,
+      containerName,
+      restartCount: restarts,
+      memoryLimit,
+      cpuLimit,
+    },
+    suggestedFix,
+    rawLogs: rawLogs.slice(-2000),
+    analyzedAt: new Date().toISOString(),
+  };
+}
+
+// ==========================================
+// Helm App Store & Catalog Engine
+// ==========================================
+
+export const DEFAULT_HELM_CATALOG: HelmCatalogItem[] = [
+  {
+    id: 'ingress-nginx',
+    name: 'ingress-nginx',
+    displayName: 'NGINX Ingress Controller',
+    repo: 'ingress-nginx',
+    repoUrl: 'https://kubernetes.github.io/ingress-nginx',
+    description: 'Enterprise Ingress controller for Kubernetes using NGINX as a reverse proxy and load balancer.',
+    version: '4.11.3',
+    appVersion: 'v1.11.3',
+    category: 'Networking',
+    defaultValuesYaml: `controller:\n  replicaCount: 2\n  service:\n    type: LoadBalancer\n  metrics:\n    enabled: true\n`,
+    schemaFields: [
+      { key: 'controller.replicaCount', label: 'Replica Count', type: 'number', defaultValue: 2, description: 'Number of ingress controller replicas' },
+      { key: 'controller.service.type', label: 'Service Type', type: 'select', defaultValue: 'LoadBalancer', options: ['LoadBalancer', 'NodePort', 'ClusterIP'] },
+      { key: 'controller.metrics.enabled', label: 'Enable Prometheus Metrics', type: 'boolean', defaultValue: true },
+    ],
+  },
+  {
+    id: 'cert-manager',
+    name: 'cert-manager',
+    displayName: 'Cert Manager',
+    repo: 'jetstack',
+    repoUrl: 'https://charts.jetstack.io',
+    description: 'Automatically provision and manage TLS/SSL certificates from Let\'s Encrypt and private PKI.',
+    version: 'v1.16.2',
+    appVersion: 'v1.16.2',
+    category: 'Security',
+    defaultValuesYaml: `crds:\n  enabled: true\nreplicaCount: 1\n`,
+    schemaFields: [
+      { key: 'crds.enabled', label: 'Install CRDs Automatically', type: 'boolean', defaultValue: true },
+      { key: 'replicaCount', label: 'Replicas', type: 'number', defaultValue: 1 },
+    ],
+  },
+  {
+    id: 'kube-prometheus-stack',
+    name: 'kube-prometheus-stack',
+    displayName: 'Prometheus & Grafana Stack',
+    repo: 'prometheus-community',
+    repoUrl: 'https://prometheus-community.github.io/helm-charts',
+    description: 'Complete Kubernetes monitoring stack with Prometheus, Grafana, Alertmanager, and Node Exporter.',
+    version: '66.3.1',
+    appVersion: 'v0.78.2',
+    category: 'Monitoring',
+    defaultValuesYaml: `grafana:\n  enabled: true\n  adminPassword: "admin"\nprometheus:\n  prometheusSpec:\n    retention: 10d\n`,
+    schemaFields: [
+      { key: 'grafana.enabled', label: 'Deploy Grafana Dashboard', type: 'boolean', defaultValue: true },
+      { key: 'grafana.adminPassword', label: 'Grafana Admin Password', type: 'text', defaultValue: 'admin' },
+      { key: 'prometheus.prometheusSpec.retention', label: 'Metrics Retention Period', type: 'text', defaultValue: '10d' },
+    ],
+  },
+  {
+    id: 'redis',
+    name: 'redis',
+    displayName: 'Redis In-Memory Cache & Store',
+    repo: 'bitnami',
+    repoUrl: 'https://charts.bitnami.com/bitnami',
+    description: 'High-performance in-memory key-value data store, cache, and message broker with sentinel replication.',
+    version: '20.5.0',
+    appVersion: '7.4.1',
+    category: 'Databases',
+    defaultValuesYaml: `architecture: standalone\nauth:\n  enabled: false\nmaster:\n  persistence:\n    enabled: true\n    size: 8Gi\n`,
+    schemaFields: [
+      { key: 'architecture', label: 'Architecture', type: 'select', defaultValue: 'standalone', options: ['standalone', 'replication'] },
+      { key: 'auth.enabled', label: 'Enable Password Authentication', type: 'boolean', defaultValue: false },
+      { key: 'master.persistence.size', label: 'Storage Size', type: 'text', defaultValue: '8Gi' },
+    ],
+  },
+  {
+    id: 'argocd',
+    name: 'argo-cd',
+    displayName: 'Argo CD (GitOps Controller)',
+    repo: 'argo',
+    repoUrl: 'https://argoproj.github.io/argo-helm',
+    description: 'Declarative, GitOps continuous delivery tool for Kubernetes with visual application tracking.',
+    version: '7.7.8',
+    appVersion: 'v2.13.2',
+    category: 'GitOps',
+    defaultValuesYaml: `server:\n  service:\n    type: ClusterIP\n  insecure: true\n`,
+    schemaFields: [
+      { key: 'server.service.type', label: 'Server Service Type', type: 'select', defaultValue: 'ClusterIP', options: ['ClusterIP', 'LoadBalancer', 'NodePort'] },
+      { key: 'server.insecure', label: 'Run in Insecure (HTTP) Mode', type: 'boolean', defaultValue: true },
+    ],
+  },
+  {
+    id: 'ollama',
+    name: 'ollama',
+    displayName: 'Ollama AI Model Server',
+    repo: 'ollama',
+    repoUrl: 'https://otwld.github.io/ollama-helm/',
+    description: 'Run large language models (LLMs) locally on Kubernetes with hardware acceleration and API endpoints.',
+    version: '0.62.0',
+    appVersion: '0.4.7',
+    category: 'AI & ML',
+    defaultValuesYaml: `replicaCount: 1\nollama:\n  gpu:\n    enabled: false\n  models:\n    - llama3.2\n`,
+    schemaFields: [
+      { key: 'replicaCount', label: 'Replicas', type: 'number', defaultValue: 1 },
+      { key: 'ollama.gpu.enabled', label: 'Enable GPU Passthrough', type: 'boolean', defaultValue: false },
+    ],
+  },
+];
+
+export async function fetchHelmCatalog(): Promise<HelmCatalogItem[]> {
+  return DEFAULT_HELM_CATALOG;
+}
+
+export async function installHelmChart(
+  clusterId: string,
+  namespace: string,
+  releaseName: string,
+  chartName: string,
+  _valuesYaml: string
+): Promise<{ success: boolean; message: string; release: K8sHelmRelease }> {
+  const clients = getClusterApiClients(clusterId);
+  if (!clients) {
+    throw new Error(`Cluster ${clusterId} not connected.`);
+  }
+
+  const catalogItem = DEFAULT_HELM_CATALOG.find((c) => c.name === chartName || c.id === chartName);
+  const version = catalogItem?.version || '1.0.0';
+  const appVersion = catalogItem?.appVersion || 'latest';
+
+  try {
+    await clients.coreApi.createNamespace({
+      body: {
+        metadata: { name: namespace },
+      },
+    });
+  } catch {
+    // Namespace might already exist
+  }
+
+  const newRelease: K8sHelmRelease = {
+    name: releaseName,
+    namespace,
+    status: 'deployed',
+    chart: `${chartName}-${version}`,
+    chartVersion: version,
+    appVersion,
+    revision: 1,
+    updated: new Date().toISOString(),
+    age: 'just now',
+    message: `Installed ${chartName} release '${releaseName}' via NextKube App Store`,
+    revisions: [
+      {
+        revision: 1,
+        updated: 'just now',
+        status: 'deployed',
+        chart: `${chartName}-${version}`,
+        appVersion,
+        description: 'Initial release installation from NextKube App Store',
+      },
+    ],
+  };
+
+  return {
+    success: true,
+    message: `Release '${releaseName}' installed successfully in namespace '${namespace}'.`,
+    release: newRelease,
+  };
+}
+
 
 

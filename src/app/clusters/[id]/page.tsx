@@ -63,6 +63,8 @@ import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import SwapVertIcon from '@mui/icons-material/SwapVert';
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import StorefrontIcon from '@mui/icons-material/Storefront';
 import { useQueryClient } from '@tanstack/react-query';
 
 import {
@@ -123,6 +125,9 @@ import {
   SwitchClusterDialog,
   ClusterOverviewObservability,
   ClusterTopologyGraph,
+  PodDiagnosticDialog,
+  CommandPalette,
+  HelmAppStore,
   useShortcuts,
   matchesShortcut,
   DraggablePaper,
@@ -217,6 +222,15 @@ spec:
   const [selectedRolloutRevision, setSelectedRolloutRevision] = useState<number | null>(null);
 
   const [describeCopied, setDescribeCopied] = useState<boolean>(false);
+
+  // AI Diagnostic Dialog state
+  const [diagnosticPod, setDiagnosticPod] = useState<{ name: string; namespace: string } | null>(null);
+
+  // Universal Command Palette state
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState<boolean>(false);
+
+  // Helm Hub sub-tab state ('releases' | 'catalog')
+  const [helmSubTab, setHelmSubTab] = useState<'releases' | 'catalog'>('releases');
 
   // Logs states
   const [logsDialogOpen, setLogsDialogOpen] = useState<boolean>(false);
@@ -521,6 +535,7 @@ spec:
       const isInput = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
 
       const consoleSc = shortcuts.find((s) => s.id === 'console')?.key;
+      const commandPaletteSc = shortcuts.find((s) => s.id === 'commandPalette')?.key;
       const createSc = shortcuts.find((s) => s.id === 'create')?.key;
       const addClusterSc = shortcuts.find((s) => s.id === 'addCluster')?.key;
       const switchClusterSc = shortcuts.find((s) => s.id === 'switchCluster')?.key;
@@ -528,6 +543,18 @@ spec:
       const refreshSc = shortcuts.find((s) => s.id === 'refresh')?.key;
       const toggleDockSc = shortcuts.find((s) => s.id === 'toggleDock')?.key;
       const topologySc = shortcuts.find((s) => s.id === 'topology')?.key;
+
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        setCommandPaletteOpen((prev) => !prev);
+        return;
+      }
+
+      if (commandPaletteSc && matchesShortcut(e, commandPaletteSc)) {
+        e.preventDefault();
+        setCommandPaletteOpen((prev) => !prev);
+        return;
+      }
 
       if (consoleSc && matchesShortcut(e, consoleSc)) {
         e.preventDefault();
@@ -1918,9 +1945,23 @@ spec:
         onClick={(e) => e.stopPropagation()}
       >
         <Box sx={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5 }}>
-          {/* Tab 1: Pods -> Logs + Terminal */}
+          {/* Tab 1: Pods -> Logs + Terminal + AI Diagnose */}
           {tab === 1 && (
             <>
+              <Tooltip title="AI Root-Cause Diagnosis">
+                <IconButton
+                  size="small"
+                  onClick={() => setDiagnosticPod({ name: resource.name, namespace: resource.namespace || selectedNamespace || 'default' })}
+                  sx={{
+                    color: (resource.status !== 'Running' && resource.status !== 'Completed') || (resource.restarts && resource.restarts > 0)
+                      ? 'warning.main'
+                      : 'text.secondary',
+                    '&:hover': { color: 'secondary.main', bgcolor: 'action.hover' },
+                  }}
+                >
+                  <AutoAwesomeIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
               <Tooltip title="View Logs">
                 <IconButton
                   size="small"
@@ -2502,6 +2543,22 @@ spec:
                 slotProps={{
                   input: {
                     startAdornment: <SearchIcon sx={{ color: 'text.secondary', mr: 1, fontSize: 18 }} />,
+                    endAdornment: (
+                      <Tooltip title="Open Command Palette (Ctrl+K / ⌘K)">
+                        <Chip
+                          label="⌘K"
+                          size="small"
+                          onClick={() => setCommandPaletteOpen(true)}
+                          sx={{
+                            height: 20,
+                            fontSize: '0.65rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            bgcolor: 'action.hover',
+                          }}
+                        />
+                      </Tooltip>
+                    ),
                   }
                 }}
               />
@@ -2628,7 +2685,20 @@ spec:
                         </TableCell>
                         <TableCell sx={{ fontWeight: 650, color: 'text.secondary', fontSize: '0.8rem' }}>{pod.ready || '1/1'}</TableCell>
                         <TableCell>
-                          <Chip label={pod.status} size="small" color={pod.status === 'Running' ? 'success' : pod.status === 'Pending' ? 'warning' : 'error'} sx={{ fontSize: '0.65rem', fontWeight: 700, borderRadius: 1 }} />
+                          <Tooltip title={pod.status !== 'Running' && pod.status !== 'Completed' ? 'Click for AI Root-Cause Diagnosis' : ''}>
+                            <Chip
+                              label={pod.status}
+                              size="small"
+                              color={pod.status === 'Running' ? 'success' : pod.status === 'Pending' ? 'warning' : 'error'}
+                              onClick={pod.status !== 'Running' && pod.status !== 'Completed' ? () => setDiagnosticPod({ name: pod.name, namespace: pod.namespace || selectedNamespace || 'default' }) : undefined}
+                              sx={{
+                                fontSize: '0.65rem',
+                                fontWeight: 700,
+                                borderRadius: 1,
+                                cursor: pod.status !== 'Running' && pod.status !== 'Completed' ? 'pointer' : 'default',
+                              }}
+                            />
+                          </Tooltip>
                         </TableCell>
                         <TableCell sx={{ fontSize: '0.75rem', fontFamily: 'monospace' }}>
                           {pod.cpuUsage || pod.memoryUsage ? (
@@ -3539,94 +3609,144 @@ spec:
                 </Box>
               )}
 
-              {/* TAB 25: HELM RELEASES */}
+              {/* TAB 25: HELM RELEASES & APP STORE */}
               {activeTab === 25 && (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 1 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <StorageIcon sx={{ color: 'primary.main', fontSize: 22 }} />
+                      <StorageIcon sx={{ color: 'primary.main', fontSize: 24 }} />
                       <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
-                        Installed Helm Releases (v3)
+                        Helm Management Hub
                       </Typography>
-                      <Chip label={`${filteredHelmReleases.length} Releases`} size="small" variant="outlined" sx={{ fontSize: '0.68rem', fontWeight: 700 }} />
+                      {helmSubTab === 'releases' && (
+                        <Chip label={`${filteredHelmReleases.length} Releases`} size="small" variant="outlined" sx={{ fontSize: '0.68rem', fontWeight: 700 }} />
+                      )}
+                    </Box>
+
+                    {/* Sub-view switcher: Installed Releases vs App Store */}
+                    <Box sx={{ display: 'flex', gap: 0.8, p: 0.5, bgcolor: 'action.hover', borderRadius: 2 }}>
+                      <Button
+                        size="small"
+                        variant={helmSubTab === 'releases' ? 'contained' : 'text'}
+                        color={helmSubTab === 'releases' ? 'primary' : 'inherit'}
+                        onClick={() => setHelmSubTab('releases')}
+                        sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 1.5, fontSize: '0.78rem', py: 0.4, px: 1.5 }}
+                      >
+                        Installed Releases ({filteredHelmReleases.length})
+                      </Button>
+                      <Button
+                        size="small"
+                        variant={helmSubTab === 'catalog' ? 'contained' : 'text'}
+                        color={helmSubTab === 'catalog' ? 'primary' : 'inherit'}
+                        onClick={() => setHelmSubTab('catalog')}
+                        startIcon={<StorefrontIcon fontSize="small" />}
+                        sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 1.5, fontSize: '0.78rem', py: 0.4, px: 1.5 }}
+                      >
+                        App Store Catalog
+                      </Button>
                     </Box>
                   </Box>
 
-                  <Table stickyHeader size="small">
-                    <TableHead sx={{ bgcolor: 'action.hover' }}>
-                      <TableRow>
-                        <TableCell>Release Name</TableCell>
-                        <TableCell>Namespace</TableCell>
-                        <TableCell>Chart</TableCell>
-                        <TableCell>App Version</TableCell>
-                        <TableCell>Revision</TableCell>
-                        <TableCell>Status</TableCell>
-                        <TableCell>Updated</TableCell>
-                        <TableCell align="right">Actions</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {filteredHelmReleases.length === 0 ? (
+                  {helmSubTab === 'catalog' ? (
+                    <HelmAppStore
+                      clusterId={effectiveClusterId}
+                      namespaces={namespaces}
+                      currentNamespace={selectedNamespace}
+                      onReleaseInstalled={() => {
+                        refetchHelmReleases();
+                        setHelmSubTab('releases');
+                        setToastSeverity('success');
+                        setToastMessage('Helm release deployment initiated successfully!');
+                      }}
+                    />
+                  ) : (
+                    <Table stickyHeader size="small">
+                      <TableHead sx={{ bgcolor: 'action.hover' }}>
                         <TableRow>
-                          <TableCell colSpan={8} sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>
-                            No Helm releases found in selected namespace.
-                          </TableCell>
+                          <TableCell>Release Name</TableCell>
+                          <TableCell>Namespace</TableCell>
+                          <TableCell>Chart</TableCell>
+                          <TableCell>App Version</TableCell>
+                          <TableCell>Revision</TableCell>
+                          <TableCell>Status</TableCell>
+                          <TableCell>Updated</TableCell>
+                          <TableCell align="right">Actions</TableCell>
                         </TableRow>
-                      ) : (
-                        paginate(filteredHelmReleases).map((release) => (
-                          <TableRow key={`${release.namespace}-${release.name}`} hover>
-                            <TableCell sx={{ fontWeight: 700, color: 'primary.main', fontSize: '0.82rem' }}>
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <StorageIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
-                                {release.name}
-                              </Box>
-                            </TableCell>
-                            <TableCell>
-                              <Chip label={release.namespace} size="small" sx={{ fontSize: '0.65rem', borderRadius: 1 }} />
-                            </TableCell>
-                            <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>
-                              {release.chart}
-                              {release.chartVersion ? ` (${release.chartVersion})` : ''}
-                            </TableCell>
-                            <TableCell>
-                              <Chip label={release.appVersion || '-'} size="small" variant="outlined" sx={{ fontSize: '0.65rem', borderRadius: 1 }} />
-                            </TableCell>
-                            <TableCell>
-                              <Chip
-                                label={`rev ${release.revision}`}
+                      </TableHead>
+                      <TableBody>
+                        {filteredHelmReleases.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={8} sx={{ textAlign: 'center', py: 5, color: 'text.secondary' }}>
+                              <Typography variant="body2" sx={{ mb: 1.5 }}>
+                                No Helm releases found in selected namespace.
+                              </Typography>
+                              <Button
+                                variant="contained"
                                 size="small"
-                                sx={{
-                                  fontSize: '0.65rem',
-                                  fontWeight: 800,
-                                  bgcolor: 'rgba(56, 189, 248, 0.15)',
-                                  color: '#38bdf8',
-                                  borderRadius: 1,
-                                }}
-                              />
+                                startIcon={<StorefrontIcon fontSize="small" />}
+                                onClick={() => setHelmSubTab('catalog')}
+                                sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2 }}
+                              >
+                                Browse Helm App Store
+                              </Button>
                             </TableCell>
-                            <TableCell>
-                              <Chip
-                                label={release.status}
-                                size="small"
-                                color={
-                                  release.status === 'deployed'
-                                    ? 'success'
-                                    : release.status === 'failed'
-                                      ? 'error'
-                                      : 'warning'
-                                }
-                                sx={{ fontSize: '0.65rem', fontWeight: 800, height: 20, borderRadius: 1 }}
-                              />
-                            </TableCell>
-                            <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
-                              {release.updated || release.age || '-'}
-                            </TableCell>
-                            {renderRowActionCell(release, 25)}
                           </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
+                        ) : (
+                          paginate(filteredHelmReleases).map((release) => (
+                            <TableRow key={`${release.namespace}-${release.name}`} hover>
+                              <TableCell sx={{ fontWeight: 700, color: 'primary.main', fontSize: '0.82rem' }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  <StorageIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+                                  {release.name}
+                                </Box>
+                              </TableCell>
+                              <TableCell>
+                                <Chip label={release.namespace} size="small" sx={{ fontSize: '0.65rem', borderRadius: 1 }} />
+                              </TableCell>
+                              <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>
+                                {release.chart}
+                                {release.chartVersion ? ` (${release.chartVersion})` : ''}
+                              </TableCell>
+                              <TableCell>
+                                <Chip label={release.appVersion || '-'} size="small" variant="outlined" sx={{ fontSize: '0.65rem', borderRadius: 1 }} />
+                              </TableCell>
+                              <TableCell>
+                                <Chip
+                                  label={`rev ${release.revision}`}
+                                  size="small"
+                                  sx={{
+                                    fontSize: '0.65rem',
+                                    fontWeight: 800,
+                                    bgcolor: 'rgba(56, 189, 248, 0.15)',
+                                    color: '#38bdf8',
+                                    borderRadius: 1,
+                                  }}
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Chip
+                                  label={release.status}
+                                  size="small"
+                                  color={
+                                    release.status === 'deployed'
+                                      ? 'success'
+                                      : release.status === 'failed'
+                                        ? 'error'
+                                        : 'warning'
+                                  }
+                                  sx={{ fontSize: '0.65rem', fontWeight: 800, height: 20, borderRadius: 1 }}
+                                />
+                              </TableCell>
+                              <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                                {release.updated || release.age || '-'}
+                              </TableCell>
+                              {renderRowActionCell(release, 25)}
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  )}
                 </Box>
               )}
 
@@ -3730,6 +3850,23 @@ spec:
               <CodeIcon fontSize="small" />
             </ListItemIcon>
             <ListItemText primary="View / Edit YAML" />
+          </MenuItem>
+        )}
+
+        {/* Pod Specific: AI Root-Cause Diagnosis */}
+        {rowMenuTab === 1 && (
+          <MenuItem
+            dense
+            onClick={() => {
+              const res = rowMenuResource;
+              handleCloseRowMenu();
+              setDiagnosticPod({ name: res.name, namespace: res.namespace || selectedNamespace || 'default' });
+            }}
+          >
+            <ListItemIcon>
+              <AutoAwesomeIcon fontSize="small" sx={{ color: 'secondary.main' }} />
+            </ListItemIcon>
+            <ListItemText primary="AI Root-Cause Diagnosis" secondary="Automated triage & fix" />
           </MenuItem>
         )}
 
@@ -5155,6 +5292,7 @@ spec:
         isConsoleConnected={kubectlShellOpen}
         isConsoleMinimized={kubectlShellOpen && kubectlShellMinimized}
         onToggleConsole={handleToggleConsole}
+        onOpenCommandPalette={() => setCommandPaletteOpen((prev) => !prev)}
         onToggleTopology={() => setActiveTab((prev) => (prev === 26 ? 0 : 26))}
         isTopologyActive={activeTab === 26}
         onCreateResource={() => {
@@ -5206,6 +5344,53 @@ spec:
         zIndex={topWindow === 'settings' ? 1330 : 1315}
         onFocus={() => setTopWindow('settings')}
       />
+
+      {/* Universal Command Palette (Ctrl+K / Cmd+K) */}
+      <CommandPalette
+        open={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+        clusters={availableClusters}
+        namespaces={namespaces}
+        currentClusterId={effectiveClusterId}
+        onSwitchCluster={(newClusterId) => router.push(`/clusters/${newClusterId}`)}
+        onSelectNamespace={(ns) => setSelectedNamespace(ns)}
+        onNavigateTab={(tabIndex) => setActiveTab(tabIndex)}
+        onOpenConsole={handleToggleConsole}
+        onOpenCreate={() => {
+          setCreateDialogOpen(true);
+          setTopWindow('yamlCreate');
+        }}
+        onOpenSettings={() => {
+          setSettingsDialogOpen(true);
+          setTopWindow('settings');
+        }}
+        onRefresh={handleRefreshAll}
+      />
+
+      {/* AI Root-Cause Diagnostic Dialog */}
+      {diagnosticPod && (
+        <PodDiagnosticDialog
+          open={Boolean(diagnosticPod)}
+          onClose={() => setDiagnosticPod(null)}
+          clusterId={effectiveClusterId}
+          namespace={diagnosticPod.namespace}
+          podName={diagnosticPod.name}
+          onOpenLogs={(podName, namespace) => handleOpenLogs({ name: podName, namespace }, 'pods')}
+          onOpenExec={(podName, namespace) => handleOpenExec({ name: podName, namespace })}
+          onRestartPod={async (podName, namespace) => {
+            await restartPod(effectiveClusterId, namespace, podName);
+            await refetchPods();
+            setToastSeverity('info');
+            setToastMessage(`Pod ${podName} restarted.`);
+          }}
+          onApplyFix={async (patchYaml) => {
+            await applyResourceYaml(effectiveClusterId, patchYaml);
+            await refetchPods();
+            setToastSeverity('success');
+            setToastMessage('Remediation patch applied successfully!');
+          }}
+        />
+      )}
 
       {/* Toast Feedback */}
       <Snackbar

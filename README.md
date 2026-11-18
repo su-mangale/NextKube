@@ -71,6 +71,24 @@ End-to-end visual dependency and live traffic map connecting Ingresses $\to$ Ser
 - Node Inspector with 1-click Logs, Exec Shell, YAML editor, and scale/restart controls.
 - Accessible via shortcut (`Alt+T`), the ActionDock, and the Overview Observability matrix.
 
+### 12. AI-Powered Root-Cause Analysis (RCA) Engine
+1-click SRE diagnosis for failing or crashing pods (`CrashLoopBackOff`, `OOMKilled`, `ImagePullBackOff`, `Pending`):
+- Correlates termination exit codes, Kubernetes warning events, and container log crash dumps.
+- Identifies root cause and generates concrete, executable YAML remediation patches (e.g. Memory limit bumps, command fixes).
+- 1-click **"Apply Remediation Patch"** directly into the cluster with automatic audit trail logging.
+
+### 13. Universal Command Palette Omnibar (`Ctrl+K` / `Cmd+K`)
+Sub-50ms keyboard-driven command center:
+- Fast fuzzy search across connected clusters, namespaces, workloads, and system commands.
+- Switch clusters, change namespaces, toggle visual topology, or launch KubeConsole without touching the mouse.
+- Integrated into the ActionDock, the search bar, and accessible via customizable shortcuts.
+
+### 14. Visual Helm App Store & Package Hub
+Comprehensive cloud-native app catalog (Ingress NGINX, Cert-Manager, Prometheus Stack, Redis, Argo CD, Ollama):
+- Interactive visual forms mode alongside raw YAML editor for custom `values.yaml`.
+- Revision histories, atomic upgrades, and 1-click rollbacks.
+- Instant 1-click deployment with namespace selection and real-time validation.
+
 ---
 
 ## 🏗️ How NextKube Works

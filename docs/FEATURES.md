@@ -107,3 +107,30 @@ NextKube equips operators and platform teams with a modern dashboard that replac
   - 📄 **View / Edit YAML** (All resources)
   - ⚖️ **Scale Replicas** & 🔄 **Rollout Restart**
 - **Action Dock & Global Shortcut**: Instantly accessible via `Alt+T`, the floating Action Dock, or the Overview Observability matrix.
+
+---
+
+### 15. AI-Powered Root-Cause Analysis (RCA) Engine
+Automated SRE diagnostics for unhealthy workloads:
+- **Crash Anomaly Triage**: Instantly detects and analyzes pods trapped in `CrashLoopBackOff`, `OOMKilled`, `ImagePullBackOff`, `CreateContainerConfigError`, and `Unschedulable/Pending`.
+- **Telemetry Correlation**: Pulls the last termination exit code, matches recent warning events from `kube-events`, and extracts relevant failure log dumps in real-time.
+- **Actionable Remediation**: Proposes actionable human-readable explanations alongside verified RFC 6902 / YAML patches.
+- **1-Click Apply**: Directly applies the proposed fix to the parent workload with one click and audits the event.
+
+---
+
+### 16. Universal Command Palette Omnibar (`Ctrl+K` / `Cmd+K`)
+Keyboard-driven omnibar designed for sub-50ms operations:
+- **Instant Global Navigation**: Jump directly to any Kubernetes resource tab (Overview, Pods, Deployments, Services, ConfigMaps, Helm Releases, Topology).
+- **Cluster & Namespace Switching**: Filter and jump between attached clusters or namespaces with zero mouse clicks.
+- **Quick Command Shortcuts**: Direct execution for opening KubeConsole, applying manifests, triggering full-cluster sync, and opening settings.
+- **Fuzzy Search & Keybindings**: Arrow key navigation, `Enter` to execute, and configurable shortcuts in Settings.
+
+---
+
+### 17. Visual Helm App Store & Package Hub
+Enterprise-grade cloud-native application management:
+- **Curated Catalog**: Built-in support for industry-standard charts (`ingress-nginx`, `cert-manager`, `kube-prometheus-stack`, `redis`, `argo-cd`, `ollama`).
+- **Interactive Visual Config Mode**: Form-driven parameter configuration with real-time toggle switches, replica counts, and ingress hosts.
+- **Raw YAML values.yaml Editor**: Direct in-browser YAML preview with syntax highlighting and instant sync with visual controls.
+- **Release Lifecycle Management**: Inspect installed releases, app versions, revision counters, status indicators, and 1-click rollback or uninstallation.

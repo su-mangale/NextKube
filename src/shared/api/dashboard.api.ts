@@ -115,6 +115,8 @@ import {
   AuditLogEntry,
   ClusterHealthReport,
   ClusterTopology,
+  PodDiagnosticReport,
+  HelmCatalogItem,
 } from '../types/dashboard.types';
 
 // Fetch Namespaces
@@ -1558,5 +1560,74 @@ export const useClusterTopology = (clusterId: string, namespace?: string) => {
     refetchInterval: 12000,
   });
 };
+
+// ==========================================
+// AI-Powered Root-Cause Analysis (RCA) Hooks
+// ==========================================
+
+export const fetchPodDiagnosis = async (
+  clusterId: string,
+  namespace: string,
+  podName: string
+): Promise<PodDiagnosticReport> => {
+  const baseUrl = getBackendUrl();
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/pods/${podName}/diagnose?namespace=${namespace}`);
+  if (!res.ok) throw new Error(`Failed to diagnose pod ${podName}`);
+  return res.json();
+};
+
+export const usePodDiagnosis = (clusterId: string, namespace: string, podName: string | null) => {
+  return useQuery<PodDiagnosticReport>({
+    queryKey: ['podDiagnosis', clusterId, namespace, podName],
+    queryFn: () => fetchPodDiagnosis(clusterId, namespace, podName!),
+    enabled: !!clusterId && !!podName,
+  });
+};
+
+// ==========================================
+// Helm App Store & Catalog Hooks
+// ==========================================
+
+export const fetchHelmCatalog = async (clusterId: string): Promise<HelmCatalogItem[]> => {
+  const baseUrl = getBackendUrl();
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/catalog`);
+  if (!res.ok) throw new Error('Failed to fetch Helm catalog');
+  return res.json();
+};
+
+export const useHelmCatalog = (clusterId: string) => {
+  return useQuery<HelmCatalogItem[]>({
+    queryKey: ['helmCatalog', clusterId],
+    queryFn: () => fetchHelmCatalog(clusterId),
+    enabled: !!clusterId,
+    staleTime: 60000,
+  });
+};
+
+export const installHelmRelease = async (
+  clusterId: string,
+  namespace: string,
+  releaseName: string,
+  chartName: string,
+  valuesYaml: string
+): Promise<{ success: boolean; message: string }> => {
+  const baseUrl = getBackendUrl();
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/helm/install`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      targetNamespace: namespace,
+      releaseName,
+      chartName,
+      valuesYaml,
+    }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.message || 'Failed to install Helm release');
+  }
+  return res.json();
+};
+
 
 

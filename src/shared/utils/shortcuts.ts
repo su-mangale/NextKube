@@ -21,6 +21,14 @@ export const DEFAULT_SHORTCUTS: ShortcutItem[] = [
     category: 'Dock & Shell',
   },
   {
+    id: 'commandPalette',
+    label: 'Command Palette Omnibar',
+    description: 'Open fast search and action command palette across clusters and workloads',
+    defaultKey: 'Ctrl+K',
+    key: 'Ctrl+K',
+    category: 'Navigation',
+  },
+  {
     id: 'create',
     label: 'Apply / Create Manifest',
     description: 'Open Kubernetes YAML creation dialog',

@@ -668,5 +668,83 @@ export interface ClusterTopology {
   };
 }
 
+// ==========================================
+// AI-Powered Root-Cause Analysis (RCA) Types
+// ==========================================
+
+export interface PodDiagnosticReport {
+  podName: string;
+  namespace: string;
+  severity: 'critical' | 'warning' | 'info';
+  status: string;
+  rootCause: string;
+  explanation: string;
+  evidence: {
+    exitCode?: number;
+    terminationReason?: string;
+    failedEvent?: string;
+    relevantLogSnippet?: string;
+    containerName?: string;
+    restartCount?: number;
+    memoryLimit?: string;
+    cpuLimit?: string;
+  };
+  suggestedFix: {
+    description: string;
+    actionType: 'patch-deployment' | 'restart' | 'check-config' | 'check-network' | 'none';
+    patchYaml?: string;
+    targetWorkload?: {
+      kind: string;
+      name: string;
+      namespace: string;
+    };
+  };
+  rawLogs?: string;
+  analyzedAt: string;
+}
+
+// ==========================================
+// Universal Command Palette Types
+// ==========================================
+
+export interface CommandPaletteItem {
+  id: string;
+  title: string;
+  subtitle?: string;
+  category: 'Clusters' | 'Workloads' | 'Navigation' | 'Actions' | 'Namespaces';
+  shortcut?: string;
+  icon?: string;
+  action: () => void;
+}
+
+// ==========================================
+// Helm App Store & Catalog Types
+// ==========================================
+
+export interface HelmCatalogField {
+  key: string;
+  label: string;
+  type: 'text' | 'number' | 'boolean' | 'select';
+  defaultValue: any;
+  options?: string[];
+  description?: string;
+}
+
+export interface HelmCatalogItem {
+  id: string;
+  name: string;
+  displayName: string;
+  repo: string;
+  repoUrl: string;
+  iconUrl?: string;
+  description: string;
+  version: string;
+  appVersion: string;
+  category: 'Networking' | 'Monitoring' | 'Databases' | 'GitOps' | 'AI & ML' | 'Security';
+  defaultValuesYaml: string;
+  schemaFields: HelmCatalogField[];
+}
+
+
 
 

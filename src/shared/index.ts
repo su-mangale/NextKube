@@ -24,6 +24,9 @@ export { SwitchClusterDialog, type SwitchClusterDialogProps } from './components
 export { ClusterOverviewObservability, type ClusterOverviewObservabilityProps } from './components/ClusterOverviewObservability';
 export { default as ClusterTopologyGraph, type ClusterTopologyGraphProps } from './components/ClusterTopologyGraph';
 export { AddClusterDialog, type AddClusterDialogProps } from './components/AddClusterDialog';
+export { PodDiagnosticDialog, type PodDiagnosticDialogProps } from './components/PodDiagnosticDialog';
+export { CommandPalette, type CommandPaletteProps } from './components/CommandPalette';
+export { HelmAppStore, type HelmAppStoreProps } from './components/HelmAppStore';
 export { DraggablePaper, type DraggablePaperProps } from './components/DraggablePaper';
 export { NoClusterView } from './components/NoClusterView';
 export * from './components/QueryProvider';
