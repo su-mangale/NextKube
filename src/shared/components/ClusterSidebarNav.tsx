@@ -6,7 +6,6 @@ import {
   Typography,
   Divider,
   Collapse,
-  Chip,
   useTheme,
   alpha,
 } from '@mui/material';
@@ -39,8 +38,14 @@ import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
 import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import TerminalRoundedIcon from '@mui/icons-material/TerminalRounded';
-import AutoModeRoundedIcon from '@mui/icons-material/AutoModeRounded';
 import CompareArrowsRoundedIcon from '@mui/icons-material/CompareArrowsRounded';
+import GitHubIcon from '@mui/icons-material/GitHub';
+import CloudQueueRoundedIcon from '@mui/icons-material/CloudQueueRounded';
+import FolderZipRoundedIcon from '@mui/icons-material/FolderZipRounded';
+import StoreRoundedIcon from '@mui/icons-material/StoreRounded';
+import AutoAwesomeMotionRoundedIcon from '@mui/icons-material/AutoAwesomeMotionRounded';
+import WidgetsRoundedIcon from '@mui/icons-material/WidgetsRounded';
+import PublishedWithChangesRoundedIcon from '@mui/icons-material/PublishedWithChangesRounded';
 
 export interface ClusterSidebarNavProps {
   activeTab: number;
@@ -48,7 +53,6 @@ export interface ClusterSidebarNavProps {
   onOpenSettings: () => void;
   onOpenCommandPalette?: () => void;
   onOpenPortForward?: () => void;
-  onOpenConfigDrift?: () => void;
   onOpenDiff?: () => void;
   onOpenSecurityPosture?: () => void;
   resourceCounts?: Partial<Record<number, number>>;
@@ -64,7 +68,7 @@ interface NavItemDef {
 }
 
 interface NavGroupDef {
-  id: 'workloads' | 'networking' | 'storage' | 'cluster';
+  id: 'workloads' | 'networking' | 'storage' | 'cluster' | 'gitops';
   label: string;
   items: NavItemDef[];
 }
@@ -74,14 +78,14 @@ export function ClusterSidebarNav({
   onSelectTab,
   onOpenSettings,
   onOpenCommandPalette: _onOpenCommandPalette,
-  onOpenPortForward,
-  onOpenConfigDrift,
-  onOpenDiff,
+  onOpenPortForward: _onOpenPortForward,
+  onOpenConfigDrift: _onOpenConfigDrift,
+  onOpenDiff: _onOpenDiff,
   onOpenSecurityPosture,
   resourceCounts: _resourceCounts = {},
   shortcutSettingsKey: _shortcutSettingsKey = 'Alt+,',
   activePortForwardsCount = 0,
-}: ClusterSidebarNavProps) {
+}: ClusterSidebarNavProps & { onOpenConfigDrift?: () => void }) {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
 
@@ -91,6 +95,7 @@ export function ClusterSidebarNav({
     networking: true,
     storage: false,
     cluster: false,
+    gitops: true,
   });
 
   // Load saved group collapse state
@@ -131,7 +136,7 @@ export function ClusterSidebarNav({
         next.workloads = true;
         changed = true;
       }
-      if ([8, 9, 10, 23].includes(activeTab) && !next.networking) {
+      if ([8, 9, 10, 23, 28].includes(activeTab) && !next.networking) {
         next.networking = true;
         changed = true;
       }
@@ -141,6 +146,10 @@ export function ClusterSidebarNav({
       }
       if ([15, 16, 17, 18, 19, 20, 21].includes(activeTab) && !next.cluster) {
         next.cluster = true;
+        changed = true;
+      }
+      if ([30, 33, 34, 35, 36, 37, 38, 39].includes(activeTab) && !next.gitops) {
+        next.gitops = true;
         changed = true;
       }
       return changed ? next : prev;
@@ -171,6 +180,7 @@ export function ClusterSidebarNav({
           { tabIndex: 9, label: 'Ingresses', icon: <LanguageRoundedIcon sx={{ fontSize: 18 }} /> },
           { tabIndex: 23, label: 'Gateway API', icon: <AltRouteRoundedIcon sx={{ fontSize: 18 }} /> },
           { tabIndex: 10, label: 'Network Policies', icon: <SecurityRoundedIcon sx={{ fontSize: 18 }} /> },
+          { tabIndex: 28, label: 'Port Forwarding', icon: <AltRouteRoundedIcon sx={{ fontSize: 18 }} />, badge: activePortForwardsCount > 0 ? `${activePortForwardsCount} active` : undefined },
         ],
       },
       {
@@ -197,8 +207,22 @@ export function ClusterSidebarNav({
           { tabIndex: 20, label: 'Events', icon: <NotificationsRoundedIcon sx={{ fontSize: 18 }} /> },
         ],
       },
+      {
+        id: 'gitops',
+        label: 'GitOps (FluxCD)',
+        items: [
+          { tabIndex: 30, label: 'GitOps Overview', icon: <CompareArrowsRoundedIcon sx={{ fontSize: 18 }} /> },
+          { tabIndex: 33, label: 'Git Sources (SOT)', icon: <GitHubIcon sx={{ fontSize: 18 }} /> },
+          { tabIndex: 34, label: 'OCI Repositories', icon: <CloudQueueRoundedIcon sx={{ fontSize: 18 }} /> },
+          { tabIndex: 35, label: 'Buckets (S3)', icon: <FolderZipRoundedIcon sx={{ fontSize: 18 }} /> },
+          { tabIndex: 36, label: 'Helm Repositories', icon: <StoreRoundedIcon sx={{ fontSize: 18 }} /> },
+          { tabIndex: 37, label: 'Kustomizations', icon: <AutoAwesomeMotionRoundedIcon sx={{ fontSize: 18 }} /> },
+          { tabIndex: 38, label: 'Helm Releases (HR)', icon: <WidgetsRoundedIcon sx={{ fontSize: 18 }} /> },
+          { tabIndex: 39, label: 'Image Automations', icon: <PublishedWithChangesRoundedIcon sx={{ fontSize: 18 }} /> },
+        ],
+      },
     ],
-    []
+    [activePortForwardsCount]
   );
 
   const renderNavItem = (item: NavItemDef, isChild = false) => {
@@ -399,149 +423,6 @@ export function ClusterSidebarNav({
           label: 'Audit Trail',
           icon: <HistoryRoundedIcon sx={{ fontSize: 18 }} />,
         })}
-
-        {onOpenPortForward && (
-          <Box
-            onClick={() => {
-              if (onOpenPortForward) onOpenPortForward();
-              else onSelectTab(28);
-            }}
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              px: 1.5,
-              py: 0.7,
-              mx: 0.8,
-              borderRadius: 1.8,
-              cursor: 'pointer',
-              bgcolor: activeTab === 28
-                ? isDark
-                  ? alpha(theme.palette.primary.main, 0.22)
-                  : alpha(theme.palette.primary.main, 0.12)
-                : 'transparent',
-              color: activeTab === 28
-                ? theme.palette.primary.main
-                : 'text.secondary',
-              transition: 'all 0.15s ease',
-              '&:hover': {
-                bgcolor: activeTab === 28
-                  ? isDark
-                    ? alpha(theme.palette.primary.main, 0.28)
-                    : alpha(theme.palette.primary.main, 0.18)
-                  : isDark
-                    ? 'rgba(56, 189, 248, 0.1)'
-                    : 'rgba(2, 132, 199, 0.08)',
-                color: isDark ? '#38bdf8' : '#0284c7',
-              },
-            }}
-          >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2 }}>
-              <AltRouteRoundedIcon sx={{ fontSize: 18, color: activeTab === 28 ? theme.palette.primary.main : '#38bdf8' }} />
-              <Typography variant="body2" sx={{ fontSize: '0.81rem', fontWeight: activeTab === 28 ? 750 : 600 }}>
-                Port-Forward Manager
-              </Typography>
-            </Box>
-            {activePortForwardsCount > 0 && (
-              <Chip
-                label={`${activePortForwardsCount} active`}
-                size="small"
-                color="success"
-                sx={{ height: 16, fontSize: '0.62rem', fontWeight: 700 }}
-              />
-            )}
-          </Box>
-        )}
-
-        {onOpenConfigDrift && (
-          <Box
-            onClick={() => {
-              if (onOpenConfigDrift) onOpenConfigDrift();
-              else onSelectTab(29);
-            }}
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              px: 1.5,
-              py: 0.7,
-              mx: 0.8,
-              borderRadius: 1.8,
-              cursor: 'pointer',
-              bgcolor: activeTab === 29
-                ? isDark
-                  ? alpha(theme.palette.primary.main, 0.22)
-                  : alpha(theme.palette.primary.main, 0.12)
-                : 'transparent',
-              color: activeTab === 29
-                ? theme.palette.primary.main
-                : 'text.secondary',
-              transition: 'all 0.15s ease',
-              '&:hover': {
-                bgcolor: activeTab === 29
-                  ? isDark
-                    ? alpha(theme.palette.primary.main, 0.28)
-                    : alpha(theme.palette.primary.main, 0.18)
-                  : isDark
-                    ? 'rgba(245, 158, 11, 0.1)'
-                    : 'rgba(245, 158, 11, 0.08)',
-                color: isDark ? '#fbbf24' : '#d97706',
-              },
-            }}
-          >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2 }}>
-              <AutoModeRoundedIcon sx={{ fontSize: 18, color: activeTab === 29 ? theme.palette.primary.main : '#f59e0b' }} />
-              <Typography variant="body2" sx={{ fontSize: '0.81rem', fontWeight: activeTab === 29 ? 750 : 600 }}>
-                Config Drift Detector
-              </Typography>
-            </Box>
-          </Box>
-        )}
-
-        {onOpenDiff && (
-          <Box
-            onClick={() => {
-              if (onOpenDiff) onOpenDiff();
-              else onSelectTab(30);
-            }}
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              px: 1.5,
-              py: 0.7,
-              mx: 0.8,
-              borderRadius: 1.8,
-              cursor: 'pointer',
-              bgcolor: activeTab === 30
-                ? isDark
-                  ? alpha(theme.palette.primary.main, 0.22)
-                  : alpha(theme.palette.primary.main, 0.12)
-                : 'transparent',
-              color: activeTab === 30
-                ? theme.palette.primary.main
-                : 'text.secondary',
-              transition: 'all 0.15s ease',
-              '&:hover': {
-                bgcolor: activeTab === 30
-                  ? isDark
-                    ? alpha(theme.palette.primary.main, 0.28)
-                    : alpha(theme.palette.primary.main, 0.18)
-                  : isDark
-                    ? 'rgba(168, 85, 247, 0.1)'
-                    : 'rgba(168, 85, 247, 0.08)',
-                color: isDark ? '#c084fc' : '#9333ea',
-              },
-            }}
-          >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2 }}>
-              <CompareArrowsRoundedIcon sx={{ fontSize: 18, color: activeTab === 30 ? theme.palette.primary.main : '#a855f7' }} />
-              <Typography variant="body2" sx={{ fontSize: '0.81rem', fontWeight: activeTab === 30 ? 750 : 600 }}>
-                GitOps Engine
-              </Typography>
-            </Box>
-          </Box>
-        )}
 
         {onOpenSecurityPosture && (
           <Box

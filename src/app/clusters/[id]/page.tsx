@@ -30,6 +30,7 @@ import {
   Chip,
   Slider,
   TablePagination,
+  TableSortLabel,
   Menu,
   ListItemIcon,
   ListItemText,
@@ -65,7 +66,6 @@ import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import AltRouteIcon from '@mui/icons-material/AltRouteRounded';
 import CompareArrowsIcon from '@mui/icons-material/CompareArrowsRounded';
-import AutoModeIcon from '@mui/icons-material/AutoModeRounded';
 import BlockIcon from '@mui/icons-material/BlockRounded';
 import LockOpenIcon from '@mui/icons-material/LockOpenRounded';
 import CleaningServicesIcon from '@mui/icons-material/CleaningServicesRounded';
@@ -139,12 +139,9 @@ import {
   usePortForwards,
   YamlDiffViewerDialog,
   GitOpsDashboard,
-  ConfigDriftDrawer,
-  useConfigDrift,
   rollbackWorkload,
   fetchRolloutHistory,
   K8sRolloutRevision,
-  ConfigDriftItem,
   cordonNode,
   NodeDrainDialog,
   SecurityPostureDrawer,
@@ -315,9 +312,6 @@ spec:
   } | null>(null);
   const [diffRollbackLoading, setDiffRollbackLoading] = useState<boolean>(false);
 
-  // Phase 2: Configuration Drift Inspector state
-  const [configDriftOpen, setConfigDriftOpen] = useState<boolean>(false);
-
   // Phase 3: Zero-Downtime Node Maintenance state
   const [drainDialogOpen, setDrainDialogOpen] = useState<boolean>(false);
   const [drainNodeTarget, setDrainNodeTarget] = useState<any | null>(null);
@@ -402,10 +396,62 @@ spec:
   const [page, setPage] = useState<number>(0);
   const [rowsPerPage, setRowsPerPage] = useState<number>(10);
 
+  // Sorting state (default: age descending for pods, name ascending for other resources)
+  const [sortField, setSortField] = useState<string>('age');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
+  // Status Filter pills state
+  const [podStatusFilter, setPodStatusFilter] = useState<'all' | 'running' | 'pending' | 'issues'>('all');
+  const [deploymentStatusFilter, setDeploymentStatusFilter] = useState<'all' | 'healthy' | 'degraded'>('all');
+  const [nodeStatusFilter, setNodeStatusFilter] = useState<'all' | 'ready' | 'notready'>('all');
+
+  const handleRequestSort = (field: string) => {
+    const isAsc = sortField === field && sortOrder === 'asc';
+    setSortOrder(isAsc ? 'desc' : 'asc');
+    setSortField(field);
+    setPage(0);
+  };
+
+  const parseAgeToSeconds = (ageStr?: string): number => {
+    if (!ageStr) return 0;
+    const str = ageStr.trim().toLowerCase();
+    let totalSeconds = 0;
+    const regex = /(\d+)\s*([ywdhms])/g;
+    let match;
+    let matchedAny = false;
+    while ((match = regex.exec(str)) !== null) {
+      matchedAny = true;
+      const val = parseInt(match[1], 10);
+      const unit = match[2];
+      if (unit === 'y') totalSeconds += val * 365 * 86400;
+      else if (unit === 'w') totalSeconds += val * 7 * 86400;
+      else if (unit === 'd') totalSeconds += val * 86400;
+      else if (unit === 'h') totalSeconds += val * 3600;
+      else if (unit === 'm') totalSeconds += val * 60;
+      else if (unit === 's') totalSeconds += val;
+    }
+    if (!matchedAny) {
+      const num = Number(str);
+      if (!isNaN(num)) return num;
+      const date = Date.parse(str);
+      if (!isNaN(date)) {
+        return Math.floor((Date.now() - date) / 1000);
+      }
+    }
+    return totalSeconds;
+  };
+
   useEffect(() => {
     setSelectedResources([]);
     setSecretDecoded(false);
     setPage(0);
+    if (activeTab === 1) {
+      setSortField('age');
+      setSortOrder('desc');
+    } else {
+      setSortField('name');
+      setSortOrder('asc');
+    }
   }, [activeTab, selectedNamespace, searchQuery]);
 
   // Feedback notifications
@@ -535,12 +581,6 @@ spec:
     Boolean(selectedResource) && (rolloutDialogOpen || activeTab === 2 || diffViewerOpen)
   );
 
-  const { data: configDriftData, refetch: refetchConfigDrift } = useConfigDrift(id, selectedNamespace || 'default', {
-    enabled: !!id,
-    refetchInterval: 30000,
-  });
-  const driftedCount = configDriftData?.driftedWorkloads ?? 0;
-
   const isDataLoading =
     metricsLoading ||
     nsLoading ||
@@ -598,7 +638,6 @@ spec:
     refetchHealth();
     refetchAuditLogs();
     refetchHelmReleases();
-    refetchConfigDrift();
     setToastSeverity('success');
     setToastMessage('Reloading cluster resources from API...');
   }, [
@@ -631,7 +670,6 @@ spec:
     refetchHealth,
     refetchAuditLogs,
     refetchHelmReleases,
-    refetchConfigDrift,
   ]);
 
   // Global customizable keyboard shortcuts handling
@@ -650,13 +688,6 @@ spec:
       const toggleDockSc = shortcuts.find((s) => s.id === 'toggleDock')?.key;
       const topologySc = shortcuts.find((s) => s.id === 'topology')?.key;
       const portForwardSc = shortcuts.find((s) => s.id === 'portForward')?.key;
-      const configDriftSc = shortcuts.find((s) => s.id === 'configDrift')?.key;
-
-      if (configDriftSc && matchesShortcut(e, configDriftSc)) {
-        e.preventDefault();
-        setConfigDriftOpen((prev) => !prev);
-        return;
-      }
 
       if (portForwardSc && matchesShortcut(e, portForwardSc)) {
         e.preventDefault();
@@ -1312,8 +1343,18 @@ spec:
     const rType = typeOverride || getResourceType(resource, activeTab);
     const isWorkload = ['deployments', 'daemonsets', 'statefulsets', 'jobs'].includes(rType);
     setLogsResourceType(isWorkload ? 'deployment' : 'pod');
-    setSelectedResource(resource);
-    const initialContainer = (resource.containers && resource.containers.length > 0) ? resource.containers[0] : '';
+
+    // Container discovery: ensure all containers (app, init, sidecars) are available
+    let allContainers: string[] = resource.containers && resource.containers.length > 0 ? resource.containers : [];
+    if (allContainers.length === 0 && (rType === 'pods' || resource.kind === 'Pod')) {
+      const matched = pods.find((p) => p.name === resource.name && (resource.namespace === 'all' || p.namespace === (resource.namespace || selectedNamespace)));
+      if (matched?.containers && matched.containers.length > 0) {
+        allContainers = matched.containers;
+      }
+    }
+    const resolvedResource = { ...resource, containers: allContainers };
+    setSelectedResource(resolvedResource);
+    const initialContainer = allContainers.length > 0 ? allContainers[0] : '';
     setSelectedContainer(initialContainer);
     setLogsDialogOpen(true);
     setLogsLoading(true);
@@ -1575,17 +1616,6 @@ spec:
     }
   };
 
-  const handleOpenDriftManifest = (driftItem: ConfigDriftItem) => {
-    setDiffResource({
-      name: `${driftItem.workloadName} (${driftItem.configName})`,
-      namespace: driftItem.namespace,
-      resourceType: driftItem.configType,
-      currentYaml: driftItem.latestConfigYaml || '',
-      previousYaml: driftItem.latestConfigYaml || '',
-    });
-    setDiffViewerOpen(true);
-  };
-
   const handleToggleCordonNode = async (node: any) => {
     if (!node?.name) return;
     const targetUnschedulable = !node.unschedulable;
@@ -1755,16 +1785,87 @@ spec:
   };
 
   const filteredDeployments = useMemo(() => {
-    return (deployments || []).filter((d) => d.name.toLowerCase().includes(searchQuery.toLowerCase()));
-  }, [deployments, searchQuery]);
+    let list = (deployments || []).filter((d) => {
+      const q = searchQuery.toLowerCase();
+      const matchesSearch =
+        !searchQuery ||
+        d.name.toLowerCase().includes(q) ||
+        (d.namespace && d.namespace.toLowerCase().includes(q));
+
+      if (!matchesSearch) return false;
+
+      const isHealthy = d.readyReplicas === d.replicas && d.replicas > 0;
+      if (deploymentStatusFilter === 'healthy') return isHealthy;
+      if (deploymentStatusFilter === 'degraded') return !isHealthy;
+      return true;
+    });
+
+    if (activeTab === 2 && sortField) {
+      list = [...list].sort((a, b) => {
+        let comp = 0;
+        if (sortField === 'name') {
+          comp = a.name.localeCompare(b.name);
+        } else if (sortField === 'namespace') {
+          comp = (a.namespace || '').localeCompare(b.namespace || '');
+        } else if (sortField === 'ready') {
+          comp = (a.readyReplicas || 0) - (b.readyReplicas || 0);
+        } else if (sortField === 'replicas') {
+          comp = (a.replicas || 0) - (b.replicas || 0);
+        } else if (sortField === 'age') {
+          comp = parseAgeToSeconds(a.age) - parseAgeToSeconds(b.age);
+        }
+        return sortOrder === 'asc' ? comp : -comp;
+      });
+    }
+
+    return list;
+  }, [deployments, searchQuery, deploymentStatusFilter, activeTab, sortField, sortOrder]);
 
   const filteredServices = useMemo(() => {
     return (services || []).filter((s) => s.name.toLowerCase().includes(searchQuery.toLowerCase()));
   }, [services, searchQuery]);
 
   const filteredPods = useMemo(() => {
-    return (pods || []).filter((p) => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
-  }, [pods, searchQuery]);
+    let list = (pods || []).filter((p) => {
+      const q = searchQuery.toLowerCase();
+      const matchesSearch =
+        !searchQuery ||
+        p.name.toLowerCase().includes(q) ||
+        (p.node && p.node.toLowerCase().includes(q)) ||
+        (p.ip && p.ip.toLowerCase().includes(q)) ||
+        (p.status && p.status.toLowerCase().includes(q)) ||
+        (p.image && p.image.toLowerCase().includes(q));
+
+      if (!matchesSearch) return false;
+
+      if (podStatusFilter === 'running') return p.status === 'Running' || p.status === 'Completed';
+      if (podStatusFilter === 'pending') return p.status === 'Pending';
+      if (podStatusFilter === 'issues') return p.status !== 'Running' && p.status !== 'Completed' && p.status !== 'Pending';
+      return true;
+    });
+
+    if (activeTab === 1 && sortField) {
+      list = [...list].sort((a, b) => {
+        let comp = 0;
+        if (sortField === 'name') {
+          comp = a.name.localeCompare(b.name);
+        } else if (sortField === 'namespace') {
+          comp = (a.namespace || '').localeCompare(b.namespace || '');
+        } else if (sortField === 'status') {
+          comp = (a.status || '').localeCompare(b.status || '');
+        } else if (sortField === 'restarts') {
+          comp = (a.restarts || 0) - (b.restarts || 0);
+        } else if (sortField === 'node') {
+          comp = (a.node || '').localeCompare(b.node || '');
+        } else if (sortField === 'age') {
+          comp = parseAgeToSeconds(a.age) - parseAgeToSeconds(b.age);
+        }
+        return sortOrder === 'asc' ? comp : -comp;
+      });
+    }
+
+    return list;
+  }, [pods, searchQuery, podStatusFilter, activeTab, sortField, sortOrder]);
 
   const filteredIngresses = useMemo(() => {
     return (ingresses || []).filter((i) => i.name.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -1779,8 +1880,40 @@ spec:
   }, [secrets, searchQuery]);
 
   const filteredNodes = useMemo(() => {
-    return (nodes || []).filter((n) => n.name.toLowerCase().includes(searchQuery.toLowerCase()));
-  }, [nodes, searchQuery]);
+    let list = (nodes || []).filter((n) => {
+      const q = searchQuery.toLowerCase();
+      const matchesSearch =
+        !searchQuery ||
+        n.name.toLowerCase().includes(q) ||
+        (n.internalIp && n.internalIp.toLowerCase().includes(q)) ||
+        (n.roles && n.roles.toLowerCase().includes(q)) ||
+        (n.role && n.role.toLowerCase().includes(q));
+
+      if (!matchesSearch) return false;
+
+      if (nodeStatusFilter === 'ready') return n.status === 'Ready' && !n.unschedulable;
+      if (nodeStatusFilter === 'notready') return n.status !== 'Ready' || n.unschedulable;
+      return true;
+    });
+
+    if (activeTab === 15 && sortField) {
+      list = [...list].sort((a, b) => {
+        let comp = 0;
+        if (sortField === 'name') {
+          comp = a.name.localeCompare(b.name);
+        } else if (sortField === 'status') {
+          comp = (a.status || '').localeCompare(b.status || '');
+        } else if (sortField === 'role') {
+          comp = (a.roles || a.role || '').localeCompare(b.roles || b.role || '');
+        } else if (sortField === 'age') {
+          comp = parseAgeToSeconds(a.age) - parseAgeToSeconds(b.age);
+        }
+        return sortOrder === 'asc' ? comp : -comp;
+      });
+    }
+
+    return list;
+  }, [nodes, searchQuery, nodeStatusFilter, activeTab, sortField, sortOrder]);
 
   const filteredEvents = useMemo(() => {
     return (events || []).filter((e) =>
@@ -2716,21 +2849,6 @@ spec:
               setActiveTab(28);
               setSearchQuery('');
             }}
-            onOpenConfigDrift={() => {
-              setActiveTab(29);
-              setSearchQuery('');
-            }}
-            onOpenDiff={() => {
-              if (!diffResource && deployments.length > 0) {
-                setDiffResource({
-                  name: deployments[0]?.name || 'app',
-                  namespace: deployments[0]?.namespace || 'default',
-                  resourceType: 'Deployment',
-                });
-              }
-              setActiveTab(30);
-              setSearchQuery('');
-            }}
             onOpenSecurityPosture={() => {
               setActiveTab(32);
               setSearchQuery('');
@@ -2851,35 +2969,136 @@ spec:
             </Paper>
           )}
           {activeTab !== 0 && activeTab !== 26 && activeTab < 27 && (
-            <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
-              <TextField
-                placeholder="Search resources by name..."
-                size="small"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                sx={{ width: 350 }}
-                slotProps={{
-                  input: {
-                    startAdornment: <SearchIcon sx={{ color: 'text.secondary', mr: 1, fontSize: 18 }} />,
-                    endAdornment: (
-                      <Tooltip title="Open Command Palette (Ctrl+K / ⌘K)">
-                        <Chip
-                          label="⌘K"
-                          size="small"
-                          onClick={() => setCommandPaletteOpen(true)}
-                          sx={{
-                            height: 20,
-                            fontSize: '0.65rem',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                            bgcolor: 'action.hover',
-                          }}
-                        />
-                      </Tooltip>
-                    ),
-                  }
-                }}
-              />
+            <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, flexWrap: 'wrap', gap: 1.5 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+                <TextField
+                  placeholder="Search resources by name..."
+                  size="small"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  sx={{ width: 280 }}
+                  slotProps={{
+                    input: {
+                      startAdornment: <SearchIcon sx={{ color: 'text.secondary', mr: 1, fontSize: 18 }} />,
+                      endAdornment: (
+                        <Tooltip title="Open Command Palette (Ctrl+K / ⌘K)">
+                          <Chip
+                            label="⌘K"
+                            size="small"
+                            onClick={() => setCommandPaletteOpen(true)}
+                            sx={{
+                              height: 20,
+                              fontSize: '0.65rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              bgcolor: 'action.hover',
+                            }}
+                          />
+                        </Tooltip>
+                      ),
+                    }
+                  }}
+                />
+
+                {/* Quick Status Filter Pills for Tab 1 (Pods) */}
+                {activeTab === 1 && (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                    <Chip
+                      label={`All (${pods.length})`}
+                      size="small"
+                      variant={podStatusFilter === 'all' ? 'filled' : 'outlined'}
+                      color={podStatusFilter === 'all' ? 'primary' : 'default'}
+                      onClick={() => { setPodStatusFilter('all'); setPage(0); }}
+                      sx={{ fontWeight: 700, cursor: 'pointer', height: 26, fontSize: '0.72rem' }}
+                    />
+                    <Chip
+                      label={`Running (${pods.filter((p) => p.status === 'Running' || p.status === 'Completed').length})`}
+                      size="small"
+                      variant={podStatusFilter === 'running' ? 'filled' : 'outlined'}
+                      color="success"
+                      onClick={() => { setPodStatusFilter('running'); setPage(0); }}
+                      sx={{ fontWeight: 700, cursor: 'pointer', height: 26, fontSize: '0.72rem' }}
+                    />
+                    <Chip
+                      label={`Pending (${pods.filter((p) => p.status === 'Pending').length})`}
+                      size="small"
+                      variant={podStatusFilter === 'pending' ? 'filled' : 'outlined'}
+                      color="warning"
+                      onClick={() => { setPodStatusFilter('pending'); setPage(0); }}
+                      sx={{ fontWeight: 700, cursor: 'pointer', height: 26, fontSize: '0.72rem' }}
+                    />
+                    <Chip
+                      label={`Issues (${pods.filter((p) => p.status !== 'Running' && p.status !== 'Completed' && p.status !== 'Pending').length})`}
+                      size="small"
+                      variant={podStatusFilter === 'issues' ? 'filled' : 'outlined'}
+                      color="error"
+                      onClick={() => { setPodStatusFilter('issues'); setPage(0); }}
+                      sx={{ fontWeight: 700, cursor: 'pointer', height: 26, fontSize: '0.72rem' }}
+                    />
+                  </Box>
+                )}
+
+                {/* Quick Status Filter Pills for Tab 2 (Deployments) */}
+                {activeTab === 2 && (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                    <Chip
+                      label={`All (${deployments.length})`}
+                      size="small"
+                      variant={deploymentStatusFilter === 'all' ? 'filled' : 'outlined'}
+                      color={deploymentStatusFilter === 'all' ? 'primary' : 'default'}
+                      onClick={() => { setDeploymentStatusFilter('all'); setPage(0); }}
+                      sx={{ fontWeight: 700, cursor: 'pointer', height: 26, fontSize: '0.72rem' }}
+                    />
+                    <Chip
+                      label={`Healthy (${deployments.filter((d) => d.readyReplicas === d.replicas && d.replicas > 0).length})`}
+                      size="small"
+                      variant={deploymentStatusFilter === 'healthy' ? 'filled' : 'outlined'}
+                      color="success"
+                      onClick={() => { setDeploymentStatusFilter('healthy'); setPage(0); }}
+                      sx={{ fontWeight: 700, cursor: 'pointer', height: 26, fontSize: '0.72rem' }}
+                    />
+                    <Chip
+                      label={`Degraded (${deployments.filter((d) => d.readyReplicas !== d.replicas || d.replicas === 0).length})`}
+                      size="small"
+                      variant={deploymentStatusFilter === 'degraded' ? 'filled' : 'outlined'}
+                      color="warning"
+                      onClick={() => { setDeploymentStatusFilter('degraded'); setPage(0); }}
+                      sx={{ fontWeight: 700, cursor: 'pointer', height: 26, fontSize: '0.72rem' }}
+                    />
+                  </Box>
+                )}
+
+                {/* Quick Status Filter Pills for Tab 15 (Nodes) */}
+                {activeTab === 15 && (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                    <Chip
+                      label={`All (${nodes.length})`}
+                      size="small"
+                      variant={nodeStatusFilter === 'all' ? 'filled' : 'outlined'}
+                      color={nodeStatusFilter === 'all' ? 'primary' : 'default'}
+                      onClick={() => { setNodeStatusFilter('all'); setPage(0); }}
+                      sx={{ fontWeight: 700, cursor: 'pointer', height: 26, fontSize: '0.72rem' }}
+                    />
+                    <Chip
+                      label={`Ready (${nodes.filter((n) => n.status === 'Ready' && !n.unschedulable).length})`}
+                      size="small"
+                      variant={nodeStatusFilter === 'ready' ? 'filled' : 'outlined'}
+                      color="success"
+                      onClick={() => { setNodeStatusFilter('ready'); setPage(0); }}
+                      sx={{ fontWeight: 700, cursor: 'pointer', height: 26, fontSize: '0.72rem' }}
+                    />
+                    <Chip
+                      label={`NotReady / Cordoned (${nodes.filter((n) => n.status !== 'Ready' || n.unschedulable).length})`}
+                      size="small"
+                      variant={nodeStatusFilter === 'notready' ? 'filled' : 'outlined'}
+                      color="error"
+                      onClick={() => { setNodeStatusFilter('notready'); setPage(0); }}
+                      sx={{ fontWeight: 700, cursor: 'pointer', height: 26, fontSize: '0.72rem' }}
+                    />
+                  </Box>
+                )}
+              </Box>
+
               <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
                 Showing {getActiveTabFilteredResources().length} resources
               </Typography>
@@ -2970,17 +3189,64 @@ spec:
                           onChange={(e) => handleSelectAllRows(e.target.checked, filteredPods)}
                         />
                       </TableCell>
-                      <TableCell>Pod Name</TableCell>
-                      <TableCell>Namespace</TableCell>
-                      <TableCell>Containers</TableCell>
+                      <TableCell>
+                        <TableSortLabel
+                          active={sortField === 'name'}
+                          direction={sortField === 'name' ? sortOrder : 'asc'}
+                          onClick={() => handleRequestSort('name')}
+                        >
+                          Pod Name
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell>
+                        <TableSortLabel
+                          active={sortField === 'namespace'}
+                          direction={sortField === 'namespace' ? sortOrder : 'asc'}
+                          onClick={() => handleRequestSort('namespace')}
+                        >
+                          Namespace
+                        </TableSortLabel>
+                      </TableCell>
                       <TableCell>Ready</TableCell>
-                      <TableCell>Status</TableCell>
+                      <TableCell>
+                        <TableSortLabel
+                          active={sortField === 'status'}
+                          direction={sortField === 'status' ? sortOrder : 'asc'}
+                          onClick={() => handleRequestSort('status')}
+                        >
+                          Status
+                        </TableSortLabel>
+                      </TableCell>
                       <TableCell>CPU / Mem</TableCell>
-                      <TableCell>Restarts</TableCell>
-                      <TableCell>Node</TableCell>
+                      <TableCell>
+                        <TableSortLabel
+                          active={sortField === 'restarts'}
+                          direction={sortField === 'restarts' ? sortOrder : 'asc'}
+                          onClick={() => handleRequestSort('restarts')}
+                        >
+                          Restarts
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell>
+                        <TableSortLabel
+                          active={sortField === 'node'}
+                          direction={sortField === 'node' ? sortOrder : 'asc'}
+                          onClick={() => handleRequestSort('node')}
+                        >
+                          Node
+                        </TableSortLabel>
+                      </TableCell>
                       <TableCell>IP</TableCell>
                       <TableCell>Image</TableCell>
-                      <TableCell>Age</TableCell>
+                      <TableCell>
+                        <TableSortLabel
+                          active={sortField === 'age'}
+                          direction={sortField === 'age' ? sortOrder : 'asc'}
+                          onClick={() => handleRequestSort('age')}
+                        >
+                          Age
+                        </TableSortLabel>
+                      </TableCell>
                       <TableCell align="right" sx={{ pr: 2 }}>Actions</TableCell>
                     </TableRow>
                   </TableHead>
@@ -2992,15 +3258,6 @@ spec:
                         </TableCell>
                         <TableCell sx={{ fontWeight: 700, color: 'primary.main' }}>{pod.name}</TableCell>
                         <TableCell><Chip label={pod.namespace} size="small" sx={{ fontSize: '0.65rem', borderRadius: 1 }} /></TableCell>
-                        <TableCell>
-                          <Chip
-                            label={`${pod.containers?.length || 1} ctr`}
-                            size="small"
-                            variant="outlined"
-                            color="info"
-                            sx={{ fontSize: '0.65rem', borderRadius: 1, height: 20 }}
-                          />
-                        </TableCell>
                         <TableCell sx={{ fontWeight: 650, color: 'text.secondary', fontSize: '0.8rem' }}>{pod.ready || '1/1'}</TableCell>
                         <TableCell>
                           <Tooltip title={pod.status !== 'Running' && pod.status !== 'Completed' ? 'Click for AI Root-Cause Diagnosis' : ''}>
@@ -3035,8 +3292,30 @@ spec:
                         <TableCell sx={{ color: pod.restarts > 0 ? 'warning.main' : 'inherit', fontWeight: pod.restarts > 0 ? 700 : 'inherit' }}>
                           {pod.restarts}
                         </TableCell>
-                        <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.78rem', color: 'text.secondary' }}>
-                          {pod.node || '-'}
+                        <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.78rem', color: 'text.secondary', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {pod.node ? (
+                            <Tooltip title={`Node: ${pod.node} (Click to copy)`}>
+                              <Box
+                                component="span"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                                    navigator.clipboard.writeText(pod.node);
+                                    setToastSeverity('info');
+                                    setToastMessage(`Copied node "${pod.node}" to clipboard`);
+                                  }
+                                }}
+                                sx={{
+                                  cursor: 'pointer',
+                                  '&:hover': { color: 'primary.main', textDecoration: 'underline' },
+                                }}
+                              >
+                                {pod.node}
+                              </Box>
+                            </Tooltip>
+                          ) : (
+                            '-'
+                          )}
                         </TableCell>
                         <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.78rem', color: 'text.secondary' }}>
                           {pod.ip || '-'}
@@ -3070,14 +3349,54 @@ spec:
                           onChange={(e) => handleSelectAllRows(e.target.checked, filteredDeployments)}
                         />
                       </TableCell>
-                      <TableCell>Name</TableCell>
-                      <TableCell>Namespace</TableCell>
-                      <TableCell>Ready Replicas</TableCell>
-                      <TableCell>Total Replicas</TableCell>
+                      <TableCell>
+                        <TableSortLabel
+                          active={sortField === 'name'}
+                          direction={sortField === 'name' ? sortOrder : 'asc'}
+                          onClick={() => handleRequestSort('name')}
+                        >
+                          Name
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell>
+                        <TableSortLabel
+                          active={sortField === 'namespace'}
+                          direction={sortField === 'namespace' ? sortOrder : 'asc'}
+                          onClick={() => handleRequestSort('namespace')}
+                        >
+                          Namespace
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell>
+                        <TableSortLabel
+                          active={sortField === 'ready'}
+                          direction={sortField === 'ready' ? sortOrder : 'asc'}
+                          onClick={() => handleRequestSort('ready')}
+                        >
+                          Ready Replicas
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell>
+                        <TableSortLabel
+                          active={sortField === 'replicas'}
+                          direction={sortField === 'replicas' ? sortOrder : 'asc'}
+                          onClick={() => handleRequestSort('replicas')}
+                        >
+                          Total Replicas
+                        </TableSortLabel>
+                      </TableCell>
                       <TableCell>Up-to-Date</TableCell>
                       <TableCell>Available</TableCell>
                       <TableCell>Image</TableCell>
-                      <TableCell>Age</TableCell>
+                      <TableCell>
+                        <TableSortLabel
+                          active={sortField === 'age'}
+                          direction={sortField === 'age' ? sortOrder : 'asc'}
+                          onClick={() => handleRequestSort('age')}
+                        >
+                          Age
+                        </TableSortLabel>
+                      </TableCell>
                       <TableCell align="right" sx={{ pr: 2 }}>Actions</TableCell>
                     </TableRow>
                   </TableHead>
@@ -3525,13 +3844,45 @@ spec:
                 <Table stickyHeader size="small">
                   <TableHead sx={{ bgcolor: 'action.hover' }}>
                     <TableRow>
-                      <TableCell>Node Name</TableCell>
-                      <TableCell>Status</TableCell>
-                      <TableCell>Roles</TableCell>
+                      <TableCell>
+                        <TableSortLabel
+                          active={sortField === 'name'}
+                          direction={sortField === 'name' ? sortOrder : 'asc'}
+                          onClick={() => handleRequestSort('name')}
+                        >
+                          Node Name
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell>
+                        <TableSortLabel
+                          active={sortField === 'status'}
+                          direction={sortField === 'status' ? sortOrder : 'asc'}
+                          onClick={() => handleRequestSort('status')}
+                        >
+                          Status
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell>
+                        <TableSortLabel
+                          active={sortField === 'role'}
+                          direction={sortField === 'role' ? sortOrder : 'asc'}
+                          onClick={() => handleRequestSort('role')}
+                        >
+                          Roles
+                        </TableSortLabel>
+                      </TableCell>
                       <TableCell>Capacity (CPU/Mem)</TableCell>
                       <TableCell>IP Address</TableCell>
                       <TableCell>Version</TableCell>
-                      <TableCell>Age</TableCell>
+                      <TableCell>
+                        <TableSortLabel
+                          active={sortField === 'age'}
+                          direction={sortField === 'age' ? sortOrder : 'asc'}
+                          onClick={() => handleRequestSort('age')}
+                        >
+                          Age
+                        </TableSortLabel>
+                      </TableCell>
                       <TableCell>Conditions</TableCell>
                       <TableCell align="right" sx={{ pr: 2 }}>Actions</TableCell>
                     </TableRow>
@@ -3539,7 +3890,27 @@ spec:
                   <TableBody>
                     {paginate(filteredNodes).map((node) => (
                       <TableRow key={node.name} hover>
-                        <TableCell sx={{ fontWeight: 700 }}>{node.name}</TableCell>
+                        <TableCell sx={{ fontWeight: 700, fontFamily: 'monospace', fontSize: '0.82rem' }}>
+                          <Tooltip title="Click to copy node name">
+                            <Box
+                              component="span"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                                  navigator.clipboard.writeText(node.name);
+                                  setToastSeverity('info');
+                                  setToastMessage(`Copied node "${node.name}" to clipboard`);
+                                }
+                              }}
+                              sx={{
+                                cursor: 'pointer',
+                                '&:hover': { color: 'primary.main', textDecoration: 'underline' },
+                              }}
+                            >
+                              {node.name}
+                            </Box>
+                          </Tooltip>
+                        </TableCell>
                         <TableCell>
                           <Chip label={node.status} size="small" color={node.status === 'Ready' ? 'success' : 'error'} sx={{ fontSize: '0.65rem', fontWeight: 700, borderRadius: 1 }} />
                         </TableCell>
@@ -4146,27 +4517,14 @@ spec:
                 </Box>
               )}
 
-              {/* TAB 29: EMBEDDED CONFIG DRIFT DETECTOR */}
-              {activeTab === 29 && (
-                <Box sx={{ width: '100%', height: 'calc(100vh - 145px)', minHeight: 640 }}>
-                  <ConfigDriftDrawer
-                    open={true}
-                    embedded={true}
-                    onClose={() => setActiveTab(0)}
-                    clusterId={effectiveClusterId}
-                    namespace={selectedNamespace || 'default'}
-                    onOpenDiff={handleOpenDriftManifest}
-                  />
-                </Box>
-              )}
-
-              {/* TAB 30: EMBEDDED GITOPS ENGINE */}
-              {activeTab === 30 && (
+              {/* TAB 30-39: EMBEDDED GITOPS ENGINE (FLUXCD) */}
+              {[30, 33, 34, 35, 36, 37, 38, 39].includes(activeTab) && (
                 <Box sx={{ width: '100%', height: 'calc(100vh - 145px)', minHeight: 640 }}>
                   <GitOpsDashboard
                     clusterId={effectiveClusterId}
                     namespaces={namespaces}
                     embedded={true}
+                    initialTab={activeTab}
                     onClose={() => setActiveTab(0)}
                   />
                 </Box>
@@ -4389,18 +4747,6 @@ spec:
               </ListItemIcon>
               <ListItemText primary="GitOps Time Machine (YAML Diff)" />
             </MenuItem>
-            <MenuItem
-              dense
-              onClick={() => {
-                handleCloseRowMenu();
-                setConfigDriftOpen(true);
-              }}
-            >
-              <ListItemIcon>
-                <AutoModeIcon fontSize="small" sx={{ color: '#f59e0b' }} />
-              </ListItemIcon>
-              <ListItemText primary="Check Config Drift" />
-            </MenuItem>
           </>
         )}
 
@@ -4492,22 +4838,6 @@ spec:
               <ListItemText primary="GitOps Time Machine (YAML Diff)" />
             </MenuItem>
           </>
-        )}
-
-        {/* ConfigMap & Secret Specific: Check Drift */}
-        {(rowMenuTab === 11 || rowMenuTab === 12) && (
-          <MenuItem
-            dense
-            onClick={() => {
-              handleCloseRowMenu();
-              setConfigDriftOpen(true);
-            }}
-          >
-            <ListItemIcon>
-              <AutoModeIcon fontSize="small" sx={{ color: '#f59e0b' }} />
-            </ListItemIcon>
-            <ListItemText primary="Inspect Pod Configuration Drift" />
-          </MenuItem>
         )}
 
         {/* CronJob Specific: Terminal Exec */}
@@ -4937,7 +5267,7 @@ spec:
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
             {/* Container Selector if Pod has multiple containers or container list */}
             {selectedResource?.containers && selectedResource.containers.length > 0 && (
-              <FormControl size="small" sx={{ minWidth: 120 }}>
+              <FormControl size="small" sx={{ minWidth: 140 }}>
                 <Select
                   value={selectedContainer || selectedResource.containers[0] || ''}
                   onChange={(e) => {
@@ -4945,6 +5275,22 @@ spec:
                     setSelectedContainer(newCont);
                     handleRefreshLogs(logsTimeFrame, newCont);
                   }}
+                  displayEmpty
+                  renderValue={(val) => (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                      <ViewSidebarRoundedIcon sx={{ fontSize: 16, color: isDark ? '#38bdf8' : '#0284c7' }} />
+                      <Typography sx={{ fontSize: '0.75rem', fontWeight: 700, maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {val || 'Container'}
+                      </Typography>
+                      {selectedResource.containers.length > 1 && (
+                        <Chip
+                          label={`${selectedResource.containers.length}`}
+                          size="small"
+                          sx={{ height: 16, fontSize: '0.6rem', fontWeight: 800, px: 0.2, bgcolor: isDark ? 'rgba(56, 189, 248, 0.2)' : 'rgba(2, 132, 199, 0.15)' }}
+                        />
+                      )}
+                    </Box>
+                  )}
                   MenuProps={{
                     slotProps: {
                       paper: {
@@ -5868,8 +6214,6 @@ spec:
         isTopologyActive={activeTab === 26}
         onTogglePortForward={() => setActiveTab((prev) => (prev === 28 ? 0 : 28))}
         activePortForwardsCount={activePortForwards.length}
-        onToggleConfigDrift={() => setActiveTab((prev) => (prev === 29 ? 0 : 29))}
-        driftedCount={driftedCount}
         onToggleGitOps={() => setActiveTab((prev) => (prev === 30 ? 0 : 30))}
         isGitOpsActive={activeTab === 30}
         onToggleSecurityPosture={() => setActiveTab((prev) => (prev === 32 ? 0 : 32))}
@@ -5937,7 +6281,6 @@ spec:
           }
           setActiveTab(30);
         }}
-        onOpenConfigDrift={() => setActiveTab(29)}
         onOpenSecurityPosture={() => setActiveTab(32)}
         onOpenNamespaceCloner={() => setNamespaceClonerOpen(true)}
         onOpenSettings={() => setActiveTab(27)}
@@ -5968,15 +6311,6 @@ spec:
         previousYaml={diffResource?.previousYaml}
         onRollback={handleRollbackFromDiff}
         rollbackLoading={diffRollbackLoading}
-      />
-
-      {/* Phase 2: Configuration Drift Inspector Drawer */}
-      <ConfigDriftDrawer
-        open={configDriftOpen}
-        onClose={() => setConfigDriftOpen(false)}
-        clusterId={effectiveClusterId}
-        namespace={selectedNamespace || 'default'}
-        onOpenDiff={handleOpenDriftManifest}
       />
 
       {/* Phase 3: Zero-Downtime Node Maintenance Dialog */}

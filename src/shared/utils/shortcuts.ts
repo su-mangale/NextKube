@@ -92,14 +92,6 @@ export const DEFAULT_SHORTCUTS: ShortcutItem[] = [
     key: 'Alt+P',
     category: 'Dock & Shell',
   },
-  {
-    id: 'configDrift',
-    label: 'ConfigMap & Secret Drift Detector',
-    description: 'Open Configuration Drift Inspector to detect pods running stale ConfigMaps or Secrets',
-    defaultKey: 'Alt+C',
-    key: 'Alt+C',
-    category: 'Cluster Management',
-  },
 ];
 
 const STORAGE_KEY = 'nextkube-keyboard-shortcuts';

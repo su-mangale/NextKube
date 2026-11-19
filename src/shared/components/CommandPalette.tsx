@@ -28,7 +28,6 @@ import FolderIcon from '@mui/icons-material/Folder';
 import StorageIcon from '@mui/icons-material/Storage';
 import AltRouteIcon from '@mui/icons-material/AltRouteRounded';
 import CompareArrowsIcon from '@mui/icons-material/CompareArrowsRounded';
-import AutoModeIcon from '@mui/icons-material/AutoModeRounded';
 import ShieldIcon from '@mui/icons-material/ShieldRounded';
 import DynamicFeedIcon from '@mui/icons-material/DynamicFeedRounded';
 import LayersIcon from '@mui/icons-material/LayersRounded';
@@ -63,7 +62,6 @@ export interface CommandPaletteProps {
   onOpenCreate?: () => void;
   onOpenPortForward?: () => void;
   onOpenDiff?: () => void;
-  onOpenConfigDrift?: () => void;
   onOpenSecurityPosture?: () => void;
   onOpenNamespaceCloner?: () => void;
   onOpenSettings?: () => void;
@@ -101,7 +99,6 @@ export function CommandPalette({
   onOpenCreate,
   onOpenPortForward,
   onOpenDiff,
-  onOpenConfigDrift,
   onOpenSecurityPosture,
   onOpenNamespaceCloner,
   onOpenSettings,
@@ -138,7 +135,6 @@ export function CommandPalette({
       { id: 'nav-audit', title: 'Audit Trail & Cluster Events', subtitle: 'Audit log timeline and control-plane activity', tab: 24, category: 'Platform Tools', icon: <HistoryIcon fontSize="small" sx={{ color: '#64748b' }} /> },
       { id: 'nav-settings', title: 'Workspace & System Settings', subtitle: 'Configure appearance, user profiles, and keyboard shortcuts', tab: 27, category: 'Platform Tools', shortcut: 'Alt+,', icon: <SettingsIcon fontSize="small" sx={{ color: '#94a3b8' }} /> },
       { id: 'nav-port-forward', title: 'Port-Forward Manager', subtitle: 'Active TCP/HTTP tunnels into private pods & services', tab: 28, category: 'Platform Tools', shortcut: 'Alt+P', icon: <AltRouteIcon fontSize="small" sx={{ color: '#38bdf8' }} /> },
-      { id: 'nav-config-drift', title: 'Config Drift Detector', subtitle: 'Detect pods running outdated configurations after ConfigMap/Secret edits', tab: 29, category: 'Platform Tools', shortcut: 'Alt+C', icon: <AutoModeIcon fontSize="small" sx={{ color: '#f59e0b' }} /> },
       { id: 'nav-gitops', title: 'GitOps Engine (Reconciliation & Sync)', subtitle: 'Manage Git sources, automated sync policies, and cluster state diff', tab: 30, category: 'Platform Tools', shortcut: 'Alt+G', icon: <CompareArrowsIcon fontSize="small" sx={{ color: '#a855f7' }} /> },
       { id: 'nav-security', title: 'Security Posture & CIS Audit', subtitle: 'Audit Pod Security Standards (PSS), CIS benchmark & RBAC policies', tab: 32, category: 'Platform Tools', shortcut: 'Alt+S', icon: <ShieldIcon fontSize="small" sx={{ color: '#ef4444' }} /> },
 
@@ -188,11 +184,6 @@ export function CommandPalette({
         resolvedAction = () => {
           onClose();
           onOpenPortForward();
-        };
-      } else if (n.tab === 29 && onOpenConfigDrift) {
-        resolvedAction = () => {
-          onClose();
-          onOpenConfigDrift();
         };
       } else if (n.tab === 30 && onOpenDiff) {
         resolvedAction = () => {
@@ -343,7 +334,6 @@ export function CommandPalette({
     onOpenCreate,
     onOpenPortForward,
     onOpenDiff,
-    onOpenConfigDrift,
     onOpenSecurityPosture,
     onOpenNamespaceCloner,
     onOpenSettings,

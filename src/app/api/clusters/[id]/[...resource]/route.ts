@@ -45,8 +45,6 @@ import {
   installHelmChart,
   fetchWorkloadRolloutHistory,
   rollbackWorkloadRevision,
-  fetchConfigDriftAnalysis,
-  syncDriftedWorkload,
   cordonNodeResource,
   fetchNodeDrainPreview,
   drainNodeResource,
@@ -69,6 +67,9 @@ import {
   saveGitOpsApps,
   syncGitOpsApp,
   rollbackGitOpsApp,
+  getFluxClusterState,
+  reconcileFluxResource,
+  toggleSuspendFluxResource,
   type GitOpsApp,
 } from '@/server/gitops';
 import { AUTH_COOKIE_NAME, verifySessionToken } from '@/server/jwt';
@@ -134,6 +135,10 @@ export async function GET(
     }
 
     if (segment0 === 'gitops') {
+      if (resource[1]?.toLowerCase() === 'flux') {
+        const fluxState = await getFluxClusterState(clusterId);
+        return NextResponse.json(fluxState);
+      }
       const apps = await getGitOpsApps(clusterId);
       return NextResponse.json(apps);
     }
@@ -430,12 +435,6 @@ export async function GET(
       return NextResponse.json(forwards);
     }
 
-    // 28. Configuration Drift Analysis: /drift
-    if (segment0 === 'drift') {
-      const data = await fetchConfigDriftAnalysis(clusterId, namespace);
-      return NextResponse.json(data);
-    }
-
     // Phase 5: Security Posture & CIS Benchmark: /security/posture
     if (segment0 === 'security') {
       const data = await fetchClusterSecurityPosture(clusterId);
@@ -542,24 +541,6 @@ export async function POST(
       return NextResponse.json(res, { status: res.success ? 200 : 400 });
     }
 
-    // 3c. Configuration Drift 1-Click Sync: /drift/sync
-    if (segment0 === 'drift' && resource.length >= 2 && resource[1] === 'sync') {
-      const { workloadName, workloadKind, namespace: targetNs } = body;
-      const res = await syncDriftedWorkload(clusterId, targetNs || namespace, workloadKind || 'Deployment', workloadName);
-      await recordAuditEvent({
-        clusterId,
-        user,
-        action: 'ROLLOUT_RESTART',
-        resourceType: workloadKind || 'Deployment',
-        resourceName: workloadName,
-        namespace: targetNs || namespace,
-        details: 'Synchronized configuration drift via zero-downtime rolling restart',
-        status: res.success ? 'SUCCESS' : 'FAILED',
-        errorMessage: res.success ? undefined : res.message,
-      });
-      return NextResponse.json(res, { status: res.success ? 200 : 400 });
-    }
-
     // Phase 3: Node Cordon / Uncordon: /nodes/[name]/cordon
     if (segment0 === 'nodes' && resource.length >= 3 && resource[2] === 'cordon') {
       const nodeName = resource[1];
@@ -601,6 +582,39 @@ export async function POST(
     // GitOps Engine Management: /gitops/[subAction]
     if (segment0 === 'gitops') {
       const subAction = resource[1]?.toLowerCase();
+      if (subAction === 'flux') {
+        const fluxAction = resource[2]?.toLowerCase();
+        if (fluxAction === 'reconcile') {
+          const { kind, id } = body;
+          const ok = await reconcileFluxResource(clusterId, kind, id);
+          await logAudit(req, user, {
+            clusterId,
+            action: 'GITOPS_SYNC',
+            resourceType: kind || 'FluxResource',
+            resourceName: id,
+            namespace: 'flux-system',
+            details: `Triggered manual reconciliation of FluxCD ${kind} (${id})`,
+            status: ok ? 'SUCCESS' : 'FAILED',
+          });
+          const updatedState = await getFluxClusterState(clusterId);
+          return NextResponse.json(updatedState);
+        }
+        if (fluxAction === 'toggle-suspend') {
+          const { kind, id } = body;
+          const ok = await toggleSuspendFluxResource(clusterId, kind, id);
+          await logAudit(req, user, {
+            clusterId,
+            action: 'CUSTOM_OPERATION',
+            resourceType: kind || 'FluxResource',
+            resourceName: id,
+            namespace: 'flux-system',
+            details: `Toggled suspend/resume on FluxCD ${kind} (${id})`,
+            status: ok ? 'SUCCESS' : 'FAILED',
+          });
+          const updatedState = await getFluxClusterState(clusterId);
+          return NextResponse.json(updatedState);
+        }
+      }
       if (subAction === 'sync') {
         const { appId } = body;
         const app = await syncGitOpsApp(appId);

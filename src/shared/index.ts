@@ -31,7 +31,6 @@ export { HelmAppStore, type HelmAppStoreProps } from './components/HelmAppStore'
 export { PortForwardDrawer, type PortForwardDrawerProps } from './components/PortForwardDrawer';
 export { default as YamlDiffViewerDialog, type YamlDiffViewerDialogProps } from './components/YamlDiffViewerDialog';
 export { default as GitOpsDashboard, type GitOpsDashboardProps } from './components/GitOpsDashboard';
-export { default as ConfigDriftDrawer, type ConfigDriftDrawerProps } from './components/ConfigDriftDrawer';
 export { default as NodeDrainDialog, type NodeDrainDialogProps } from './components/NodeDrainDialog';
 export { default as SecurityPostureDrawer, type SecurityPostureDrawerProps } from './components/SecurityPostureDrawer';
 export { default as NamespaceClonerDialog, type NamespaceClonerDialogProps } from './components/NamespaceClonerDialog';

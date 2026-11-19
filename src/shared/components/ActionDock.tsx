@@ -20,7 +20,6 @@ import SwapHorizRoundedIcon from '@mui/icons-material/SwapHorizRounded';
 import HubRoundedIcon from '@mui/icons-material/HubRounded';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import AltRouteRoundedIcon from '@mui/icons-material/AltRouteRounded';
-import AutoModeRoundedIcon from '@mui/icons-material/AutoModeRounded';
 import CompareArrowsRoundedIcon from '@mui/icons-material/CompareArrowsRounded';
 import ShieldRoundedIcon from '@mui/icons-material/ShieldRounded';
 import { useShortcuts } from '../utils/shortcuts';
@@ -45,8 +44,6 @@ export interface ActionDockProps {
   isTopologyActive?: boolean;
   onTogglePortForward?: () => void;
   activePortForwardsCount?: number;
-  onToggleConfigDrift?: () => void;
-  driftedCount?: number;
   onToggleGitOps?: () => void;
   isGitOpsActive?: boolean;
   onToggleSecurityPosture?: () => void;
@@ -76,8 +73,6 @@ export function ActionDock({
   isTopologyActive = false,
   onTogglePortForward,
   activePortForwardsCount = 0,
-  onToggleConfigDrift,
-  driftedCount = 0,
   onToggleGitOps,
   isGitOpsActive = false,
   onToggleSecurityPosture,
@@ -579,67 +574,6 @@ export function ActionDock({
                   }}
                 >
                   {activePortForwardsCount}
-                </Box>
-              )}
-            </Box>
-          </Tooltip>
-        )}
-
-        {/* ConfigMap & Secret Drift Detector */}
-        {onToggleConfigDrift && (
-          <Tooltip
-            title={`ConfigMap & Secret Drift Detector (${getShortcutKey('configDrift') || 'Alt+C'})${driftedCount > 0 ? ` • ${driftedCount} drifted` : ''}`}
-            placement="left"
-            arrow
-          >
-            <Box sx={{ position: 'relative' }}>
-              <IconButton
-                onClick={onToggleConfigDrift}
-                sx={{
-                  width: 42,
-                  height: 42,
-                  borderRadius: '50%',
-                  bgcolor: isDark ? 'rgba(245, 158, 11, 0.15)' : 'rgba(217, 119, 6, 0.12)',
-                  color: isDark ? '#fbbf24' : '#d97706',
-                  border: '1px solid',
-                  borderColor: isDark ? 'rgba(245, 158, 11, 0.28)' : 'rgba(217, 119, 6, 0.22)',
-                  transition: 'all 0.24s cubic-bezier(0.34, 1.56, 0.64, 1)',
-                  '&:hover': {
-                    transform: 'scale(1.15)',
-                    bgcolor: isDark ? 'rgba(245, 158, 11, 0.25)' : 'rgba(217, 119, 6, 0.2)',
-                    borderColor: isDark ? '#fbbf24' : '#d97706',
-                    boxShadow: '0 4px 14px rgba(217, 119, 6, 0.35)',
-                  },
-                  '&:active': {
-                    transform: 'scale(0.95)',
-                  },
-                }}
-              >
-                <AutoModeRoundedIcon sx={{ fontSize: 21 }} />
-              </IconButton>
-              {driftedCount > 0 && (
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    top: -2,
-                    right: -2,
-                    bgcolor: '#f59e0b',
-                    color: '#ffffff',
-                    fontSize: '0.62rem',
-                    fontWeight: 800,
-                    borderRadius: '50%',
-                    width: 17,
-                    height: 17,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    boxShadow: '0 0 6px #f59e0b',
-                    border: '1.5px solid',
-                    borderColor: 'background.paper',
-                    pointerEvents: 'none',
-                  }}
-                >
-                  {driftedCount}
                 </Box>
               )}
             </Box>

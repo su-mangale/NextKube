@@ -1104,6 +1104,151 @@ export interface NamespaceCloneResult {
   logs: NamespaceCloneProgressItem[];
 }
 
+// FluxCD GitOps Architecture Types
+export interface FluxGitRepository {
+  id: string;
+  name: string;
+  namespace: string;
+  url: string;
+  branch: string;
+  tag?: string;
+  semver?: string;
+  secretRef?: string;
+  interval: string;
+  ready: boolean;
+  statusMessage: string;
+  artifactRevision?: string;
+  lastReconciledAt: string;
+  suspended: boolean;
+}
+
+export interface FluxOCIRepository {
+  id: string;
+  name: string;
+  namespace: string;
+  url: string;
+  tag?: string;
+  digest?: string;
+  secretRef?: string;
+  interval: string;
+  ready: boolean;
+  statusMessage: string;
+  lastReconciledAt: string;
+  suspended: boolean;
+}
+
+export interface FluxBucket {
+  id: string;
+  name: string;
+  namespace: string;
+  endpoint: string;
+  bucketName: string;
+  provider: 'generic' | 'aws' | 'gcp' | 'azure' | 'minio';
+  secretRef?: string;
+  interval: string;
+  ready: boolean;
+  statusMessage: string;
+  lastReconciledAt: string;
+  suspended: boolean;
+}
+
+export interface FluxHelmRepository {
+  id: string;
+  name: string;
+  namespace: string;
+  url: string;
+  type: 'default' | 'oci';
+  secretRef?: string;
+  interval: string;
+  ready: boolean;
+  statusMessage: string;
+  lastReconciledAt: string;
+  suspended: boolean;
+}
+
+export interface FluxKustomization {
+  id: string;
+  name: string;
+  namespace: string;
+  sourceKind: 'GitRepository' | 'OCIRepository' | 'Bucket';
+  sourceName: string;
+  path: string;
+  prune: boolean;
+  targetNamespace?: string;
+  interval: string;
+  retryInterval?: string;
+  ready: boolean;
+  statusMessage: string;
+  lastAppliedRevision: string;
+  lastAttemptedRevision?: string;
+  suspended: boolean;
+  lastReconciledAt: string;
+}
+
+export interface FluxHelmRelease {
+  id: string;
+  name: string;
+  namespace: string;
+  chartSourceKind: 'HelmRepository' | 'GitRepository' | 'OCIRepository';
+  chartSourceName: string;
+  chart: string;
+  version: string;
+  targetNamespace?: string;
+  interval: string;
+  ready: boolean;
+  statusMessage: string;
+  suspended: boolean;
+  lastReconciledAt: string;
+}
+
+export interface FluxImageRepository {
+  id: string;
+  name: string;
+  namespace: string;
+  image: string;
+  interval: string;
+  scanStatus: 'OK' | 'Scanning' | 'Failed';
+  lastScannedAt: string;
+  scannedTagsCount: number;
+}
+
+export interface FluxImagePolicy {
+  id: string;
+  name: string;
+  namespace: string;
+  imageRepoRef: string;
+  policyType: 'semver' | 'numerical' | 'regex';
+  range: string;
+  selectedTag: string;
+  lastEvaluatedAt: string;
+}
+
+export interface FluxImageUpdateAutomation {
+  id: string;
+  name: string;
+  namespace: string;
+  gitRepoRef: string;
+  updatePath: string;
+  checkoutBranch: string;
+  commitMessage: string;
+  lastPushedCommit: string;
+  suspended: boolean;
+  lastRunAt: string;
+}
+
+export interface FluxClusterState {
+  clusterId: string;
+  gitRepositories: FluxGitRepository[];
+  ociRepositories: FluxOCIRepository[];
+  buckets: FluxBucket[];
+  helmRepositories: FluxHelmRepository[];
+  kustomizations: FluxKustomization[];
+  helmReleases: FluxHelmRelease[];
+  imageRepositories: FluxImageRepository[];
+  imagePolicies: FluxImagePolicy[];
+  imageUpdateAutomations: FluxImageUpdateAutomation[];
+}
+
 
 
 

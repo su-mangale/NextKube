@@ -166,7 +166,10 @@ export async function fetchPods(clusterId: string, namespace?: string): Promise<
       const ready = containerStatuses.filter((c) => c.ready).length;
       const restarts = containerStatuses.reduce((acc, c) => acc + c.restartCount, 0);
       const images = (pod.spec?.containers || []).map((c) => c.image).filter(Boolean).join(', ');
-      const containers = (pod.spec?.containers || []).map((c) => c.name);
+      const appContainers = (pod.spec?.containers || []).map((c) => c.name);
+      const initContainers = (pod.spec?.initContainers || []).map((c) => c.name);
+      const ephemeralContainers = (pod.spec?.ephemeralContainers || []).map((c) => c.name);
+      const containers = Array.from(new Set([...appContainers, ...initContainers, ...ephemeralContainers]));
 
       return {
         name: pod.metadata?.name || 'unknown-pod',

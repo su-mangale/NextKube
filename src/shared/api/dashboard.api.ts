@@ -121,13 +121,9 @@ import {
   PortForwardSession,
   CreatePortForwardRequest,
   PortForwardTargetOption,
-  ConfigDriftSummary,
   NodeDrainOptions,
   NodeDrainResult,
   NodeDrainPreview,
-  ClusterFinOpsSummary,
-  ResourceCostRates,
-  ApplyRightSizingRequest,
   SecurityPostureReport,
   RbacCheckRequest,
   RbacCheckResult,
@@ -135,6 +131,7 @@ import {
   NamespaceClonePreview,
   NamespaceCloneRequest,
   NamespaceCloneResult,
+  FluxClusterState,
 } from '../types/dashboard.types';
 
 // Fetch Namespaces
@@ -805,47 +802,6 @@ export const rollbackWorkload = async (
     throw new Error(data.message || data.error || 'Failed to rollback workload to revision');
   }
   return await res.json();
-};
-
-// Phase 2: Configuration Drift Detection
-export const fetchConfigDrift = async (
-  clusterId: string,
-  namespace?: string
-): Promise<ConfigDriftSummary> => {
-  const baseUrl = getBackendUrl();
-  const nsQuery = namespace && namespace !== 'all' ? `?namespace=${namespace}` : '';
-  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/drift${nsQuery}`);
-  if (!res.ok) throw new Error('Failed to fetch configuration drift report');
-  return await res.json();
-};
-
-// Phase 2: 1-Click Sync for Drifted Workload (Zero-Downtime Rolling Restart)
-export const syncDriftedWorkload = async (
-  clusterId: string,
-  workloadName: string,
-  workloadKind: string,
-  namespace: string
-): Promise<{ success: boolean; message: string }> => {
-  const baseUrl = getBackendUrl();
-  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/drift/sync`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ workloadName, workloadKind, namespace }),
-  });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.message || data.error || 'Failed to synchronize configuration drift');
-  }
-  return await res.json();
-};
-
-export const useConfigDrift = (clusterId: string, namespace?: string, options?: { enabled?: boolean; refetchInterval?: number }) => {
-  return useQuery<ConfigDriftSummary>({
-    queryKey: ['configDrift', clusterId, namespace],
-    queryFn: () => fetchConfigDrift(clusterId, namespace),
-    enabled: options?.enabled !== false && !!clusterId,
-    refetchInterval: options?.refetchInterval ?? 30000,
-  });
 };
 
 // Set Deployment Image
@@ -1947,53 +1903,6 @@ export const stopPortForward = async (
 };
 
 // ==========================================
-// Phase 4: FinOps Cost Allocation & Right-Sizing API
-// ==========================================
-
-export const fetchClusterFinOpsSummary = async (
-  clusterId: string,
-  rates?: Partial<ResourceCostRates>
-): Promise<ClusterFinOpsSummary> => {
-  const baseUrl = getBackendUrl();
-  const query = rates
-    ? `?cpuRate=${rates.cpuPerCoreHour ?? ''}&memRate=${rates.memoryPerGiBHour ?? ''}&storageRate=${rates.storagePerGiBMonth ?? ''}`
-    : '';
-  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/cost${query}`);
-  if (!res.ok) throw new Error('Failed to retrieve cluster FinOps summary');
-  return res.json();
-};
-
-export const useClusterFinOps = (
-  clusterId: string,
-  rates?: Partial<ResourceCostRates>,
-  options?: { enabled?: boolean }
-) => {
-  return useQuery({
-    queryKey: ['clusterFinOps', clusterId, rates?.cpuPerCoreHour, rates?.memoryPerGiBHour, rates?.storagePerGiBMonth],
-    queryFn: () => fetchClusterFinOpsSummary(clusterId, rates),
-    enabled: options?.enabled !== undefined ? options.enabled && !!clusterId : !!clusterId,
-    staleTime: 60000,
-  });
-};
-
-export const applyRightSizingRecommendation = async (
-  clusterId: string,
-  req: ApplyRightSizingRequest
-): Promise<{ success: boolean; message: string }> => {
-  const baseUrl = getBackendUrl();
-  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/cost/right-size`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(req),
-  });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.error || data.message || 'Failed to apply right-sizing patch');
-  }
-  return res.json();
-};
-
-// ==========================================
 // Phase 5: Security Posture & RBAC Matrix API
 // ==========================================
 
@@ -2090,6 +1999,57 @@ export const exportNamespaceYaml = async (
   if (!res.ok) throw new Error('Failed to export namespace YAML');
   return res.json();
 };
+
+// ==========================================
+// FluxCD GitOps Hooks & API Calls
+// ==========================================
+
+export const fetchFluxClusterState = async (clusterId: string): Promise<FluxClusterState> => {
+  const baseUrl = getBackendUrl();
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/gitops/flux`);
+  if (!res.ok) throw new Error('Failed to fetch FluxCD cluster state');
+  return res.json();
+};
+
+export const useFluxClusterState = (clusterId: string, options?: { enabled?: boolean; refetchInterval?: number }) => {
+  return useQuery<FluxClusterState>({
+    queryKey: ['fluxClusterState', clusterId],
+    queryFn: () => fetchFluxClusterState(clusterId),
+    enabled: options?.enabled !== false && !!clusterId,
+    refetchInterval: options?.refetchInterval ?? 15000,
+  });
+};
+
+export const reconcileFluxResourceRequest = async (
+  clusterId: string,
+  kind: string,
+  id: string
+): Promise<FluxClusterState> => {
+  const baseUrl = getBackendUrl();
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/gitops/flux/reconcile`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind, id }),
+  });
+  if (!res.ok) throw new Error(`Failed to reconcile Flux ${kind} (${id})`);
+  return res.json();
+};
+
+export const toggleSuspendFluxResourceRequest = async (
+  clusterId: string,
+  kind: string,
+  id: string
+): Promise<FluxClusterState> => {
+  const baseUrl = getBackendUrl();
+  const res = await fetch(`${baseUrl}/api/clusters/${clusterId}/gitops/flux/toggle-suspend`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind, id }),
+  });
+  if (!res.ok) throw new Error(`Failed to toggle suspension on Flux ${kind} (${id})`);
+  return res.json();
+};
+
 
 
 
