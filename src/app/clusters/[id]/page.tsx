@@ -1345,14 +1345,44 @@ spec:
     setLogsResourceType(isWorkload ? 'deployment' : 'pod');
 
     // Container discovery: ensure all containers (app, init, sidecars) are available
-    let allContainers: string[] = resource.containers && resource.containers.length > 0 ? resource.containers : [];
-    if (allContainers.length === 0 && (rType === 'pods' || resource.kind === 'Pod')) {
-      const matched = pods.find((p) => p.name === resource.name && (resource.namespace === 'all' || p.namespace === (resource.namespace || selectedNamespace)));
-      if (matched?.containers && matched.containers.length > 0) {
-        allContainers = matched.containers;
+    let allContainers: string[] = resource.containers && resource.containers.length > 0 ? [...resource.containers] : [];
+    if (allContainers.length === 0) {
+      if (rType === 'pods' || resource.kind === 'Pod') {
+        const matched = pods.find((p) => p.name === resource.name && (resource.namespace === 'all' || p.namespace === (resource.namespace || selectedNamespace)));
+        if (matched?.containers && matched.containers.length > 0) {
+          allContainers = [...matched.containers];
+        }
+      } else if (rType === 'deployments' || resource.kind === 'Deployment') {
+        const matchedDep = deployments.find((d) => d.name === resource.name && (resource.namespace === 'all' || d.namespace === (resource.namespace || selectedNamespace)));
+        if (matchedDep?.containers && matchedDep.containers.length > 0) {
+          allContainers = [...matchedDep.containers];
+        }
+      } else if (rType === 'daemonsets' || resource.kind === 'DaemonSet') {
+        const matchedDs = daemonSets.find((d) => d.name === resource.name && (resource.namespace === 'all' || d.namespace === (resource.namespace || selectedNamespace)));
+        if (matchedDs?.containers && matchedDs.containers.length > 0) {
+          allContainers = [...matchedDs.containers];
+        }
+      } else if (rType === 'statefulsets' || resource.kind === 'StatefulSet') {
+        const matchedSts = statefulSets.find((s) => s.name === resource.name && (resource.namespace === 'all' || s.namespace === (resource.namespace || selectedNamespace)));
+        if (matchedSts?.containers && matchedSts.containers.length > 0) {
+          allContainers = [...matchedSts.containers];
+        }
+      }
+
+      // If still empty and workload, discover containers from matching replica pods
+      if (allContainers.length === 0) {
+        const matchingPods = pods.filter((p) => (resource.namespace === 'all' || p.namespace === (resource.namespace || selectedNamespace)) && p.name.startsWith(resource.name));
+        const found = new Set<string>();
+        matchingPods.forEach((p) => {
+          (p.containers || []).forEach((c) => found.add(c));
+        });
+        if (found.size > 0) {
+          allContainers = Array.from(found);
+        }
       }
     }
-    const resolvedResource = { ...resource, containers: allContainers };
+
+    const resolvedResource = { ...resource, resourceType: rType, containers: allContainers };
     setSelectedResource(resolvedResource);
     const initialContainer = allContainers.length > 0 ? allContainers[0] : '';
     setSelectedContainer(initialContainer);
@@ -1432,10 +1462,11 @@ spec:
   const handleRefreshLogs = async (timeFrameVal?: string, containerVal?: string) => {
     if (!selectedResource) return;
     const tf = timeFrameVal !== undefined ? timeFrameVal : logsTimeFrame;
-    const cont = containerVal !== undefined ? containerVal : selectedContainer;
+    const rawCont = containerVal !== undefined ? containerVal : selectedContainer;
+    const cont = rawCont && rawCont !== '__all__' ? rawCont : undefined;
     const isPre = tf === 'pre';
     const resource = selectedResource;
-    const rType = getResourceType(resource, activeTab);
+    const rType = resource.resourceType || (logsResourceType === 'deployment' ? 'deployments' : 'pods') || getResourceType(resource, activeTab);
     const isWorkload = ['deployments', 'daemonsets', 'statefulsets', 'jobs'].includes(rType);
     setLogsLoading(true);
     const namespace = resource.namespace || selectedNamespace || 'default';
@@ -5279,8 +5310,8 @@ spec:
                   renderValue={(val) => (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                       <ViewSidebarRoundedIcon sx={{ fontSize: 16, color: isDark ? '#38bdf8' : '#0284c7' }} />
-                      <Typography sx={{ fontSize: '0.75rem', fontWeight: 700, maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {val || 'Container'}
+                      <Typography sx={{ fontSize: '0.75rem', fontWeight: 700, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {val === '__all__' ? 'All Containers' : (val || 'Container')}
                       </Typography>
                       {selectedResource.containers.length > 1 && (
                         <Chip
@@ -5292,9 +5323,14 @@ spec:
                     </Box>
                   )}
                   MenuProps={{
+                    sx: { zIndex: 2000 },
                     slotProps: {
+                      root: {
+                        sx: { zIndex: 2000 },
+                      },
                       paper: {
                         sx: {
+                          zIndex: 2000,
                           bgcolor: isDark ? '#0f1422' : '#ffffff',
                           color: isDark ? '#f0f6fc' : '#0f172a',
                           border: isDark ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid #e2e8f0',
@@ -5339,6 +5375,11 @@ spec:
                     '& .MuiSvgIcon-root': { color: isDark ? '#38bdf8' : '#0284c7', fontSize: 18 },
                   }}
                 >
+                  {selectedResource.containers.length > 1 && (
+                    <MenuItem value="__all__" sx={{ fontSize: '0.8rem', fontWeight: 700, color: 'primary.main' }}>
+                      All Containers ({selectedResource.containers.length})
+                    </MenuItem>
+                  )}
                   {selectedResource.containers.map((cName: string) => (
                     <MenuItem key={cName} value={cName} sx={{ fontSize: '0.8rem' }}>
                       {cName}
@@ -5359,9 +5400,14 @@ spec:
                   handleRefreshLogs(newTf);
                 }}
                 MenuProps={{
+                  sx: { zIndex: 2000 },
                   slotProps: {
+                    root: {
+                      sx: { zIndex: 2000 },
+                    },
                     paper: {
                       sx: {
+                        zIndex: 2000,
                         bgcolor: isDark ? '#0f1422' : '#ffffff',
                         color: isDark ? '#f0f6fc' : '#0f172a',
                         border: isDark ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid #e2e8f0',

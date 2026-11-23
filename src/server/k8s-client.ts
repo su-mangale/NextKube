@@ -206,7 +206,9 @@ export async function fetchDeployments(clusterId: string, namespace?: string): P
 
     return res.items.map((dep) => {
       const image = dep.spec?.template?.spec?.containers?.[0]?.image;
-      const containers = (dep.spec?.template?.spec?.containers || []).map((c) => c.name);
+      const appContainers = (dep.spec?.template?.spec?.containers || []).map((c) => c.name);
+      const initContainers = (dep.spec?.template?.spec?.initContainers || []).map((c) => c.name);
+      const containers = Array.from(new Set([...appContainers, ...initContainers]));
       return {
         name: dep.metadata?.name || 'unknown',
         namespace: dep.metadata?.namespace || 'default',
@@ -239,7 +241,9 @@ export async function fetchDaemonSets(clusterId: string, namespace?: string): Pr
 
     return res.items.map((ds) => {
       const image = ds.spec?.template?.spec?.containers?.[0]?.image;
-      const containers = (ds.spec?.template?.spec?.containers || []).map((c) => c.name);
+      const appContainers = (ds.spec?.template?.spec?.containers || []).map((c) => c.name);
+      const initContainers = (ds.spec?.template?.spec?.initContainers || []).map((c) => c.name);
+      const containers = Array.from(new Set([...appContainers, ...initContainers]));
       const nodeSelector = ds.spec?.template?.spec?.nodeSelector
         ? Object.entries(ds.spec.template.spec.nodeSelector).map(([k, v]) => `${k}=${v}`).join(', ')
         : '<none>';
@@ -276,16 +280,21 @@ export async function fetchStatefulSets(clusterId: string, namespace?: string): 
       ? await clients.appsApi.listStatefulSetForAllNamespaces({})
       : await clients.appsApi.listNamespacedStatefulSet({ namespace });
 
-    return res.items.map((sts) => ({
-      name: sts.metadata?.name || 'unknown',
-      namespace: sts.metadata?.namespace || 'default',
-      readyReplicas: sts.status?.readyReplicas || 0,
-      replicas: sts.spec?.replicas || 0,
-      serviceName: sts.spec?.serviceName || '<none>',
-      age: formatAge(sts.metadata?.creationTimestamp),
-      image: sts.spec?.template?.spec?.containers?.[0]?.image,
-      containers: (sts.spec?.template?.spec?.containers || []).map((c) => c.name),
-    }));
+    return res.items.map((sts) => {
+      const appContainers = (sts.spec?.template?.spec?.containers || []).map((c) => c.name);
+      const initContainers = (sts.spec?.template?.spec?.initContainers || []).map((c) => c.name);
+      const containers = Array.from(new Set([...appContainers, ...initContainers]));
+      return {
+        name: sts.metadata?.name || 'unknown',
+        namespace: sts.metadata?.namespace || 'default',
+        readyReplicas: sts.status?.readyReplicas || 0,
+        replicas: sts.spec?.replicas || 0,
+        serviceName: sts.spec?.serviceName || '<none>',
+        age: formatAge(sts.metadata?.creationTimestamp),
+        image: sts.spec?.template?.spec?.containers?.[0]?.image,
+        containers,
+      };
+    });
   } catch (err) {
     console.warn(`[K8sClient] fetchStatefulSets failed for ${clusterId}:`, err);
     return [];
